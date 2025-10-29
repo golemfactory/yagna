@@ -1,6 +1,6 @@
 use anyhow::Result;
+use arkiv_sdk::Hash;
 use chrono::{DateTime, Duration, Utc};
-use golem_base_sdk::Hash;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

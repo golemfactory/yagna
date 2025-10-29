@@ -1,8 +1,8 @@
 use alloy::network::{AnyNetwork, BlockResponse};
 use alloy::providers::{DynProvider, Provider, ProviderBuilder};
 use anyhow::{anyhow, Result};
-use golem_base_sdk::client::GolemBaseClient;
-use golem_base_sdk::{Address, Hash};
+use arkiv_sdk::client::ArkivClient;
+use arkiv_sdk::{Address, Hash};
 
 use ya_core_model::market::{
     FundGolemBase, FundGolemBaseResponse, GetGolemBaseBalance, GetGolemBaseBalanceResponse,
@@ -17,7 +17,7 @@ use crate::protocol::discovery::faucet::FaucetClient;
 #[derive(Clone)]
 pub struct GolemBaseCommandHandler {
     identity: std::sync::Arc<dyn IdentityApi>,
-    golem_base: GolemBaseClient,
+    golem_base: ArkivClient,
     config: DiscoveryConfig,
     optimism_client: DynProvider<AnyNetwork>,
 }
@@ -25,7 +25,7 @@ pub struct GolemBaseCommandHandler {
 impl GolemBaseCommandHandler {
     pub fn new(
         identity: std::sync::Arc<dyn IdentityApi>,
-        golem_base: GolemBaseClient,
+        golem_base: ArkivClient,
         config: DiscoveryConfig,
     ) -> Self {
         let optimism_provider = Self::create_optimism_provider(&config);

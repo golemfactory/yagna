@@ -2,10 +2,10 @@ use crate::config::DiscoveryConfig;
 use crate::protocol::discovery::pow::solve_pow;
 
 use anyhow::Result;
+use arkiv_sdk::Address;
+use arkiv_sdk::{client::ArkivClient, Hash};
 use bigdecimal::BigDecimal;
 use futures::stream::{self, StreamExt};
-use golem_base_sdk::Address;
-use golem_base_sdk::{client::GolemBaseClient, Hash};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -37,11 +37,11 @@ pub struct RedeemResponse {
 
 pub struct FaucetClient {
     config: DiscoveryConfig,
-    client: GolemBaseClient,
+    client: ArkivClient,
 }
 
 impl FaucetClient {
-    pub fn new(config: DiscoveryConfig, client: GolemBaseClient) -> Self {
+    pub fn new(config: DiscoveryConfig, client: ArkivClient) -> Self {
         Self { config, client }
     }
 
@@ -151,11 +151,11 @@ impl FaucetClient {
 
         // Wait for transaction to be mined.
         // Note: Transaction hash references L2 bridge deposit, that's why we need a new client.
-        let client = GolemBaseClient::new_uninitialized(self.config.get_l2_rpc_url().clone())
+        let client = ArkivClient::new_uninitialized(self.config.get_l2_rpc_url().clone())
             .map_err(|e| anyhow::anyhow!("Failed to initialize L2 client: {}", e))?
-            .override_config(golem_base_sdk::client::TransactionConfig {
+            .override_config(arkiv_sdk::client::TransactionConfig {
                 chain_id: Some(self.config.get_chain_id()),
-                ..golem_base_sdk::client::TransactionConfig::default()
+                ..arkiv_sdk::client::TransactionConfig::default()
             });
         client
             .wait_for_transaction(response.tx_hash.parse::<Hash>()?)

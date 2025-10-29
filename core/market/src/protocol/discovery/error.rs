@@ -17,6 +17,8 @@ pub enum DiscoveryError {
     Identity(#[from] IdentityError),
     #[error("GolemBase error: {0}")]
     GolemBaseError(String),
+    #[error("Programming error (should never happen): {0}")]
+    ProgrammingError(String),
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]

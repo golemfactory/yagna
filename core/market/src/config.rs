@@ -142,6 +142,9 @@ pub struct DiscoveryConfig {
     /// Number of confirmations required for GolemBase transactions
     #[clap(env = "GOLEM_BASE_REQUIRED_CONFIRMATIONS", default_value = "1")]
     pub required_confirmations: u64,
+    /// Batch size for querying offers from GolemBase
+    #[clap(env = "GOLEM_BASE_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
+    pub offer_query_batch_size: usize,
 }
 
 impl Default for DiscoveryConfig {
@@ -153,6 +156,7 @@ impl Default for DiscoveryConfig {
             offer_publish_timeout: Duration::from_secs(30),
             publish_max_retries: 3,
             required_confirmations: 1,
+            offer_query_batch_size: 20,
         }
     }
 }

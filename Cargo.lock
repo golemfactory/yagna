@@ -1450,6 +1450,79 @@ dependencies = [
 ]
 
 [[package]]
+name = "arkiv-mock"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=b90ebad0880203269934eefb8f94661e7580aef4#b90ebad0880203269934eefb8f94661e7580aef4"
+dependencies = [
+ "alloy",
+ "alloy-json-rpc",
+ "anyhow",
+ "arkiv-sdk",
+ "async-trait",
+ "bytes 1.10.1",
+ "derive_more 2.0.1",
+ "futures-util",
+ "hex",
+ "humantime 2.2.0",
+ "jsonrpsee",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "url",
+]
+
+[[package]]
+name = "arkiv-sdk"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=b90ebad0880203269934eefb8f94661e7580aef4#b90ebad0880203269934eefb8f94661e7580aef4"
+dependencies = [
+ "alloy",
+ "alloy-json-rpc",
+ "alloy-rlp",
+ "alloy-signer-local",
+ "anyhow",
+ "async-trait",
+ "bigdecimal 0.4.8",
+ "bon",
+ "bytes 1.10.1",
+ "derive_more 2.0.1",
+ "dirs",
+ "displaydoc",
+ "futures 0.3.31",
+ "hex",
+ "humantime 2.2.0",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "arkiv-test-utils"
+version = "0.1.0"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=b90ebad0880203269934eefb8f94661e7580aef4#b90ebad0880203269934eefb8f94661e7580aef4"
+dependencies = [
+ "alloy",
+ "anyhow",
+ "arkiv-mock",
+ "arkiv-sdk",
+ "bigdecimal 0.4.8",
+ "env_logger 0.10.2",
+ "humantime 2.2.0",
+ "log",
+ "tempfile",
+ "testcontainers",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4445,80 +4518,6 @@ dependencies = [
  "log",
  "regex-automata",
  "regex-syntax",
-]
-
-[[package]]
-name = "golem-base-mock"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=27511d20013281292bcf80ae64ce08558dc16916#27511d20013281292bcf80ae64ce08558dc16916"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "anyhow",
- "async-trait",
- "base64 0.21.7",
- "bytes 1.10.1",
- "derive_more 2.0.1",
- "futures-util",
- "golem-base-sdk",
- "hex",
- "humantime 2.2.0",
- "jsonrpsee",
- "log",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tokio",
- "tokio-stream",
- "url",
-]
-
-[[package]]
-name = "golem-base-sdk"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=27511d20013281292bcf80ae64ce08558dc16916#27511d20013281292bcf80ae64ce08558dc16916"
-dependencies = [
- "alloy",
- "alloy-json-rpc",
- "alloy-rlp",
- "alloy-signer-local",
- "anyhow",
- "async-trait",
- "base64 0.22.1",
- "bigdecimal 0.4.8",
- "bon",
- "bytes 1.10.1",
- "derive_more 2.0.1",
- "dirs",
- "displaydoc",
- "futures 0.3.31",
- "hex",
- "humantime 2.2.0",
- "log",
- "rand 0.8.5",
- "serde",
- "thiserror 2.0.12",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "golem-base-test-utils"
-version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=27511d20013281292bcf80ae64ce08558dc16916#27511d20013281292bcf80ae64ce08558dc16916"
-dependencies = [
- "alloy",
- "anyhow",
- "bigdecimal 0.4.8",
- "env_logger 0.10.2",
- "golem-base-mock",
- "golem-base-sdk",
- "humantime 2.2.0",
- "log",
- "tempfile",
- "testcontainers",
- "tokio",
- "url",
 ]
 
 [[package]]
@@ -11990,6 +11989,9 @@ dependencies = [
  "actix-service",
  "actix-web",
  "anyhow",
+ "arkiv-mock",
+ "arkiv-sdk",
+ "arkiv-test-utils",
  "async-trait",
  "bigdecimal 0.4.8",
  "chrono",
@@ -11998,9 +12000,6 @@ dependencies = [
  "env_logger 0.10.2",
  "ethsign",
  "futures 0.3.31",
- "golem-base-mock",
- "golem-base-sdk",
- "golem-base-test-utils",
  "humantime 2.2.0",
  "lazy_static",
  "log",
@@ -12234,6 +12233,7 @@ dependencies = [
  "all_asserts",
  "alloy",
  "anyhow",
+ "arkiv-sdk",
  "async-trait",
  "backtrace",
  "bigdecimal 0.4.8",
@@ -12246,7 +12246,6 @@ dependencies = [
  "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.31",
- "golem-base-sdk",
  "hex",
  "humantime 2.2.0",
  "lazy_static",

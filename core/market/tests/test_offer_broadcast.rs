@@ -65,54 +65,6 @@ async fn test_broadcast_offer() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Discovery `RetrieveOffers` GSB endpoint should return only existing Offers.
-/// Test sends RetrieveOffers requesting existing and not existing subscription.
-/// Market is expected to return only existing Offer without any error.
-#[cfg_attr(not(feature = "test-suite"), ignore)]
-#[serial_test::serial]
-async fn test_discovery_get_offers() -> anyhow::Result<()> {
-    enable_logs(false);
-
-    let dir = temp_dir!("test_discovery_get_offers")?;
-    let dir = dir.path();
-
-    let network = MarketsNetwork::new(dir, MockNet::new())
-        .await
-        .add_market_instance("Node-1")
-        .await;
-
-    let discovery_builder = network.discovery_builder();
-    let network = network
-        .add_discovery_instance("Node-2", discovery_builder)
-        .await;
-
-    let mkt1 = network.get_market("Node-1");
-    let id1 = network.get_default_id("Node-1").await;
-    let discovery2 = network.get_discovery("Node-2");
-
-    let subscription_id = mkt1
-        .subscribe_offer(&client::sample_offer(), &id1)
-        .await
-        .unwrap();
-    let invalid_subscription = "0000000000000000000000000000000000000000000000000000000000000002"
-        .parse()
-        .unwrap();
-
-    let offers = discovery2
-        .get_remote_offers(
-            id1.identity.to_string(),
-            vec![subscription_id.clone(), invalid_subscription],
-            // 5,
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(offers.len(), 1);
-    assert_eq!(offers[0].id, subscription_id);
-
-    Ok(())
-}
-
 // /// Note: Test disabled since hybrid NET requires limiting number of Subscriptions.
 // /// Unreliable broadcasts have limited packet size, because we don't want to implement
 // /// packets fragmentation.

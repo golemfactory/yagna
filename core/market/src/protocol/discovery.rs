@@ -17,12 +17,12 @@ use ya_core_model::market::{
 };
 use ya_service_bus::typed as bus;
 
-use golem_base_sdk::client::GolemBaseClient;
-use golem_base_sdk::entity::Create;
-use golem_base_sdk::events::Event;
-use golem_base_sdk::rpc::{EntityMetaData, SearchResult};
-use golem_base_sdk::signers::TransactionSigner;
-use golem_base_sdk::{Address, Hash};
+use arkiv_sdk::client::ArkivClient;
+use arkiv_sdk::entity::Create;
+use arkiv_sdk::events::Event;
+use arkiv_sdk::rpc::{QueryOptions, SearchResult};
+use arkiv_sdk::signers::TransactionSigner;
+use arkiv_sdk::{Address, Hash};
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
@@ -31,7 +31,7 @@ use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
 
-const GOLEM_BASE_CALLER: &str = "GolemBase";
+const ARKIV_CALLER: &str = "Arkiv";
 
 // TODO: Get this value from node configuration
 const BLOCK_TIME_SECONDS: i64 = 2;
@@ -58,7 +58,7 @@ pub(super) struct OfferHandlers {
 
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
-    golem_base: GolemBaseClient,
+    golem_base: ArkivClient,
     offer_handlers: OfferHandlers,
     config: DiscoveryConfig,
     identities: Mutex<HashSet<NodeId>>,
@@ -111,35 +111,34 @@ impl Discovery {
     }
 
     /// Checks if an offer belongs to us based on metadata and entity_id
-    fn is_own_offer(&self, metadata: &EntityMetaData) -> bool {
+    fn is_own_offer(&self, metadata: &SearchResult) -> bool {
+        let Some(owner) = metadata.owner.as_ref() else {
+            log::warn!("[Programming error] Entity metadata should contain owner!");
+            return false;
+        };
+
         let identities = self.inner.identities.lock().unwrap();
-        let owner_bytes = NodeId::from(metadata.owner.as_slice());
+        let owner_bytes = NodeId::from(owner.as_slice());
         identities.contains(&owner_bytes)
     }
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
     pub async fn query_offers(&self) -> Result<Vec<ModelOffer>, DiscoveryError> {
         let client = &self.inner.golem_base;
+        let batch_size = self.inner.config.offer_query_batch_size;
 
-        // Query for entities with golem_marketplace_type = "Offer"
+        // Use arkiv-sdk's built-in batching
         let query = r#"golem_marketplace_type = "Offer""#;
-        let results = client.query_entities(query).await.map_err(|e| {
-            DiscoveryError::GolemBaseError(format!("Failed to query offers: {}", e))
-        })?;
+        let options = QueryOptions::with_all().with_page_size(batch_size as u64);
 
-        Self::parse_offers(results)
-    }
+        log::debug!("Querying offers with batch size {batch_size}..");
 
-    /// Retrieves Offers from Golem Base
-    pub async fn get_remote_offers(
-        &self,
-        _target_node_id: String,
-        offer_ids: Vec<SubscriptionId>,
-    ) -> Result<Vec<ModelOffer>, DiscoveryError> {
-        let results = self
-            .query_subscriptions(&offer_ids)
+        let results = client
+            .query_with_options(query, &options)
             .await
-            .map_err(|e| DiscoveryError::GolemBaseError(e.to_string()))?;
+            .map_err(|e| DiscoveryError::GolemBaseError(format!("Failed to query offers: {e}")))?;
+
+        log::debug!("Successfully fetched {} total offers", results.len());
         Self::parse_offers(results)
     }
 
@@ -155,49 +154,20 @@ impl Discovery {
             ))
         })?;
 
-        // Remove the entry
-        client
-            .remove_entries(metadata.owner, vec![key])
-            .await
-            .map_err(|e| {
-                DiscoveryError::GolemBaseError(format!(
-                    "Failed to remove entry for owner {}: {e}",
-                    metadata.owner
-                ))
-            })?;
+        let owner = metadata
+            .owner
+            .ok_or(DiscoveryError::ProgrammingError(format!(
+                "Entity metadata doesn't contain owner for offer {offer_id}"
+            )))?;
+        client.remove_entries(owner, vec![key]).await.map_err(|e| {
+            DiscoveryError::GolemBaseError(format!("Failed to remove entry for owner {owner}: {e}"))
+        })?;
 
         log::info!(
             "Successfully removed entry from GolemBase for offer {}",
             offer_id
         );
         Ok(())
-    }
-
-    /// Queries GolemBase for entries matching the given subscription IDs
-    async fn query_subscriptions(
-        &self,
-        offer_ids: &[SubscriptionId],
-    ) -> anyhow::Result<Vec<SearchResult>> {
-        if offer_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let offer_ids: Vec<Hash> = offer_ids
-            .iter()
-            .map(|id| Hash::from(id.to_bytes()))
-            .collect();
-
-        let mut results = Vec::new();
-        for key in offer_ids {
-            if let Ok(content) = self.inner.golem_base.get_storage_value(key).await {
-                results.push(SearchResult {
-                    key,
-                    value: content,
-                });
-            }
-        }
-
-        Ok(results)
     }
 
     /// Converts search results to ModelOffer objects
@@ -219,8 +189,9 @@ impl Discovery {
     }
 
     fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
+        log::debug!("Parsing Offer {key} json: {string_utf}");
         let offer: GolemBaseOffer = serde_json::from_str(string_utf)
-            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer json: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer {key} json: {e}"))?;
         offer.into_model_offer(key)
     }
 
@@ -363,7 +334,7 @@ impl Discovery {
     }
 
     /// Validates if an entity is a Golem offer by checking its marketplace type annotation
-    fn is_golem_offer(metadata: &EntityMetaData) -> bool {
+    fn is_golem_offer(metadata: &SearchResult) -> bool {
         metadata.string_annotations.iter().any(|annotation| {
             annotation.key == "golem_marketplace_type" && annotation.value == "Offer"
         })
@@ -382,9 +353,7 @@ impl Discovery {
 
                 log::trace!("Entity created in Golem Base: {}", entity_id);
 
-                let offer = client.cat(entity_id).await?;
-                let offer = Self::parse_offer(entity_id, &offer)?;
-
+                let offer = Self::offer_from_search(metadata)?;
                 self.register_incoming_offers(vec![offer]).await?;
             }
             Event::EntityRemoved { entity_id, .. } => {
@@ -395,7 +364,7 @@ impl Discovery {
                     .offer_handlers
                     .offer_unsubscribe_handler
                     .call(
-                        GOLEM_BASE_CALLER.to_string(),
+                        ARKIV_CALLER.to_string(),
                         UnsubscribedOffersBcast {
                             offer_ids: vec![id],
                         },
@@ -561,15 +530,18 @@ impl Discovery {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get current block: {}", e))?;
 
-        let metadata = client
+        let mut search = client
             .get_entity_metadata(offer_id)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get entity metadata: {}", e))?;
-        let metadata = serde_json::to_value(&metadata)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
 
-        let content = client.cat(offer_id).await?;
+        let content = search.value_as_string()?;
         let offer = Self::parse_offer(offer_id, &content)?.into_client_offer()?;
+
+        // We don't want to display whole content as metadata, to avoid polluting output.
+        search.value.take();
+        let metadata = serde_json::to_value(&search)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize metadata: {}", e))?;
 
         Ok(GetGolemBaseOfferResponse {
             offer,
@@ -617,10 +589,7 @@ impl Discovery {
             .inner
             .offer_handlers
             .filter_out_known_ids
-            .call(
-                GOLEM_BASE_CALLER.to_string(),
-                OffersBcast { offer_ids: ids },
-            )
+            .call(ARKIV_CALLER.to_string(), OffersBcast { offer_ids: ids })
             .await
             .unwrap_or_default();
 
@@ -636,7 +605,7 @@ impl Discovery {
                 .offer_handlers
                 .receive_remote_offers
                 .call(
-                    GOLEM_BASE_CALLER.to_string(),
+                    ARKIV_CALLER.to_string(),
                     OffersRetrieved {
                         offers: filtered_offers,
                     },
