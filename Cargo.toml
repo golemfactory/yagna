@@ -103,6 +103,7 @@ url = "2.1.1"
 [dev-dependencies]
 erc20_processor = { workspace = true }
 ya-test-framework.path = "test-utils/test-framework"
+ya-framework-basic = { workspace = true }
 
 ya-exe-unit = { version = "0.4", path = "exe-unit" }
 

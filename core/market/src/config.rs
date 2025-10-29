@@ -111,22 +111,18 @@ impl GolemBaseNetwork {
 
 #[derive(Parser, Clone, Debug)]
 pub struct GolemBaseRpcConfig {
-    #[clap(env = "GOLEM_BASE_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub faucet_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub rpc_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
     pub ws_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub l2_rpc_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_CHAIN_ID", default_value = "1337")]
+    #[clap(env = "ARKIV_CUSTOM_CHAIN_ID", default_value = "1337")]
     pub chain_id: u64,
-    // In local developer GolemBase environment, pre-allocated account is available to fund other accounts.
-    #[clap(
-        env = "GOLEM_BASE_CUSTOM_FUND_PREALLOCATED",
-        default_value_t = false,
-        long
-    )]
+    // In local developer Arkiv environment, pre-allocated account is available to fund other accounts.
+    #[clap(env = "ARKIV_CUSTOM_FUND_PREALLOCATED", default_value_t = false, long)]
     pub fund_preallocated: bool,
 }
 
@@ -136,7 +132,7 @@ define_from_env!(GolemBaseRpcConfig);
 pub struct DiscoveryConfig {
     #[clap(skip = GolemBaseNetwork::default_config())]
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
-    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Marketplace")]
+    #[clap(env = "ARKIV_CUSTOM_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
     // PoW faucets require to compute PoW solutions. This variable determines how many threads
     // will be used to compute solutions. Note that this is margin realtive to maximal avaiable

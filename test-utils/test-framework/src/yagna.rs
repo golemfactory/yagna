@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
+use arkiv_test_utils::arkiv::{ArkivContainer, Config as ArkivConfig};
+
 #[derive(Clone)]
 pub struct YagnaMock {
     yagna_dir: PathBuf,
@@ -13,6 +15,7 @@ pub struct YagnaMock {
 
     command: YagnaCommand,
     process: Arc<Mutex<Option<tracker::YagnaTracker>>>,
+    arkiv: Arc<Mutex<Option<ArkivContainer>>>,
 }
 
 #[derive(Default, Clone)]
@@ -60,6 +63,7 @@ impl YagnaMock {
                 env: Default::default(),
             },
             process: Arc::new(Mutex::new(None)),
+            arkiv: Arc::new(Mutex::new(None)),
         };
 
         yagna.set_default_env()
@@ -80,17 +84,55 @@ impl YagnaMock {
         self
     }
 
+    /// Initialize and configure arkiv container for this YagnaMock instance.
+    /// This will start a local arkiv container and configure environment variables
+    /// to point to it. This is called automatically during service_run.
+    async fn with_arkiv(&mut self) -> anyhow::Result<()> {
+        let arkiv_container = Self::init_arkiv().await?;
+        let rpc_url = arkiv_container.get_url()?;
+
+        // Convert HTTP URL to WebSocket URL
+        let ws_url = rpc_url
+            .as_str()
+            .replace("http://", "ws://")
+            .replace("https://", "wss://");
+
+        self.command = self
+            .command
+            .clone()
+            .env("ARKIV_CUSTOM_NETWORK", "Custom")
+            .env("ARKIV_CUSTOM_RPC_URL", rpc_url.as_str())
+            .env("ARKIV_CUSTOM_WS_URL", &ws_url)
+            .env("ARKIV_CUSTOM_CHAIN_ID", "1337")
+            .env("ARKIV_CUSTOM_FUND_PREALLOCATED", "true");
+
+        *self.arkiv.lock().unwrap() = Some(arkiv_container);
+        Ok(())
+    }
+
+    async fn init_arkiv() -> anyhow::Result<ArkivContainer> {
+        let port = portpicker::pick_unused_port()
+            .ok_or_else(|| anyhow!("Failed to find available port"))?;
+        let arkiv_config = ArkivConfig::default().with_port(port);
+        ArkivContainer::new(arkiv_config)
+            .await
+            .map_err(|e| anyhow!("Failed to start Arkiv container: {}", e))
+    }
+
     pub fn command(&self) -> Command {
         self.command.build("yagna").unwrap()
     }
 
-    pub async fn service_run(self) -> anyhow::Result<Self> {
+    pub async fn service_run(mut self) -> anyhow::Result<Self> {
+        // Always start arkiv container before starting yagna service
+        self.with_arkiv().await?;
+
         let mut cmd = self.command.build_std("yagna");
         cmd.current_dir(&self.yagna_dir)
             .arg("service")
             .arg("run")
-            .stderr(Stdio::null())
-            .stdout(Stdio::null());
+            .stderr(Stdio::inherit())
+            .stdout(Stdio::inherit());
 
         #[cfg(target_os = "linux")]
         unsafe {

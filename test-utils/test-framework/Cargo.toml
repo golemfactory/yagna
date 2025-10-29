@@ -16,9 +16,11 @@ serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch 
 ] }
 tokio = { version = "1", features = ["rt"] }
 url = "2.3"
+portpicker = "0.1"
 
 ya-utils-process.workspace = true
 ya-framework-macro = { path = "./framework-macro" }
+arkiv-test-utils.workspace = true
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.73"
