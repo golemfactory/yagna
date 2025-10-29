@@ -7,7 +7,7 @@ services:
         entrypoint: /usr/bin/ya-sb-router
         command: ["-l", "tcp://0.0.0.0:7477"]
 
-    golem-base:
+    arkiv:
         image: golemnetwork/golembase-op-geth:latest
         ports:
             - "8545:8545"
