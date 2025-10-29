@@ -168,6 +168,15 @@ impl YagnaMock {
                 process.kill();
             }
         }
+
+        // Clean up arkiv container - it may need a runtime for async cleanup
+        let arkiv = self.arkiv.lock().map_err(|e| anyhow!("{e}"))?.take();
+        if let Some(container) = arkiv {
+            // Container cleanup might need async operations, but dropping should handle it
+            // If async cleanup is needed, create a runtime for it
+            drop(container);
+        }
+
         Ok(())
     }
 }

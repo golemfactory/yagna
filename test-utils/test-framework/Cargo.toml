@@ -14,7 +14,7 @@ serde_json = "1.0"
 serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch = "actix_rt_test", features = [
     "actix-rt2",
 ] }
-tokio = { version = "1", features = ["rt"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread"] }
 url = "2.3"
 portpicker = "0.1"
 
