@@ -100,7 +100,7 @@ impl YagnaMock {
         self.command = self
             .command
             .clone()
-            .env("ARKIV_CUSTOM_NETWORK", "Custom")
+            .env("ARKIV_NETWORK", "Custom")
             .env("ARKIV_CUSTOM_RPC_URL", rpc_url.as_str())
             .env("ARKIV_CUSTOM_WS_URL", &ws_url)
             .env("ARKIV_CUSTOM_CHAIN_ID", "1337")

@@ -44,7 +44,7 @@ pub mod message;
 pub mod offer;
 pub mod pow;
 
-/// Responsible for communication with Golem Base during discovery phase.
+/// Responsible for communication with Arkiv during discovery phase.
 #[derive(Clone)]
 pub struct Discovery {
     inner: Arc<DiscoveryImpl>,
@@ -58,19 +58,19 @@ pub(super) struct OfferHandlers {
 
 pub struct DiscoveryImpl {
     identity: Arc<dyn IdentityApi>,
-    golem_base: ArkivClient,
+    arkiv: ArkivClient,
     offer_handlers: OfferHandlers,
     config: DiscoveryConfig,
     identities: Mutex<HashSet<NodeId>>,
 }
 
 impl Discovery {
-    /// Broadcasts Offers to Golem Base
+    /// Broadcasts Offers to Arkiv
     pub async fn bcast_offer(&self, offer: GolemBaseOffer) -> Result<ModelOffer, DiscoveryError> {
         // Validate account to return more menaingfull error messages than create_entry would.
         self.validate_account(offer.provider_id).await?;
 
-        let client = &self.inner.golem_base;
+        let client = &self.inner.arkiv;
         let address = Address::from(&offer.provider_id.into_array());
 
         // Serialize the offer to JSON
@@ -124,7 +124,7 @@ impl Discovery {
 
     /// Queries GolemBase for all offers with marketplace type "Offer"
     pub async fn query_offers(&self) -> Result<Vec<ModelOffer>, DiscoveryError> {
-        let client = &self.inner.golem_base;
+        let client = &self.inner.arkiv;
         let batch_size = self.inner.config.offer_query_batch_size;
 
         // Use arkiv-sdk's built-in batching
@@ -142,9 +142,9 @@ impl Discovery {
         Self::parse_offers(results)
     }
 
-    /// Broadcasts unsubscribe to Golem Base
+    /// Broadcasts unsubscribe to Arkiv
     pub async fn bcast_unsubscribe(&self, offer_id: SubscriptionId) -> Result<(), DiscoveryError> {
-        let client = &self.inner.golem_base;
+        let client = &self.inner.arkiv;
 
         // Get metadata to find owner
         let key = Hash::from(offer_id.to_bytes());
@@ -216,7 +216,7 @@ impl Discovery {
     async fn offers_events_loop(&self, starting_block: u64) -> anyhow::Result<()> {
         let events = self
             .inner
-            .golem_base
+            .arkiv
             .events_client_with_url(self.inner.config.get_ws_url().clone())
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
@@ -230,12 +230,12 @@ impl Discovery {
             match event {
                 Ok(event) => {
                     // Handle the event based on its type
-                    if let Err(e) = self.handle_golem_base_event(event).await {
-                        log::error!("Error handling Golem Base event: {}", e);
+                    if let Err(e) = self.handle_arkiv_event(event).await {
+                        log::error!("Error handling Arkiv event: {}", e);
                     }
                 }
                 Err(e) => {
-                    log::error!("Error receiving Golem Base event: {}", e);
+                    log::error!("Error receiving Arkiv event: {}", e);
                     // Try to reconnect after a delay, to protect against errors spam
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     continue;
@@ -245,10 +245,10 @@ impl Discovery {
         Ok(())
     }
 
-    /// Spawns a task that listens for WebSocket events from Golem Base
+    /// Spawns a task that listens for WebSocket events from Arkiv
     pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
         let discovery = self.clone();
-        let client = self.inner.golem_base.clone();
+        let client = self.inner.arkiv.clone();
 
         // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
         // any sense to keep them after restart and they polute GolemBase. Offers should expire
@@ -307,12 +307,12 @@ impl Discovery {
         let address = Address::from(&node_id.into_array());
 
         // Get all entries owned by this address
-        let results = self.inner.golem_base.get_entities_of_owner(address).await?;
+        let results = self.inner.arkiv.get_entities_of_owner(address).await?;
 
         // Filter only offer entries
         let mut offer_entries = Vec::new();
         for result in results {
-            let metadata = self.inner.golem_base.get_entity_metadata(result).await?;
+            let metadata = self.inner.arkiv.get_entity_metadata(result).await?;
 
             // It's important. If we would run on GolemBase chain that is not dedicated for marketplace
             // only, we would remove entries published by other applications.
@@ -324,7 +324,7 @@ impl Discovery {
         if !offer_entries.is_empty() {
             let count = offer_entries.len();
             self.inner
-                .golem_base
+                .arkiv
                 .remove_entries(address, offer_entries)
                 .await?;
             log::info!("Removed {} offers for identity {}", count, node_id);
@@ -340,9 +340,9 @@ impl Discovery {
         })
     }
 
-    /// Handles incoming Golem Base events
-    async fn handle_golem_base_event(&self, event: Event) -> anyhow::Result<()> {
-        let client = self.inner.golem_base.clone();
+    /// Handles incoming Arkiv events
+    async fn handle_arkiv_event(&self, event: Event) -> anyhow::Result<()> {
+        let client = self.inner.arkiv.clone();
 
         match event {
             Event::EntityCreated { entity_id, .. } => {
@@ -351,13 +351,13 @@ impl Discovery {
                     return Ok(());
                 }
 
-                log::trace!("Entity created in Golem Base: {}", entity_id);
+                log::trace!("Entity created in Arkiv: {}", entity_id);
 
                 let offer = Self::offer_from_search(metadata)?;
                 self.register_incoming_offers(vec![offer]).await?;
             }
             Event::EntityRemoved { entity_id, .. } => {
-                log::trace!("Entity removed from Golem Base: {}", entity_id);
+                log::trace!("Entity removed from Arkiv: {}", entity_id);
 
                 let id = SubscriptionId::from_bytes(entity_id.0);
                 self.inner
@@ -381,7 +381,7 @@ impl Discovery {
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
     pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
-        log::info!("Golem Base Configuration:");
+        log::info!("Arkiv Configuration:");
         log::info!("  Network: {:?}", self.inner.config.get_network_type());
         log::info!("  RPC URL: {}", self.inner.config.get_rpc_url());
         log::info!("  WebSocket URL: {}", self.inner.config.get_ws_url());
@@ -392,7 +392,7 @@ impl Discovery {
             self.inner.config.fund_preallocated()
         );
 
-        let client = self.inner.golem_base.clone();
+        let client = self.inner.arkiv.clone();
 
         // Sync with GolemBase node
         client
@@ -408,7 +408,7 @@ impl Discovery {
             .await
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
-        // Start Golem Base listener that loads offers and listens for updates
+        // Start Arkiv listener that loads offers and listens for updates
         self.bind_offers_listener().await?;
 
         self.bind_identity_handlers(gsb.local_addr()).await?;
@@ -430,9 +430,9 @@ impl Discovery {
         let signer = YagnaIdSigner::new(self.inner.identity.clone(), node_id);
         let address = signer.address();
 
-        self.inner.golem_base.account_register(signer).await?;
+        self.inner.arkiv.account_register(signer).await?;
 
-        let balance = self.inner.golem_base.get_balance(address).await?;
+        let balance = self.inner.arkiv.get_balance(address).await?;
         log::info!("GolemBase client registered account {address} with balance: {balance}");
         Ok(())
     }
@@ -509,7 +509,7 @@ impl Discovery {
             let handler = command_handler_.clone();
             async move {
                 handler
-                    .handle_golem_base_command(msg)
+                    .handle_arkiv_command(msg)
                     .await
                     .map_err(|e| RpcMessageError::Market(e.to_string()))
             }
@@ -524,7 +524,7 @@ impl Discovery {
             .parse::<Hash>()
             .map_err(|e| anyhow::anyhow!("Invalid offer ID format: {}", e))?;
 
-        let client = self.inner.golem_base.clone();
+        let client = self.inner.arkiv.clone();
         let block_number = client
             .get_current_block_number()
             .await
