@@ -17,7 +17,7 @@ use crate::protocol::discovery::faucet::FaucetClient;
 #[derive(Clone)]
 pub struct GolemBaseCommandHandler {
     identity: std::sync::Arc<dyn IdentityApi>,
-    golem_base: ArkivClient,
+    arkiv: ArkivClient,
     config: DiscoveryConfig,
     optimism_client: DynProvider<AnyNetwork>,
 }
@@ -25,14 +25,14 @@ pub struct GolemBaseCommandHandler {
 impl GolemBaseCommandHandler {
     pub fn new(
         identity: std::sync::Arc<dyn IdentityApi>,
-        golem_base: ArkivClient,
+        arkiv: ArkivClient,
         config: DiscoveryConfig,
     ) -> Self {
         let optimism_provider = Self::create_optimism_provider(&config);
 
         Self {
             identity,
-            golem_base,
+            arkiv,
             config,
             optimism_client: optimism_provider,
         }
@@ -41,7 +41,7 @@ impl GolemBaseCommandHandler {
     pub fn from_discovery(discovery: &super::Discovery) -> Self {
         Self::new(
             discovery.inner.identity.clone(),
-            discovery.inner.golem_base.clone(),
+            discovery.inner.arkiv.clone(),
             discovery.inner.config.clone(),
         )
     }
@@ -87,7 +87,7 @@ impl GolemBaseCommandHandler {
             )));
         }
 
-        let client = self.golem_base.clone();
+        let client = self.arkiv.clone();
         let address = Address::from(&wallet.into_array());
 
         let faucet_client = FaucetClient::new(self.config.clone(), client.clone());
@@ -125,7 +125,7 @@ impl GolemBaseCommandHandler {
             })?,
         };
 
-        let client = self.golem_base.clone();
+        let client = self.arkiv.clone();
         let address = Address::from(&wallet.into_array());
 
         let balance = client
@@ -140,7 +140,7 @@ impl GolemBaseCommandHandler {
         })
     }
 
-    pub async fn handle_golem_base_command(
+    pub async fn handle_arkiv_command(
         &self,
         msg: GolemBaseCommand,
     ) -> Result<GolemBaseCommandResponse, RpcMessageError> {
@@ -182,7 +182,7 @@ impl GolemBaseCommandHandler {
     }
 
     async fn get_block(&self, block_number: u64) -> anyhow::Result<GolemBaseCommandResponse> {
-        let client = self.golem_base.clone();
+        let client = self.arkiv.clone();
 
         // Get block by number
         let block = client

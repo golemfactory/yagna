@@ -132,24 +132,24 @@ define_from_env!(GolemBaseRpcConfig);
 pub struct DiscoveryConfig {
     #[clap(skip = GolemBaseNetwork::default_config())]
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
-    #[clap(env = "ARKIV_CUSTOM_NETWORK", default_value = "Marketplace")]
+    #[clap(env = "ARKIV_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
     // PoW faucets require to compute PoW solutions. This variable determines how many threads
     // will be used to compute solutions. Note that this is margin realtive to maximal avaiable
-    // threads. If machine has N cores, then N - GOLEM_BASE_FUND_POW_THREADS_MARGIN will be used.
-    #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
+    // threads. If machine has N cores, then N - ARKIV_FUND_POW_THREADS_MARGIN will be used.
+    #[clap(env = "ARKIV_FUND_POW_THREADS_MARGIN", default_value = "2")]
     pub pow_threads_margin: usize,
     /// Timeout for publishing offers on the market
-    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
+    #[clap(env = "ARKIV_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
     pub offer_publish_timeout: Duration,
     /// Number of retries for GolemBase transactions
-    #[clap(env = "GOLEM_BASE_PUBLISH_MAX_RETRIES", default_value = "2")]
+    #[clap(env = "ARKIV_PUBLISH_MAX_RETRIES", default_value = "2")]
     pub publish_max_retries: u32,
     /// Number of confirmations required for GolemBase transactions
-    #[clap(env = "GOLEM_BASE_REQUIRED_CONFIRMATIONS", default_value = "1")]
+    #[clap(env = "ARKIV_REQUIRED_CONFIRMATIONS", default_value = "1")]
     pub required_confirmations: u64,
     /// Batch size for querying offers from GolemBase
-    #[clap(env = "GOLEM_BASE_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
+    #[clap(env = "ARKIV_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
     pub offer_query_batch_size: usize,
 }
 

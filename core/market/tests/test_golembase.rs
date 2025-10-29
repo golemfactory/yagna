@@ -66,8 +66,8 @@ async fn test_golembase_offer_expiration_desync_before() -> Result<(), anyhow::E
     let dir = dir.path();
 
     // Set expiration to un-even number. Market will convert this number to mulitplicity
-    // of 2s, which is block interval on Golem Base.
-    // This will cause desynchronization between market expiration counter and Golem Base.
+    // of 2s, which is block interval on Arkiv.
+    // This will cause desynchronization between market expiration counter and Arkiv.
     let mut config = create_market_config_for_test();
     config.subscription.default_ttl = chrono::Duration::milliseconds(5300);
     let network = MarketsNetwork::new_mocked(dir, MockNet::new())
@@ -114,7 +114,7 @@ async fn test_golembase_offer_expiration_desync_before() -> Result<(), anyhow::E
 }
 
 // The same scenario as `test_golembase_offer_expiration_desync_before` but this
-// time expiration on Golem Base elapses later than market internal.
+// time expiration on Arkiv elapses later than market internal.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
 async fn test_golembase_offer_expiration_desync_after() -> Result<(), anyhow::Error> {
@@ -124,8 +124,8 @@ async fn test_golembase_offer_expiration_desync_after() -> Result<(), anyhow::Er
     let dir = dir.path();
 
     // Set expiration to un-even number. Market will convert this number to mulitplicity
-    // of 2s, which is block interval on Golem Base.
-    // This will cause desynchronization between market expiration counter and Golem Base.
+    // of 2s, which is block interval on Arkiv.
+    // This will cause desynchronization between market expiration counter and Arkiv.
     let mut config = create_market_config_for_test();
     config.subscription.default_ttl = chrono::Duration::milliseconds(6300);
     let network = MarketsNetwork::new_mocked(dir, MockNet::new())
