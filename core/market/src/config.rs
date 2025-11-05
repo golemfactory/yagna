@@ -2,9 +2,19 @@ use anyhow::Result;
 use clap::Parser;
 use clap::ValueEnum;
 use std::collections::HashMap;
+use std::env;
 use std::time::Duration;
 use url::Url;
 use ya_utils_cli::define_from_env;
+
+pub fn is_market_memory_on_disk() -> bool {
+    // This options is used to troubleshoot memory issues with market.
+    // Use only for debugging purposes, default value is false.
+    let str = env::var("MARKET_MEMORY_USE_DISK")
+        .unwrap_or_default()
+        .to_lowercase();
+    str == "true" || str == "1"
+}
 
 #[derive(Parser, Clone)]
 pub struct Config {
@@ -101,22 +111,18 @@ impl GolemBaseNetwork {
 
 #[derive(Parser, Clone, Debug)]
 pub struct GolemBaseRpcConfig {
-    #[clap(env = "GOLEM_BASE_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub faucet_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub rpc_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
     pub ws_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    #[clap(env = "ARKIV_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
     pub l2_rpc_url: Url,
-    #[clap(env = "GOLEM_BASE_CUSTOM_CHAIN_ID", default_value = "1337")]
+    #[clap(env = "ARKIV_CUSTOM_CHAIN_ID", default_value = "1337")]
     pub chain_id: u64,
-    // In local developer GolemBase environment, pre-allocated account is available to fund other accounts.
-    #[clap(
-        env = "GOLEM_BASE_CUSTOM_FUND_PREALLOCATED",
-        default_value_t = false,
-        long
-    )]
+    // In local developer Arkiv environment, pre-allocated account is available to fund other accounts.
+    #[clap(env = "ARKIV_CUSTOM_FUND_PREALLOCATED", default_value_t = false, long)]
     pub fund_preallocated: bool,
 }
 
@@ -126,24 +132,24 @@ define_from_env!(GolemBaseRpcConfig);
 pub struct DiscoveryConfig {
     #[clap(skip = GolemBaseNetwork::default_config())]
     pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
-    #[clap(env = "GOLEM_BASE_NETWORK", default_value = "Marketplace")]
+    #[clap(env = "ARKIV_NETWORK", default_value = "Marketplace")]
     pub network: GolemBaseNetwork,
     // PoW faucets require to compute PoW solutions. This variable determines how many threads
     // will be used to compute solutions. Note that this is margin realtive to maximal avaiable
-    // threads. If machine has N cores, then N - GOLEM_BASE_FUND_POW_THREADS_MARGIN will be used.
-    #[clap(env = "GOLEM_BASE_FUND_POW_THREADS_MARGIN", default_value = "2")]
+    // threads. If machine has N cores, then N - ARKIV_FUND_POW_THREADS_MARGIN will be used.
+    #[clap(env = "ARKIV_FUND_POW_THREADS_MARGIN", default_value = "2")]
     pub pow_threads_margin: usize,
     /// Timeout for publishing offers on the market
-    #[clap(env = "GOLEM_BASE_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
+    #[clap(env = "ARKIV_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
     pub offer_publish_timeout: Duration,
     /// Number of retries for GolemBase transactions
-    #[clap(env = "GOLEM_BASE_PUBLISH_MAX_RETRIES", default_value = "2")]
+    #[clap(env = "ARKIV_PUBLISH_MAX_RETRIES", default_value = "2")]
     pub publish_max_retries: u32,
     /// Number of confirmations required for GolemBase transactions
-    #[clap(env = "GOLEM_BASE_REQUIRED_CONFIRMATIONS", default_value = "1")]
+    #[clap(env = "ARKIV_REQUIRED_CONFIRMATIONS", default_value = "1")]
     pub required_confirmations: u64,
     /// Batch size for querying offers from GolemBase
-    #[clap(env = "GOLEM_BASE_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
+    #[clap(env = "ARKIV_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
     pub offer_query_batch_size: usize,
 }
 

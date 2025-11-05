@@ -32,7 +32,7 @@ pub enum DiscoveryInitError {
     #[error("Failed to bind GSB handler for {0}: {1}")]
     BindingGsbFailed(String, String),
 
-    #[error("Failed to initialize Golem Base client: {0}")]
+    #[error("Failed to initialize Arkiv client: {0}")]
     GolemBaseInitFailed(String),
 
     #[error("Builder initialization incomplete: {0}")]

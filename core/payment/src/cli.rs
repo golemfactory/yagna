@@ -333,7 +333,7 @@ Typically operation should take less than 1 minute.
                     None => "N/A".to_string(),
                 };
 
-                let golem_base_gas = match bus::service(market_bus::discovery_endpoint())
+                let arkiv_gas = match bus::service(market_bus::discovery_endpoint())
                     .send(GetGolemBaseBalance {
                         wallet: Some(address.parse()?),
                     })
@@ -425,7 +425,7 @@ Typically operation should take less than 1 minute.
                             "confirmed",
                             format!("{} {}", status.incoming.confirmed.total_amount, status.token),
                             format!("{} {}", status.outgoing.confirmed.total_amount, status.token),
-                            format!("GolemBase: {}", golem_base_gas)
+                            format!("GolemBase: {}", arkiv_gas)
                         ]},
                         serde_json::json! {[
                             format!("token: {}", status.token),

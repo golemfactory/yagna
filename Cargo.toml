@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "yagna"
 readme = "README.md"
 repository = "https://github.com/golemfactory/yagna"
-version = "0.17.1"
+version = "0.17.6"
 
 [features]
 default = ['erc20-driver', 'gftp/bin']
@@ -103,6 +103,7 @@ url = "2.1.1"
 [dev-dependencies]
 erc20_processor = { workspace = true }
 ya-test-framework.path = "test-utils/test-framework"
+ya-framework-basic = { workspace = true }
 
 ya-exe-unit = { version = "0.4", path = "exe-unit" }
 
@@ -194,6 +195,11 @@ blocks_in_conditions = "allow"
 get_first = "allow"
 doc_lazy_continuation = "allow"
 len_zero = "allow"
+result_large_err = "allow"
+cloned_ref_to_slice_refs = "allow"
+
+[workspace.lints.rust]
+mismatched_lifetime_syntaxes = "allow"
 
 [workspace]
 members = [
@@ -260,17 +266,17 @@ actix = { version = "0.13", default-features = false }
 crunchy = "=0.2.2"
 
 derive_more = "0.99.11"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
-erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "4200567b931af64f4fb1f6b756dd6d051576b64f" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "8cd601fa14fef3c62d31f9c0682a703d97d20d75" }
+erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "8cd601fa14fef3c62d31f9c0682a703d97d20d75" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
-#erc20_payment_lib = { version = "0.4.7" }
-#erc20_processor = { version = "0.4.7" }
+#erc20_payment_lib = { version = "0.5.1" }
+#erc20_processor = { version = "0.5.1" }
 gftp = { version = "0.4.1", path = "core/gftp" }
 
-arkiv-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
-arkiv-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
-arkiv-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "b90ebad0880203269934eefb8f94661e7580aef4" }
+arkiv-sdk = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "7824e15846e8c08fe5b6d518a7dced7cd8accf12" }
+arkiv-mock = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "7824e15846e8c08fe5b6d518a7dced7cd8accf12" }
+arkiv-test-utils = { git = "https://github.com/golemfactory/golembase-rust-sdk.git", rev = "7824e15846e8c08fe5b6d518a7dced7cd8accf12" }
 #arkiv-sdk = { path = "../../GolemBase/rust-sdk" }
 #arkiv-mock = { path = "../../GolemBase/rust-sdk/test-utils/golem-base-mock" }
 #arkiv-test-utils = { path = "../../GolemBase/rust-sdk/test-utils" }

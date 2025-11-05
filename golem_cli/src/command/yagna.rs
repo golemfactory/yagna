@@ -65,6 +65,14 @@ lazy_static! {
             },
         );
         erc20.insert(
+            NetworkName::Hoodi.into(),
+            PaymentPlatform {
+                platform: "erc20-hoodi-tglm",
+                driver: "erc20",
+                token: "tGLM",
+            },
+        );
+        erc20.insert(
             NetworkName::Mumbai.into(),
             PaymentPlatform {
                 platform: "erc20-mumbai-tglm",
@@ -156,6 +164,7 @@ lazy_static! {
             NetworkGroup::Testnet,
             vec![
                 NetworkName::Holesky,
+                NetworkName::Hoodi,
                 NetworkName::Amoy,
                 NetworkName::Sepolia,
             ],

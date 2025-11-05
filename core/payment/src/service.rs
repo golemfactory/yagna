@@ -123,10 +123,12 @@ mod local {
         counter!("payment.invoices.requestor.not-enough-funds", 0);
 
         counter!("payment.amount.received", 0, "platform" => "erc20-holesky-tglm");
+        counter!("payment.amount.received", 0, "platform" => "erc20-hoodi-tglm");
         counter!("payment.amount.received", 0, "platform" => "erc20-mainnet-glm");
         counter!("payment.amount.received", 0, "platform" => "erc20-polygon-glm");
 
         counter!("payment.amount.sent", 0, "platform" => "erc20-holesky-tglm");
+        counter!("payment.amount.sent", 0, "platform" => "erc20-hoodi-tglm");
         counter!("payment.amount.sent", 0, "platform" => "erc20-mainnet-glm");
         counter!("payment.amount.sent", 0, "platform" => "erc20-polygon-glm");
 

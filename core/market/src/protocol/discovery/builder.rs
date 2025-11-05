@@ -78,7 +78,7 @@ impl DiscoveryBuilder {
             DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
         })?;
 
-        let golem_base = ArkivClient::new_uninitialized(config.get_rpc_url().clone())
+        let arkiv = ArkivClient::new_uninitialized(config.get_rpc_url().clone())
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?
             .override_config(TransactionConfig {
                 max_retries: config.publish_max_retries,
@@ -96,7 +96,7 @@ impl DiscoveryBuilder {
                 identity: self.get_data(),
                 offer_handlers,
                 config: config.clone(),
-                golem_base,
+                arkiv,
                 identities: std::sync::Mutex::new(HashSet::new()),
             }),
         };

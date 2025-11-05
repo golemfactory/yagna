@@ -191,26 +191,26 @@ impl MarketsNetwork {
     /// Creates a new MarketsNetwork with mocked GolemBase. Equivalent to calling new_raw and with_mocked_golembase.
     pub async fn new_mocked(testdir: impl AsRef<Path>, net: MockNet) -> anyhow::Result<Self> {
         let network = Self::new_raw(testdir, net).await;
-        network.with_mocked_golembase().await
+        network.with_mocked_arkiv().await
     }
 
     /// Creates a new MarketsNetwork with containerized GolemBase. Equivalent to calling new.
     pub async fn new_containerized(testdir: impl AsRef<Path>, net: MockNet) -> Self {
         let mut network = Self::new_raw(testdir, net).await;
-        network.golembase = Some(Self::init_golembase(&network.config).await.unwrap());
+        network.golembase = Some(Self::init_arkiv(&network.config).await.unwrap());
         network
     }
 
-    async fn init_golembase(config: &Config) -> Result<ArkivContainer> {
+    async fn init_arkiv(config: &Config) -> Result<ArkivContainer> {
         let ws_port = config.discovery.get_rpc_url().port().unwrap_or(8545);
-        let golembase_config = ArkivConfig::default().with_port(ws_port);
-        ArkivContainer::new(golembase_config)
+        let arkiv_config = ArkivConfig::default().with_port(ws_port);
+        ArkivContainer::new(arkiv_config)
             .await
-            .map_err(|e| anyhow!("Failed to start GolemBase container: {}", e))
+            .map_err(|e| anyhow!("Failed to start Arkiv container: {}", e))
     }
 
     /// Use mocked GolemBase instead of container. This will disable the container initialization.
-    pub async fn with_mocked_golembase(mut self) -> anyhow::Result<Self> {
+    pub async fn with_mocked_arkiv(mut self) -> anyhow::Result<Self> {
         let rpc_url = self.config.discovery.get_rpc_url().clone();
         log::info!("Using GolemBase mock server URL: {}", rpc_url);
 

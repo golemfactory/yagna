@@ -45,4 +45,5 @@ sha3 = "0.8.2"
 tempdir = "0.3.7"
 tokio = { version = "1", features = ["process"] }
 
-[build-dependencies]
+[lints]
+workspace = true
