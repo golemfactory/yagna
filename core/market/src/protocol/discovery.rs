@@ -83,7 +83,7 @@ impl Discovery {
 
         // Create entry with marketplace type and ID annotations
         let entry =
-            Create::new(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
+            Create::json(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
 
         // Create entry on GolemBase
         let timeout = self.inner.config.offer_publish_timeout;

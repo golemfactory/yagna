@@ -1551,7 +1551,7 @@ dependencies = [
 [[package]]
 name = "arkiv-mock"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=2a1a66b150722a01805403c76905472455eaf1d8#2a1a66b150722a01805403c76905472455eaf1d8"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=cb1f808ddc144f20ecad6f70b5c1eb94d00d959e#cb1f808ddc144f20ecad6f70b5c1eb94d00d959e"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -1576,7 +1576,7 @@ dependencies = [
 [[package]]
 name = "arkiv-sdk"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=2a1a66b150722a01805403c76905472455eaf1d8#2a1a66b150722a01805403c76905472455eaf1d8"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=cb1f808ddc144f20ecad6f70b5c1eb94d00d959e#cb1f808ddc144f20ecad6f70b5c1eb94d00d959e"
 dependencies = [
  "alloy",
  "alloy-json-rpc",
@@ -1586,6 +1586,7 @@ dependencies = [
  "async-trait",
  "bigdecimal 0.4.9",
  "bon",
+ "brotli",
  "bytes 1.10.1",
  "derive_more 2.0.1",
  "dirs",
@@ -1605,7 +1606,7 @@ dependencies = [
 [[package]]
 name = "arkiv-test-utils"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=2a1a66b150722a01805403c76905472455eaf1d8#2a1a66b150722a01805403c76905472455eaf1d8"
+source = "git+https://github.com/golemfactory/golembase-rust-sdk.git?rev=cb1f808ddc144f20ecad6f70b5c1eb94d00d959e#cb1f808ddc144f20ecad6f70b5c1eb94d00d959e"
 dependencies = [
  "alloy",
  "anyhow",
