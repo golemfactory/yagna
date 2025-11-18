@@ -421,8 +421,9 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let demand_id = demand_id1.clone();
     let market = market1.clone();
 
+    // Reserve 2 blocks for subimiting the Offer.
     let query1 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 3.0, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 8.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -430,7 +431,7 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
     let demand_id = demand_id1.clone();
 
     let query2 = tokio::spawn(async move {
-        let events = market.query_events(&demand_id, 5.0, Some(5)).await.unwrap();
+        let events = market.query_events(&demand_id, 8.0, Some(5)).await.unwrap();
         Result::<_, anyhow::Error>::Ok(events)
     });
 
@@ -448,12 +449,12 @@ async fn test_simultaneous_query_events() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let mut events1 = tokio::time::timeout(Duration::from_millis(3100), query1)
+    let mut events1 = tokio::time::timeout(Duration::from_millis(500), query1)
         .await
         .unwrap()
         .unwrap()
         .unwrap();
-    let events2 = tokio::time::timeout(Duration::from_millis(3100), query2)
+    let events2 = tokio::time::timeout(Duration::from_millis(500), query2)
         .await
         .unwrap()
         .unwrap()

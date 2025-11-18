@@ -189,7 +189,7 @@ impl Discovery {
     }
 
     fn parse_offer(key: Hash, string_utf: &str) -> anyhow::Result<ModelOffer> {
-        log::debug!("Parsing Offer {key} json: {string_utf}");
+        log::trace!("Parsing Offer {key} json: {string_utf}");
         let offer: GolemBaseOffer = serde_json::from_str(string_utf)
             .map_err(|e| anyhow::anyhow!("Failed to deserialize Offer {key} json: {e}"))?;
         offer.into_model_offer(key)
@@ -425,7 +425,7 @@ impl Discovery {
             .map_err(|e| DiscoveryInitError::BindingGsbFailed(endpoint.to_string(), e.to_string()))
     }
 
-    /// Registers a single YagnaIdSigner with GolemBase
+    /// Registers a single YagnaIdSigner with Arkiv
     async fn register_signer(&self, node_id: NodeId) -> anyhow::Result<()> {
         let signer = YagnaIdSigner::new(self.inner.identity.clone(), node_id);
         let address = signer.address();
@@ -433,7 +433,7 @@ impl Discovery {
         self.inner.arkiv.account_register(signer).await?;
 
         let balance = self.inner.arkiv.get_balance(address).await?;
-        log::info!("GolemBase client registered account {address} with balance: {balance}");
+        log::info!("Arkiv client registered account {address} with balance: {balance}");
         Ok(())
     }
 

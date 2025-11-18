@@ -110,7 +110,7 @@ impl GolemBaseCommandHandler {
             .await
             .map_err(|e| RpcMessageError::Market(format!("Failed to get balance: {}", e)))?;
 
-        log::info!("GolemBase balance for wallet {}: {}", wallet, balance);
+        log::info!("Arkiv balance for wallet {}: {}", wallet, balance);
         Ok(FundGolemBaseResponse { wallet, balance })
     }
 
