@@ -19,7 +19,7 @@ from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import (
     run_activity,
-    wasi_exe_script,
+    wasi_sleeper_extended_exe_script,
     wasi_sleeper_task_package,
 )
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
@@ -136,7 +136,10 @@ async def test_prov_idle_agreement_after_2_activities(
         for i in range(0, 2):
             logger.info("Running activity %d-th time on %s", i, provider.name)
             await run_activity(
-                requestor, provider, agreement_id, wasi_exe_script(runner)
+                requestor,
+                provider,
+                agreement_id,
+                wasi_sleeper_extended_exe_script(runner),
             )
 
         # Break after 5s + 3s margin

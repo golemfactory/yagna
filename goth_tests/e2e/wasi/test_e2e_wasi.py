@@ -17,7 +17,7 @@ from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import (
-    wasi_exe_script,
+    wasi_sleeper_extended_exe_script,
     wasi_sleeper_task_package,
 )
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
@@ -64,7 +64,7 @@ async def test_e2e_wasi(
         )
 
         # Activity
-        exe_script = wasi_exe_script(runner)
+        exe_script = wasi_sleeper_extended_exe_script(runner)
         num_commands = len(exe_script)
 
         for agreement_id, provider in agreement_providers:
