@@ -16,7 +16,10 @@ from goth.node import node_environment
 from goth.runner import Runner
 from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package
+from goth_tests.helpers.activity import (
+    wasi_exe_script,
+    wasi_sleeper_task_package,
+)
 from goth_tests.helpers.negotiation import DemandBuilder, negotiate_agreements
 from goth_tests.helpers.probe import ProviderProbe
 
@@ -48,7 +51,7 @@ async def test_e2e_wasi(
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(wasi_task_package)
+            .props_from_template(wasi_sleeper_task_package)
             .constraints("(&(golem.runtime.name=wasmtime))")
             .build()
         )
