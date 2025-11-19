@@ -83,7 +83,7 @@ impl Discovery {
 
         // Create entry with marketplace type and ID annotations
         let entry =
-            Create::json(payload, ttl_blocks).annotate_string("golem_marketplace_type", "Offer");
+            Create::json(payload, ttl_blocks).annotate_string("GolemMarketplaceType", "Offer");
 
         // Create entry on GolemBase
         let timeout = self.inner.config.offer_publish_timeout;
@@ -128,7 +128,7 @@ impl Discovery {
         let batch_size = self.inner.config.offer_query_batch_size;
 
         // Use arkiv-sdk's built-in batching
-        let query = r#"golem_marketplace_type = "Offer""#;
+        let query = r#"GolemMarketplaceType = "Offer""#;
         let options = QueryOptions::with_all().with_page_size(batch_size as u64);
 
         log::debug!("Querying offers with batch size {batch_size}..");
@@ -336,7 +336,7 @@ impl Discovery {
     /// Validates if an entity is a Golem offer by checking its marketplace type annotation
     fn is_golem_offer(metadata: &SearchResult) -> bool {
         metadata.string_annotations.iter().any(|annotation| {
-            annotation.key == "golem_marketplace_type" && annotation.value == "Offer"
+            annotation.key == "GolemMarketplaceType" && annotation.value == "Offer"
         })
     }
 
