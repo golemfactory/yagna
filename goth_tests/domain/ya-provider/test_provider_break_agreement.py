@@ -17,7 +17,11 @@ from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe
 
-from goth_tests.helpers.activity import run_activity, wasi_exe_script, wasi_task_package
+from goth_tests.helpers.activity import (
+    run_activity,
+    wasi_sleeper_extended_exe_script,
+    wasi_sleeper_task_package,
+)
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
 from goth_tests.helpers.payment import pay_all
 from goth_tests.helpers.probe import ProviderProbe
@@ -90,7 +94,7 @@ async def test_prov_idle_agreement(
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, wasi_task_package),
+            build_demand(requestor, runner, wasi_sleeper_task_package),
             providers,
         )
 
@@ -123,7 +127,7 @@ async def test_prov_idle_agreement_after_2_activities(
         agreement_providers = await negotiate_agreements(
             requestor,
             build_demand(
-                requestor, runner, wasi_task_package, require_debit_notes=False
+                requestor, runner, wasi_sleeper_task_package, require_debit_notes=False
             ),
             providers,
         )
@@ -132,7 +136,10 @@ async def test_prov_idle_agreement_after_2_activities(
         for i in range(0, 2):
             logger.info("Running activity %d-th time on %s", i, provider.name)
             await run_activity(
-                requestor, provider, agreement_id, wasi_exe_script(runner)
+                requestor,
+                provider,
+                agreement_id,
+                wasi_sleeper_extended_exe_script(runner),
             )
 
         # Break after 5s + 3s margin
@@ -160,7 +167,7 @@ async def test_prov_debit_notes_accept_timeout(
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, wasi_task_package),
+            build_demand(requestor, runner, wasi_sleeper_task_package),
             providers,
         )
 
@@ -209,7 +216,7 @@ async def test_prov_timeout_unresponsive_requestor(
 
         agreement_providers = await negotiate_agreements(
             requestor,
-            build_demand(requestor, runner, wasi_task_package),
+            build_demand(requestor, runner, wasi_sleeper_task_package),
             providers,
         )
 

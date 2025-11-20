@@ -36,6 +36,9 @@ pub enum GolemBaseNetwork {
     Marketplace,
     #[clap(name = "MarketplaceLoadTests")]
     MarketplaceLoadTests,
+    /// Furby is a load and stress tests network.
+    #[clap(name = "Furby")]
+    Furby,
     #[clap(name = "Local")]
     Local,
     #[clap(name = "Custom")]
@@ -80,19 +83,16 @@ impl GolemBaseNetwork {
                 fund_preallocated: false,
             },
         );
-        // Configuration: https://marketplaceloadtests.hoodi.arkiv.network/
-        // Explorer: https://explorer.marketplaceloadtests.hoodi.arkiv.network/
+        // Configuration: https://furby.hoodi.arkiv.network/
+        // Explorer: https://explorer.furby.hoodi.arkiv.network/
         configs.insert(
-            GolemBaseNetwork::MarketplaceLoadTests,
+            GolemBaseNetwork::Furby,
             GolemBaseRpcConfig {
-                faucet_url: Url::parse("https://marketplaceloadtests.hoodi.arkiv.network/faucet/")
-                    .unwrap(),
-                rpc_url: Url::parse("https://marketplaceloadtests.hoodi.arkiv.network/rpc")
-                    .unwrap(),
-                ws_url: Url::parse("wss://marketplaceloadtests.hoodi.arkiv.network/rpc/ws")
-                    .unwrap(),
+                faucet_url: Url::parse("https://furby.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://furby.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://furby.hoodi.arkiv.network/rpc/ws").unwrap(),
                 l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
-                chain_id: 60138453005,
+                chain_id: 60138453060,
                 fund_preallocated: false,
             },
         );

@@ -112,33 +112,33 @@ impl AgreementsCommand {
 
 #[derive(StructOpt, Debug)]
 pub enum GolemBaseCliCommand {
-    /// Fund GolemBase wallet
+    /// Fund Arkiv wallet
     Fund {
         #[structopt(
             help = "Wallet address to fund (optional, uses default identity if not provided)"
         )]
         wallet: Option<NodeId>,
     },
-    /// Check GolemBase wallet balance
+    /// Check Arkiv wallet balance
     Balance {
         #[structopt(
             help = "Wallet address to check (optional, uses default identity if not provided)"
         )]
         wallet: Option<NodeId>,
     },
-    /// Get offer from GolemBase
+    /// Get offer from Arkiv
     GetOffer {
         #[structopt(help = "Offer ID to retrieve")]
         offer_id: String,
         #[structopt(long, help = "Flatten offer")]
         flatten: bool,
     },
-    /// Get transaction from GolemBase
+    /// Get transaction from Arkiv
     GetTransaction {
         #[structopt(help = "Transaction ID to retrieve")]
         transaction_id: String,
     },
-    /// Get block from GolemBase
+    /// Get block from Arkiv
     GetBlock {
         #[structopt(help = "Block number to retrieve")]
         block_number: u64,
@@ -155,7 +155,7 @@ impl GolemBaseCliCommand {
                     .await??;
 
                 CommandOutput::object(json!({
-                    "message": format!("GolemBase wallet {} funded, balance {} tGLM", response.wallet, response.balance)
+                    "message": format!("Arkiv wallet {} funded, balance {} tGLM", response.wallet, response.balance)
                 }))
             }
             GolemBaseCliCommand::Balance { wallet } => {
@@ -165,7 +165,7 @@ impl GolemBaseCliCommand {
                     .await??;
 
                 CommandOutput::object(json!({
-                    "message": format!("GolemBase wallet {} balance: {} tGLM", response.wallet, response.balance),
+                    "message": format!("Arkiv wallet {} balance: {} tGLM", response.wallet, response.balance),
                     "balance": response.balance
                 }))
             }

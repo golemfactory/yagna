@@ -148,3 +148,38 @@ def wasi_sleeper_exe_script(duration: float = 10.0):
             }
         },
     ]
+
+def wasi_sleeper_extended_exe_script(
+    runner: Runner, duration: float = 10.0, output_file: str = "upload_file"
+):
+    """WASI exe script builder."""
+    """Create a WASI exe script for running a WASI sleeper task."""
+
+    output_path = Path(runner.web_root_path) / output_file
+    if output_path.exists():
+        os.remove(output_path)
+
+    web_server_addr = f"http://{runner.host_address}:{runner.web_server_port}"
+
+    return [
+        {"deploy": {}},
+        {"start": {"args": []}},
+        {
+            "transfer": {
+                "from": f"{web_server_addr}/params.json",
+                "to": "container:/input/file_in",
+            }
+        },
+        {
+            "run": {
+                "entry_point": "rust-wasi-sleeper",
+                "args": [f"{duration}"],
+            }
+        },
+        {
+            "transfer": {
+                "from": "container:/input/file_in",
+                "to": f"{web_server_addr}/upload/{output_file}",
+            }
+        },
+    ]
