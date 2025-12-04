@@ -39,6 +39,8 @@ pub enum GolemBaseNetwork {
     /// Furby is a load and stress tests network.
     #[clap(name = "Furby")]
     Furby,
+    #[clap(name = "Nolock")]
+    Nolock,
     #[clap(name = "Local")]
     Local,
     #[clap(name = "Custom")]
@@ -93,6 +95,18 @@ impl GolemBaseNetwork {
                 ws_url: Url::parse("wss://furby.hoodi.arkiv.network/rpc/ws").unwrap(),
                 l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
                 chain_id: 60138453060,
+                fund_preallocated: false,
+            },
+        );
+        // Configuration: https://nolock.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Nolock,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://nolock.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://nolock.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://nolock.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453070,
                 fund_preallocated: false,
             },
         );
