@@ -266,6 +266,16 @@ impl Matcher {
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 
+        // Track demand expiration
+        self.expiration_tracker
+            .send(TrackDeadline {
+                category: "Demand".to_string(),
+                deadline: Utc.from_utc_datetime(&demand.expiration_ts),
+                id: demand.id.to_string(),
+            })
+            .await
+            .ok();
+
         // Lazy loading of Offers from Arkiv. Until yagna knows that we are running
         // as Requestor, there is no need to listen for Offers.
         log::debug!("Demand created - starting to listen for offers");
@@ -293,6 +303,15 @@ impl Matcher {
         id: &Identity,
     ) -> Result<(), MatcherError> {
         self.store.remove_demand(demand_id, id).await?;
+
+        // Stop tracking demand expiration
+        self.expiration_tracker
+            .send(StopTracking {
+                category: Some("Demand".to_string()),
+                id: demand_id.to_string(),
+            })
+            .await
+            .ok();
 
         // Check if this was the last demand - if so, stop listening for offers
         self.maybe_stop_listening().await;
