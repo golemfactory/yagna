@@ -151,6 +151,10 @@ pub struct DiscoveryConfig {
     /// Batch size for querying offers from GolemBase
     #[clap(env = "ARKIV_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
     pub offer_query_batch_size: usize,
+    /// If true, collect all offers independently if we have any Reqeustor connected.
+    /// It is determined by the number of active demands.
+    #[clap(env = "MARKET_RUN_AS_INDEXER", default_value_t = false, long)]
+    pub run_as_indexer: bool,
 }
 
 impl Default for DiscoveryConfig {
@@ -163,6 +167,7 @@ impl Default for DiscoveryConfig {
             publish_max_retries: 3,
             required_confirmations: 1,
             offer_query_batch_size: 20,
+            run_as_indexer: false,
         }
     }
 }

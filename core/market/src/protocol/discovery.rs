@@ -3,8 +3,10 @@ use chrono::{DateTime, Utc};
 use futures::StreamExt;
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::task::JoinHandle;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use ya_client::model::NodeId;
@@ -62,6 +64,8 @@ pub struct DiscoveryImpl {
     offer_handlers: OfferHandlers,
     config: DiscoveryConfig,
     identities: Mutex<HashSet<NodeId>>,
+    websocket_task: Mutex<Option<JoinHandle<()>>>,
+    last_block_number: AtomicU64,
 }
 
 impl Discovery {
@@ -214,8 +218,8 @@ impl Discovery {
     }
 
     async fn offers_events_loop(&self, starting_block: u64) -> anyhow::Result<()> {
-        let events = self
-            .inner
+        let discovery = self.inner.clone();
+        let events = discovery
             .arkiv
             .events_client_with_url(self.inner.config.get_ws_url().clone())
             .await
@@ -226,13 +230,27 @@ impl Discovery {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get events stream: {}", e))?;
 
+        discovery
+            .last_block_number
+            .store(starting_block, Ordering::SeqCst);
+
         while let Some(event) = event_stream.next().await {
             match event {
                 Ok(event) => {
+                    let block_number = match &event {
+                        Event::EntityCreated { block_number, .. } => *block_number,
+                        Event::EntityRemoved { block_number, .. } => *block_number,
+                        Event::EntityUpdated { block_number, .. } => *block_number,
+                    };
+
                     // Handle the event based on its type
                     if let Err(e) = self.handle_arkiv_event(event).await {
                         log::error!("Error handling Arkiv event: {}", e);
                     }
+
+                    discovery
+                        .last_block_number
+                        .store(block_number, Ordering::SeqCst);
                 }
                 Err(e) => {
                     log::error!("Error receiving Arkiv event: {}", e);
@@ -257,10 +275,13 @@ impl Discovery {
         log::debug!("Removing all existing offers from previous runs..");
         self.remove_all_node_offers().await;
 
-        // Get current block number to start listening from
-        let current_block = client.get_current_block_number().await.map_err(|e| {
-            DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {}", e))
-        })?;
+        // Get starting block number - use last remembered block if available, otherwise current block
+        let starting_block = match self.inner.last_block_number.load(Ordering::SeqCst) {
+            block if block > 0 => block,
+            _ => client.get_current_block_number().await.map_err(|e| {
+                DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {e}"))
+            })?,
+        };
 
         // First, load all existing offers to setup initial state.
         // Later we will listen only for state changes.
@@ -271,13 +292,65 @@ impl Discovery {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to register offers: {}", e))
         })?;
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             discovery
-                .offers_events_loop(current_block)
+                .offers_events_loop(starting_block)
                 .await
                 .inspect_err(|e| log::error!("Error in GolemBase events listener: {}", e))
                 .ok();
         });
+
+        // Store the task handle
+        {
+            let mut task_handle = self.inner.websocket_task.lock().unwrap();
+            *task_handle = Some(handle);
+        }
+
+        Ok(())
+    }
+
+    /// Starts listening for offers (queries existing offers and starts websocket listener)
+    /// This is called when the first demand is created
+    pub async fn start_listening(&self) -> Result<(), DiscoveryError> {
+        // If running as indexer, listener is already started in bind_gsb
+        if self.inner.config.run_as_indexer {
+            log::debug!("Running as indexer - listener already started, skipping");
+            return Ok(());
+        }
+
+        // Check if already listening
+        {
+            let task_handle = self.inner.websocket_task.lock().unwrap();
+            if task_handle.is_some() {
+                log::debug!("Already listening for offers, skipping start");
+                return Ok(());
+            }
+        }
+
+        log::info!("Starting to listen for offers (first demand created)");
+        self.bind_offers_listener()
+            .await
+            .map_err(|e| DiscoveryError::GolemBaseError(format!("Binding offers listener: {e}")))?;
+        Ok(())
+    }
+
+    /// Stops listening for offers (stops websocket listener but keeps offers in database)
+    pub async fn stop_listening(&self) -> Result<(), DiscoveryError> {
+        // If running as indexer, keep listening even when no demands
+        if self.inner.config.run_as_indexer {
+            log::info!("Running as indexer - keeping listener active, skipping stop");
+            return Ok(());
+        }
+
+        log::info!("Stopping listening for offers (last demand removed)");
+
+        // Get and clear the task handle
+        {
+            let mut task_handle = self.inner.websocket_task.lock().unwrap();
+            if let Some(handle) = task_handle.take() {
+                handle.abort();
+            }
+        };
 
         Ok(())
     }
@@ -409,7 +482,13 @@ impl Discovery {
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
 
         // Start Arkiv listener that loads offers and listens for updates
-        self.bind_offers_listener().await?;
+        // Only if MARKET_RUN_AS_INDEXER is enabled (otherwise we wait for first demand)
+        if self.inner.config.run_as_indexer {
+            log::info!("MARKET_RUN_AS_INDEXER enabled - starting offer listener immediately");
+            self.bind_offers_listener().await?;
+        } else {
+            log::info!("MARKET_RUN_AS_INDEXER disabled - will start listening when first demand is created");
+        }
 
         self.bind_identity_handlers(gsb.local_addr()).await?;
         self.bind_fund_handler(gsb.local_addr()).await?;

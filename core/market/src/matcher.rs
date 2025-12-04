@@ -133,8 +133,10 @@ impl Matcher {
 
     pub async fn bind_expiration_tracker(&self) -> anyhow::Result<()> {
         let store = self.store.clone();
+        let matcher = self.clone();
         bind_deadline_reaction(self.expiration_tracker.clone(), move |msg| {
             let store = store.clone();
+            let matcher = matcher.clone();
             async move {
                 let id = SubscriptionId::from_str(&msg.id);
                 match (&msg.category[..], &id) {
@@ -149,7 +151,10 @@ impl Matcher {
                             store.db.as_dao::<DemandDao>().demand_state(id).await
                         {
                             log::info!("Demand [{}] expired.", id);
-                            counter!("market.demands.expired", 1)
+                            counter!("market.demands.expired", 1);
+
+                            // Check if we should stop listening after demand expiration
+                            matcher.maybe_stop_listening().await;
                         }
                     }
                     _ => {}
@@ -260,6 +265,14 @@ impl Matcher {
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
+
+        // Lazy loading of Offers from Arkiv. Until yagna knows that we are running
+        // as Requestor, there is no need to listen for Offers.
+        log::debug!("Demand created - starting to listen for offers");
+        if let Err(e) = self.discovery.start_listening().await {
+            log::error!("Failed to start listening for offers: {e}");
+        }
+
         self.resolver.receive(&demand);
 
         tracing::event!(
@@ -281,6 +294,9 @@ impl Matcher {
     ) -> Result<(), MatcherError> {
         self.store.remove_demand(demand_id, id).await?;
 
+        // Check if this was the last demand - if so, stop listening for offers
+        self.maybe_stop_listening().await;
+
         tracing::event!(
             Level::INFO,
             entity = "demand",
@@ -290,6 +306,24 @@ impl Matcher {
             "Unsubscribed demand"
         );
         Ok(())
+    }
+
+    /// Checks if there are no active demands and stops listening for offers if so
+    async fn maybe_stop_listening(&self) {
+        let demand_count = match self.store.count_active_demands().await {
+            Ok(count) => count,
+            Err(e) => {
+                log::error!("Failed to count active demands: {e}");
+                return;
+            }
+        };
+
+        if demand_count == 0 {
+            log::debug!("No active demands - stopping to listen for offers");
+            if let Err(e) = self.discovery.stop_listening().await {
+                log::error!("Failed to stop listening for offers: {e}");
+            }
+        }
     }
 
     pub async fn get_our_active_offer_ids(&self) -> Result<Vec<SubscriptionId>, QueryOffersError> {
