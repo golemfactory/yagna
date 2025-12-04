@@ -265,6 +265,7 @@ impl Matcher {
         id: &Identity,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
+        self.resolver.receive(&demand);
 
         // Track demand expiration
         self.expiration_tracker
@@ -282,8 +283,6 @@ impl Matcher {
         if let Err(e) = self.discovery.start_listening().await {
             log::error!("Failed to start listening for offers: {e}");
         }
-
-        self.resolver.receive(&demand);
 
         tracing::event!(
             Level::INFO,
