@@ -268,13 +268,6 @@ impl Discovery {
         let discovery = self.clone();
         let client = self.inner.arkiv.clone();
 
-        // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
-        // any sense to keep them after restart and they polute GolemBase. Offers should expire
-        // after some period of time, so this step is not essential, but in case we restart after crash
-        // the old Offers would remain.
-        log::debug!("Removing all existing offers from previous runs..");
-        self.remove_all_node_offers().await;
-
         // Get starting block number - use last remembered block if available, otherwise current block
         let starting_block = match self.inner.last_block_number.load(Ordering::SeqCst) {
             block if block > 0 => block,
@@ -480,6 +473,13 @@ impl Discovery {
         self.initialize_account()
             .await
             .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
+
+        // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
+        // any sense to keep them after restart and they polute GolemBase. Offers should expire
+        // after some period of time, so this step is not essential, but in case we restart after crash
+        // the old Offers would remain.
+        log::debug!("Removing all existing offers from previous runs..");
+        self.remove_all_node_offers().await;
 
         // Start Arkiv listener that loads offers and listens for updates
         // Only if MARKET_RUN_AS_INDEXER is enabled (otherwise we wait for first demand)
