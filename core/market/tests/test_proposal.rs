@@ -3,7 +3,7 @@ use tokio::time::Duration;
 
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::{
-    mock_node::{assert_offers_broadcasted, MarketsNetwork},
+    mock_node::{assert_offers_broadcasted, create_market_config_for_test, MarketsNetwork},
     proposal_util::exchange_draft_proposals,
 };
 use ya_framework_mocks::net::MockNet;
@@ -113,8 +113,13 @@ async fn test_proposal_random_shuffle() -> anyhow::Result<()> {
     let dir = temp_dir!("test_proposal_random_shuffle")?;
     let dir = dir.path();
 
+    // Configure as indexer so nodes listen for offers without demands
+    let mut config = create_market_config_for_test();
+    config.discovery.run_as_indexer = true;
+
     let mut network = MarketsNetwork::new_mocked(dir, MockNet::new())
         .await?
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await;
 
