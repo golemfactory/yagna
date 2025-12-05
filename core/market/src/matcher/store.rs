@@ -339,6 +339,17 @@ impl SubscriptionStore {
             .collect())
     }
 
+    /// Counts active demands in the database
+    pub async fn count_active_demands(&self) -> Result<usize, DemandError> {
+        let demands = self
+            .db
+            .as_dao::<DemandDao>()
+            .get_demands(None, None, Utc::now().naive_utc())
+            .await
+            .map_err(DemandError::GetMany)?;
+        Ok(demands.len())
+    }
+
     pub async fn get_demands_before(
         &self,
         insertion_ts: NaiveDateTime,

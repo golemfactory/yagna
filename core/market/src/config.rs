@@ -39,6 +39,8 @@ pub enum GolemBaseNetwork {
     /// Furby is a load and stress tests network.
     #[clap(name = "Furby")]
     Furby,
+    #[clap(name = "Nolock")]
+    Nolock,
     #[clap(name = "Local")]
     Local,
     #[clap(name = "Custom")]
@@ -93,6 +95,18 @@ impl GolemBaseNetwork {
                 ws_url: Url::parse("wss://furby.hoodi.arkiv.network/rpc/ws").unwrap(),
                 l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
                 chain_id: 60138453060,
+                fund_preallocated: false,
+            },
+        );
+        // Configuration: https://nolock.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Nolock,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://nolock.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://nolock.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://nolock.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453070,
                 fund_preallocated: false,
             },
         );
@@ -151,6 +165,10 @@ pub struct DiscoveryConfig {
     /// Batch size for querying offers from GolemBase
     #[clap(env = "ARKIV_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
     pub offer_query_batch_size: usize,
+    /// If true, collect all offers independently if we have any Reqeustor connected.
+    /// It is determined by the number of active demands.
+    #[clap(env = "MARKET_RUN_AS_INDEXER", default_value_t = false, long)]
+    pub run_as_indexer: bool,
 }
 
 impl Default for DiscoveryConfig {
@@ -163,6 +181,7 @@ impl Default for DiscoveryConfig {
             publish_max_retries: 3,
             required_confirmations: 1,
             offer_query_batch_size: 20,
+            run_as_indexer: false,
         }
     }
 }

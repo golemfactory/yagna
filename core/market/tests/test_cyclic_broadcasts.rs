@@ -1,4 +1,5 @@
 use rand::seq::SliceRandom;
+use std::sync::Arc;
 use std::time::Duration;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::temp_dir;
@@ -6,7 +7,8 @@ use ya_market::testing::{mock_offer::client, MarketServiceExt, QueryOfferError};
 
 use ya_framework_mocks::assert_err_eq;
 use ya_framework_mocks::market::legacy::mock_node::{
-    assert_offers_broadcasted, assert_unsunbscribes_broadcasted, MarketsNetwork,
+    assert_offers_broadcasted, assert_unsunbscribes_broadcasted, create_market_config_for_test,
+    MarketsNetwork,
 };
 use ya_framework_mocks::net::MockNet;
 
@@ -21,8 +23,13 @@ async fn test_startup_offers_sharing() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_startup_offers_sharing")?;
     let dir = dir.path();
 
+    // Configure as indexer so nodes listen for offers without demands
+    let mut config = create_market_config_for_test();
+    config.discovery.run_as_indexer = true;
+
     let network = MarketsNetwork::new(dir, MockNet::new())
         .await
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
@@ -184,8 +191,13 @@ async fn test_network_error_while_subscribing() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_network_error_while_subscribing")?;
     let dir = dir.path();
 
+    // Configure as indexer so nodes listen for offers without demands
+    let mut config = create_market_config_for_test();
+    config.discovery.run_as_indexer = true;
+
     let network = MarketsNetwork::new(dir, MockNet::new())
         .await
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
@@ -226,8 +238,13 @@ async fn test_sharing_someones_else_offers() -> Result<(), anyhow::Error> {
     let dir = temp_dir!("test_sharing_someones_else_offers")?;
     let dir = dir.path();
 
+    // Configure as indexer so nodes listen for offers without demands
+    let mut config = create_market_config_for_test();
+    config.discovery.run_as_indexer = true;
+
     let network = MarketsNetwork::new(dir, MockNet::new())
         .await
+        .with_config(Arc::new(config))
         .add_market_instance("Node-1")
         .await
         .add_market_instance("Node-2")
