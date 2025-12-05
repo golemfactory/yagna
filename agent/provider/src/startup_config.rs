@@ -247,6 +247,8 @@ pub struct RunConfig {
     pub tasks: TaskConfig,
     ///changes log level from info to debug
     #[structopt(long)]
+    pub no_file_monitors: bool,
+    #[structopt(long)]
     pub debug: bool,
 }
 
