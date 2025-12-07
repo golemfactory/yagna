@@ -19,19 +19,19 @@ use ya_core_model::market::{
 };
 use ya_service_bus::typed as bus;
 
-use arkiv_sdk::client::ArkivClient;
-use arkiv_sdk::entity::Create;
-use arkiv_sdk::events::Event;
-use arkiv_sdk::rpc::{QueryOptions, SearchResult};
-use arkiv_sdk::signers::TransactionSigner;
-use arkiv_sdk::{Address, Hash};
-
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
 use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
+use arkiv_sdk::client::ArkivClient;
+use arkiv_sdk::entity::Create;
+use arkiv_sdk::events::Event;
+use arkiv_sdk::rpc::{QueryOptions, SearchResult};
+use arkiv_sdk::signers::TransactionSigner;
+use arkiv_sdk::{Address, Hash};
+use rand::{thread_rng, Rng};
 
 const ARKIV_CALLER: &str = "Arkiv";
 
@@ -199,6 +199,35 @@ impl Discovery {
         offer.into_model_offer(key)
     }
 
+    async fn sync_client(&self) -> Result<()> {
+        const MAX_ATTEMPTS: usize = 10;
+        for i in 0..MAX_ATTEMPTS {
+            let client = self.inner.arkiv.clone();
+
+            // Sync with GolemBase node
+            match client.sync_node(Duration::from_secs(10)).await {
+                Ok(_) => {
+                    log::info!("Successfully synced with Arkiv node");
+                    break;
+                }
+                Err(e) => {
+                    log::warn!("Failed to sync Arkiv {}", e);
+                    if i == MAX_ATTEMPTS - 1 {
+                        return Err(anyhow::anyhow!(
+                            "Failed to sync Arkiv after 10 attempts: {}",
+                            e
+                        ));
+                    }
+                    // random to avoid herding effect when starting multiple nodes simultaneously
+                    let r = thread_rng().gen_range(10.0..25.0);
+                    log::info!("Trying again in {} s. ({}/10)..", r, i + 1);
+                    tokio::time::sleep(Duration::from_secs_f64(r)).await;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// List all accounts and initialize YagnaIdSigners on GolemBase, so they can be used for
     /// signing storage transactions.
     async fn initialize_account(&self) -> Result<()> {
@@ -210,8 +239,28 @@ impl Discovery {
         }
 
         for node_id in node_ids {
-            if let Err(e) = self.register_signer(node_id).await {
-                log::error!("Failed to register signer for {}: {}", node_id, e);
+            const MAX_ATTEMPTS: usize = 10;
+            for i in 0..MAX_ATTEMPTS {
+                match self.register_signer(node_id).await {
+                    Ok(_) => {
+                        log::info!("Successfully registered signer for {}", node_id);
+                        break;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to register signer for {}: {}", node_id, e);
+                        if i == MAX_ATTEMPTS - 1 {
+                            return Err(anyhow::anyhow!(
+                                "Failed to register signer for {} after 10 attempts: {}",
+                                node_id,
+                                e
+                            ));
+                        }
+                        // random to avoid herding effect when starting multiple nodes simultaneously
+                        let r = thread_rng().gen_range(10.0..25.0);
+                        log::info!("Trying again in {} s. ({}/10)..", r, i + 1);
+                        tokio::time::sleep(Duration::from_secs_f64(r)).await;
+                    }
+                }
             }
         }
         Ok(())
@@ -458,24 +507,18 @@ impl Discovery {
             self.inner.config.fund_preallocated()
         );
 
-        let client = self.inner.arkiv.clone();
+        self.sync_client().await.map_err(|e| {
+            log::error!("Failed to sync with GolemBase node: {}", e);
+            DiscoveryInitError::GolemBaseInitFailed(e.to_string())
+        })?;
 
-        // Sync with GolemBase node
-        client
-            .sync_node(Duration::from_secs(10))
-            .await
-            .map_err(|e| {
-                DiscoveryInitError::GolemBaseInitFailed(format!(
-                    "Failed to sync with GolemBase node: {e}"
-                ))
-            })?;
-
-        self.initialize_account()
-            .await
-            .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?;
+        self.initialize_account().await.map_err(|e| {
+            log::error!("Failed to initialize accounts on GolemBase: {}", e);
+            DiscoveryInitError::GolemBaseInitFailed(e.to_string())
+        })?;
 
         // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
-        // any sense to keep them after restart and they polute GolemBase. Offers should expire
+        // any sense to keep them after restart and they pollute GolemBase. Offers should expire
         // after some period of time, so this step is not essential, but in case we restart after crash
         // the old Offers would remain.
         log::debug!("Removing all existing offers from previous runs..");
