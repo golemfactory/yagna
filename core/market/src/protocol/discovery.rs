@@ -71,7 +71,7 @@ pub struct DiscoveryImpl {
 impl Discovery {
     /// Broadcasts Offers to Arkiv
     pub async fn bcast_offer(&self, offer: GolemBaseOffer) -> Result<ModelOffer, DiscoveryError> {
-        // Validate account to return more menaingfull error messages than create_entry would.
+        // Validate account to return more meaningful error messages than create_entry would.
         self.validate_account(offer.provider_id).await?;
 
         let client = &self.inner.arkiv;
@@ -91,19 +91,61 @@ impl Discovery {
 
         // Create entry on GolemBase
         let timeout = self.inner.config.offer_publish_timeout;
-        let entry_id = client
-            .create_entry(address, entry)
-            .timeout(Some(timeout))
-            .await
-            .map_err(|_| {
-                DiscoveryError::GolemBaseError(format!(
-                    "Timeout ({}) creating offer.",
-                    humantime::format_duration(timeout)
-                ))
-            })?
-            .map_err(|e| {
-                DiscoveryError::GolemBaseError(format!("Failed to create offer: {}", e))
-            })?;
+
+        let max_attempts = self.inner.config.publish_max_retries;
+        let mut i = 0;
+        let entry_id = loop {
+            i += 1;
+            match client
+                .create_entry(address, entry.clone())
+                .timeout(Some(timeout))
+                .await
+            {
+                Ok(Ok(entry_id)) => {
+                    log::info!(
+                        "Successfully created Offer entry in GolemBase with ID: {}",
+                        entry_id
+                    );
+                    break entry_id;
+                }
+                Ok(Err(er)) => {
+                    log::warn!(
+                        "Attempt {}/{}: Failed to create Offer entry in GolemBase: {}",
+                        i,
+                        max_attempts,
+                        er
+                    );
+                    if i >= max_attempts {
+                        return Err(DiscoveryError::GolemBaseError(format!(
+                            "Failed to create Offer entry after {} attempts: {}",
+                            max_attempts, er
+                        )));
+                    }
+                    // random to avoid herding effect when starting multiple nodes simultaneously
+                    let r = thread_rng().gen_range(10.0..25.0);
+                    log::info!("Trying again in {} s. ({}/{})..", r, i, max_attempts);
+                    tokio::time::sleep(Duration::from_secs_f64(r)).await;
+                }
+                Err(err) => {
+                    log::warn!(
+                        "Attempt {}/{}: Failed to create Offer entry in GolemBase: {}",
+                        i,
+                        max_attempts,
+                        err
+                    );
+                    if i >= max_attempts {
+                        return Err(DiscoveryError::GolemBaseError(format!(
+                            "Failed to create Offer entry after {} attempts: {}",
+                            max_attempts, err
+                        )));
+                    }
+                    // random to avoid herding effect when starting multiple nodes simultaneously
+                    let r = thread_rng().gen_range(10.0..25.0);
+                    log::info!("Trying again in {} s. ({}/{})..", r, i, max_attempts);
+                    tokio::time::sleep(Duration::from_secs_f64(r)).await;
+                }
+            }
+        };
 
         log::info!("Created Offer entry in GolemBase with ID: {}", entry_id);
 

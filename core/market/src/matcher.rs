@@ -184,8 +184,8 @@ impl Matcher {
         let offer =
             GolemBaseOffer::create(offer, id.identity, self.config.subscription.default_ttl);
 
-        // Reserve a placeholder before publishing. Since we use GolemBase identitfier as OfferId,
-        // we can't add Offer to store immediately. But this causes race condtions in case other Node
+        // Reserve a placeholder before publishing. Since we use GolemBase identifier as OfferId,
+        // we can't add Offer to store immediately. But this causes race conditions in case other Node
         // retrieves Offer earlier and tries to communicate with us (sends initial proposal).
         // To avoid this, placeholder gives us ability to synchronize and wait for Offer to be available.
         let placeholder_guard = self.store.offer_sync().reserve_placeholder();
