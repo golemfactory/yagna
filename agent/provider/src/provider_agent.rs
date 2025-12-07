@@ -5,6 +5,7 @@ use ya_client::net::NetApi;
 use ya_core_model::NodeId;
 
 use std::convert::TryFrom;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
@@ -80,9 +81,9 @@ pub struct ProviderAgent {
     account: NodeId,
     log_handler: LoggerHandle,
     networks: Vec<PaymentPlatform>,
-    rulestore_monitor: FileMonitor,
-    keystore_monitor: FileMonitor,
-    whitelist_monitor: FileMonitor,
+    rulestore_monitor: Option<FileMonitor>,
+    keystore_monitor: Option<FileMonitor>,
+    whitelist_monitor: Option<FileMonitor>,
     net_api: NetApi,
 }
 
@@ -159,24 +160,39 @@ impl ProviderAgent {
             log::info!("Using payment network: {}", net_color.paint(&n.network));
         }
 
+        log::info!("Creating GlobalsManager...");
         let mut globals = GlobalsManager::try_new(&config.globals_file, args.node)?;
-        globals.spawn_monitor(&config.globals_file)?;
+        log::info!("Creating PresetManager...");
         let mut presets = PresetManager::load_or_create(&config.presets_file)?;
-        presets.spawn_monitor(&config.presets_file)?;
+        log::info!("Creating HardwareManager...");
         let mut hardware = hardware::Manager::try_new(&config)?;
-        hardware.spawn_monitor(&config.hardware_file)?;
-        let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
-            rules_manager.spawn_file_monitors()?;
+
+        let (rulestore_monitor, keystore_monitor, whitelist_monitor) = if args.no_file_monitors {
+            log::info!("Not spawning file monitors (disabled by --no-file-monitors)...");
+            (None, None, None)
+        } else {
+            log::info!("Spawning file monitors...");
+            globals.spawn_monitor(&config.globals_file)?;
+            presets.spawn_monitor(&config.presets_file)?;
+            hardware.spawn_monitor(&config.hardware_file)?;
+            let mon = rules_manager.spawn_file_monitors()?;
+            (Some(mon.0), Some(mon.1), Some(mon.2))
+        };
 
         let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
 
+        log::info!("Starting ProviderMarket...");
         let market = ProviderMarket::new(api.market, args.market, agent_negotiators_cfg).start();
+        log::info!("Starting Payments...");
         let payments = Payments::new(api.activity.clone(), api.payment, args.payment).start();
+        log::info!("Starting Task Runner...");
         let runner = TaskRunner::new(api.activity, args.runner, registry, data_dir)?.start();
+        log::info!("Starting Task Manager...");
         let task_manager =
             TaskManager::new(market.clone(), runner.clone(), payments, args.tasks)?.start();
         let net_api = api.net;
 
+        log::info!("Success creating and initializing provider agent!");
         Ok(ProviderAgent {
             globals,
             market,
@@ -482,9 +498,15 @@ impl Handler<Shutdown> for ProviderAgent {
         let market = self.market.clone();
         let tasks = self.task_manager.clone();
         let log_handler = self.log_handler.clone();
-        self.keystore_monitor.stop();
-        self.rulestore_monitor.stop();
-        self.whitelist_monitor.stop();
+        if let Some(m) = self.keystore_monitor.as_mut() {
+            m.stop()
+        }
+        if let Some(m) = self.rulestore_monitor.as_mut() {
+            m.stop()
+        }
+        if let Some(m) = self.whitelist_monitor.as_mut() {
+            m.stop()
+        }
 
         async move {
             market.send(MarketShutdown).await??;
