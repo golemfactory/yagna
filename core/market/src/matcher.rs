@@ -1,6 +1,7 @@
 use actix::prelude::*;
 use chrono::{DateTime, TimeZone, Utc};
 use metrics::counter;
+use std::fs;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -190,16 +191,40 @@ impl Matcher {
         // To avoid this, placeholder gives us ability to synchronize and wait for Offer to be available.
         let placeholder_guard = self.store.offer_sync().reserve_placeholder();
 
-        let offer = self
-            .discovery
-            .bcast_offer(offer)
-            .await
-            .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;
+        /*let offer = self
+        .discovery
+        .bcast_offer(offer)
+        .await
+        .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;*/
+
+        let random_bytes: [u8; 32] = rand::random();
+        let offer: Offer = Offer {
+            id: SubscriptionId::from_bytes(random_bytes),
+            properties: offer.properties.to_string(),
+            constraints: offer.constraints.clone(),
+            node_id: offer.provider_id,
+            owned: None,
+            creation_ts: Utc::now().naive_utc(),
+            insertion_ts: Some(Utc::now().naive_utc()),
+            expiration_ts: Utc::now().naive_utc() + chrono::Duration::hours(1),
+        };
+
+        let payload = serde_json::to_vec(&offer).map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!("Failed to serialize offer: {}", e))
+        })?;
+
+        //save payload to file
+        fs::write("offer_payload.json", &payload).map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!(
+                "Failed to write offer payload to file: {}",
+                e
+            ))
+        })?;
 
         self.expiration_tracker
             .send(TrackDeadline {
                 category: "Offer".to_string(),
-                deadline: Utc.from_utc_datetime(&offer.expiration_ts),
+                deadline: Utc::now() + chrono::Duration::hours(1),
                 id: offer.id.to_string(),
             })
             .await

@@ -12677,6 +12677,7 @@ dependencies = [
  "digest 0.8.1",
  "env_logger 0.7.1",
  "futures 0.3.31",
+ "glob",
  "hex",
  "humantime 2.3.0",
  "lazy_static",

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use futures::StreamExt;
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
+use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -31,6 +31,7 @@ use arkiv_sdk::events::Event;
 use arkiv_sdk::rpc::{QueryOptions, SearchResult};
 use arkiv_sdk::signers::TransactionSigner;
 use arkiv_sdk::{Address, Hash};
+use glob::glob;
 use rand::{thread_rng, Rng};
 
 const ARKIV_CALLER: &str = "Arkiv";
@@ -55,7 +56,7 @@ pub struct Discovery {
 pub(super) struct OfferHandlers {
     filter_out_known_ids: HandlerSlot<OffersBcast>,
     receive_remote_offers: HandlerSlot<OffersRetrieved>,
-    offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
+    _offer_unsubscribe_handler: HandlerSlot<UnsubscribedOffersBcast>,
 }
 
 pub struct DiscoveryImpl {
@@ -157,7 +158,7 @@ impl Discovery {
     }
 
     /// Checks if an offer belongs to us based on metadata and entity_id
-    fn is_own_offer(&self, metadata: &SearchResult) -> bool {
+    fn _is_own_offer(&self, metadata: &SearchResult) -> bool {
         let Some(owner) = metadata.owner.as_ref() else {
             log::warn!("[Programming error] Entity metadata should contain owner!");
             return false;
@@ -308,47 +309,32 @@ impl Discovery {
         Ok(())
     }
 
-    async fn offers_events_loop(&self, starting_block: u64) -> anyhow::Result<()> {
-        let discovery = self.inner.clone();
-        let events = discovery
-            .arkiv
-            .events_client_with_url(self.inner.config.get_ws_url().clone())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get events client: {}", e))?;
+    async fn offers_events_loop(&self, _starting_block: u64) -> anyhow::Result<()> {
+        loop {
+            //read file from offer.json
+            if let Ok(paths) = glob("incoming-offer-*.json") {
+                #[allow(clippy::manual_flatten)]
+                for entry in paths {
+                    if let Ok(path) = entry {
+                        // Read the file
+                        let data = fs::read_to_string(&path)?;
+                        let offer: ModelOffer = serde_json::from_str(&data)?;
 
-        let mut event_stream = events
-            .events_stream_from_block(starting_block)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to get events stream: {}", e))?;
+                        // Register it
+                        self.register_incoming_offers(vec![offer]).await?;
 
-        discovery
-            .last_block_number
-            .store(starting_block, Ordering::SeqCst);
-
-        while let Some(event) = event_stream.next().await {
-            match event {
-                Ok(event) => {
-                    let block_number = match &event {
-                        Event::EntityCreated { block_number, .. } => *block_number,
-                        Event::EntityRemoved { block_number, .. } => *block_number,
-                        Event::EntityUpdated { block_number, .. } => *block_number,
-                    };
-
-                    // Handle the event based on its type
-                    if let Err(e) = self.handle_arkiv_event(event).await {
-                        log::error!("Error handling Arkiv event: {}", e);
+                        // Remove file after processing
+                        fs::remove_file(&path)?;
                     }
-
-                    discovery
-                        .last_block_number
-                        .store(block_number, Ordering::SeqCst);
                 }
-                Err(e) => {
-                    log::error!("Error receiving Arkiv event: {}", e);
-                    // Try to reconnect after a delay, to protect against errors spam
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
+            }
+            // Wait for either Ctrl+C or timeout to continue loop
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    log::info!("Received Ctrl+C, shutting down offers events loop");
+                    break;
                 }
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
             }
         }
         Ok(())
@@ -360,19 +346,15 @@ impl Discovery {
         let client = self.inner.arkiv.clone();
 
         // Get starting block number - use last remembered block if available, otherwise current block
-        let starting_block = match self.inner.last_block_number.load(Ordering::SeqCst) {
-            block if block > 0 => block,
-            _ => client.get_current_block_number().await.map_err(|e| {
-                DiscoveryInitError::GolemBaseInitFailed(format!("Failed to get current block: {e}"))
-            })?,
-        };
+        let starting_block = 0;
 
         // First, load all existing offers to setup initial state.
         // Later we will listen only for state changes.
-        let offers = self.query_offers().await.map_err(|e| {
+        /*let offers = self.query_offers().await.map_err(|e| {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to query offers: {}", e))
-        })?;
-        self.register_incoming_offers(offers).await.map_err(|e| {
+        })?;*/
+
+        self.register_incoming_offers(vec![]).await.map_err(|e| {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to register offers: {}", e))
         })?;
 
@@ -498,13 +480,13 @@ impl Discovery {
     }
 
     /// Handles incoming Arkiv events
-    async fn handle_arkiv_event(&self, event: Event) -> anyhow::Result<()> {
+    async fn _handle_arkiv_event(&self, event: Event) -> anyhow::Result<()> {
         let client = self.inner.arkiv.clone();
 
         match event {
             Event::EntityCreated { entity_id, .. } => {
                 let metadata = client.get_entity_metadata(entity_id).await?;
-                if !Self::is_golem_offer(&metadata) || self.is_own_offer(&metadata) {
+                if !Self::is_golem_offer(&metadata) || self._is_own_offer(&metadata) {
                     return Ok(());
                 }
 
@@ -519,7 +501,7 @@ impl Discovery {
                 let id = SubscriptionId::from_bytes(entity_id.0);
                 self.inner
                     .offer_handlers
-                    .offer_unsubscribe_handler
+                    ._offer_unsubscribe_handler
                     .call(
                         ARKIV_CALLER.to_string(),
                         UnsubscribedOffersBcast {
@@ -549,6 +531,8 @@ impl Discovery {
             self.inner.config.fund_preallocated()
         );
 
+        /*
+
         self.sync_client().await.map_err(|e| {
             log::error!("Failed to sync with GolemBase node: {}", e);
             DiscoveryInitError::GolemBaseInitFailed(e.to_string())
@@ -558,6 +542,9 @@ impl Discovery {
             log::error!("Failed to initialize accounts on GolemBase: {}", e);
             DiscoveryInitError::GolemBaseInitFailed(e.to_string())
         })?;
+
+
+         */
 
         // Remove all existing offers from previous runs. Offers are volatile, so it doesn't make
         // any sense to keep them after restart and they pollute GolemBase. Offers should expire
