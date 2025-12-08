@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::fs;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -66,7 +65,6 @@ pub struct DiscoveryImpl {
     config: DiscoveryConfig,
     identities: Mutex<HashSet<NodeId>>,
     websocket_task: Mutex<Option<JoinHandle<()>>>,
-    last_block_number: AtomicU64,
 }
 
 impl Discovery {
@@ -242,7 +240,7 @@ impl Discovery {
         offer.into_model_offer(key)
     }
 
-    async fn sync_client(&self) -> Result<()> {
+    async fn _sync_client(&self) -> Result<()> {
         const MAX_ATTEMPTS: usize = 10;
         for i in 0..MAX_ATTEMPTS {
             let client = self.inner.arkiv.clone();
@@ -273,7 +271,7 @@ impl Discovery {
 
     /// List all accounts and initialize YagnaIdSigners on GolemBase, so they can be used for
     /// signing storage transactions.
-    async fn initialize_account(&self) -> Result<()> {
+    async fn _initialize_account(&self) -> Result<()> {
         let node_ids = self.inner.identity.list_active_ids().await?;
         {
             let mut identities = self.inner.identities.lock().unwrap();
@@ -318,8 +316,10 @@ impl Discovery {
                     if let Ok(path) = entry {
                         // Read the file
                         let data = fs::read_to_string(&path)?;
-                        let offer: ModelOffer = serde_json::from_str(&data)?;
+                        let offer: GolemBaseOffer = serde_json::from_str(&data)?;
 
+                        let new_id = thread_rng().gen::<[u8; 32]>();
+                        let offer = offer.into_model_offer(Hash::from_slice(&new_id))?;
                         // Register it
                         self.register_incoming_offers(vec![offer]).await?;
 
@@ -343,7 +343,7 @@ impl Discovery {
     /// Spawns a task that listens for WebSocket events from Arkiv
     pub async fn bind_offers_listener(&self) -> Result<(), DiscoveryInitError> {
         let discovery = self.clone();
-        let client = self.inner.arkiv.clone();
+        //let client = self.inner.arkiv.clone();
 
         // Get starting block number - use last remembered block if available, otherwise current block
         let starting_block = 0;

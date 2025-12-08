@@ -99,7 +99,6 @@ impl DiscoveryBuilder {
                 arkiv,
                 identities: std::sync::Mutex::new(HashSet::new()),
                 websocket_task: std::sync::Mutex::new(None),
-                last_block_number: std::sync::atomic::AtomicU64::new(0),
             }),
         };
 
