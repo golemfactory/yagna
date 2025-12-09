@@ -197,6 +197,18 @@ impl Matcher {
         .await
         .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;*/
 
+        //save payload to file
+
+        let offer_to_str = serde_json::to_string(&offer).map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!("Failed to serialize offer: {}", e))
+        })?;
+        fs::write("offer_base.json", offer_to_str).map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!(
+                "Failed to write offer payload to file: {}",
+                e
+            ))
+        })?;
+
         let random_bytes: [u8; 32] = rand::random();
         let offer: Offer = Offer {
             id: SubscriptionId::from_bytes(random_bytes),
