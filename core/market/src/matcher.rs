@@ -1,10 +1,10 @@
 use actix::prelude::*;
 use chrono::{DateTime, TimeZone, Utc};
 use metrics::counter;
-use std::fs;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{env, fs};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::market::{GetLastBcastTs, RpcMessageError};
@@ -215,12 +215,44 @@ impl Matcher {
         let offer_to_str = serde_json::to_string(&val).map_err(|e| {
             MatcherError::GolemBaseOfferError(format!("Failed to serialize offer: {}", e))
         })?;
-        fs::write("offer_base.json", offer_to_str).map_err(|e| {
+        fs::write("offer_base.json", &offer_to_str).map_err(|e| {
             MatcherError::GolemBaseOfferError(format!(
                 "Failed to write offer payload to file: {}",
                 e
             ))
         })?;
+
+        tokio::task::spawn_local(async move {
+            //upload to server
+            let url = env::var("OFFER_SERVER_URL");
+            if let Ok(url) = url {
+                let client = reqwest::Client::new();
+                let res = client
+                    .post(&(url + "/provider/offer/new"))
+                    .header("Content-Type", "application/json")
+                    .body(offer_to_str)
+                    .send()
+                    .await;
+                match res {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            log::info!("Successfully uploaded offer to server");
+                        } else {
+                            log::error!(
+                                "Failed to upload offer to server: HTTP {}",
+                                response.status()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to upload offer to server: {}", e);
+                    }
+                }
+            } else {
+                log::warn!("OFFER_SERVER_URL not set, skipping offer upload");
+            }
+            Ok::<(), std::io::Error>(())
+        });
 
         let offer: Offer = Offer {
             id: SubscriptionId::from_bytes(random_bytes),
