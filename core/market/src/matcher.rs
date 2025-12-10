@@ -33,6 +33,7 @@ use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;
+use serde_json::Value;
 use store::SubscriptionStore;
 use tracing::Level;
 
@@ -198,8 +199,20 @@ impl Matcher {
         .map_err(|e| MatcherError::GolemBaseOfferError(e.to_string()))?;*/
 
         //save payload to file
+        let random_bytes: [u8; 32] = rand::random();
+        let subscription_id = SubscriptionId::from_bytes(random_bytes);
 
-        let offer_to_str = serde_json::to_string(&offer).map_err(|e| {
+        let mut val = serde_json::to_value(&offer).map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!("Failed to serialize offer: {}", e))
+        })?;
+
+        val.as_object_mut()
+            .ok_or_else(|| {
+                MatcherError::GolemBaseOfferError("Offer serialized to non-object JSON".to_string())
+            })?
+            .insert("id".to_string(), Value::String(subscription_id.to_string()));
+
+        let offer_to_str = serde_json::to_string(&val).map_err(|e| {
             MatcherError::GolemBaseOfferError(format!("Failed to serialize offer: {}", e))
         })?;
         fs::write("offer_base.json", offer_to_str).map_err(|e| {
@@ -209,7 +222,6 @@ impl Matcher {
             ))
         })?;
 
-        let random_bytes: [u8; 32] = rand::random();
         let offer: Offer = Offer {
             id: SubscriptionId::from_bytes(random_bytes),
             properties: offer.properties.to_string(),

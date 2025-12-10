@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::fs;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -24,6 +25,7 @@ use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
+use crate::testing::MatcherError;
 use arkiv_sdk::client::ArkivClient;
 use arkiv_sdk::entity::Create;
 use arkiv_sdk::events::Event;
@@ -32,6 +34,7 @@ use arkiv_sdk::signers::TransactionSigner;
 use arkiv_sdk::{Address, Hash};
 use glob::glob;
 use rand::{thread_rng, Rng};
+use serde_json::Value;
 
 const ARKIV_CALLER: &str = "Arkiv";
 
@@ -316,10 +319,39 @@ impl Discovery {
                     if let Ok(path) = entry {
                         // Read the file
                         let data = fs::read_to_string(&path)?;
+
+                        let val: Value = serde_json::from_str(&data)?;
+
+                        let hash = Hash::from_str(
+                            val.as_object()
+                                .ok_or_else(|| {
+                                    MatcherError::GolemBaseOfferError(
+                                        "Offer serialized to non-object JSON".to_string(),
+                                    )
+                                })?
+                                .get("id")
+                                .ok_or_else(|| {
+                                    MatcherError::GolemBaseOfferError(
+                                        "Offer JSON missing 'id' field".to_string(),
+                                    )
+                                })?
+                                .as_str()
+                                .ok_or_else(|| {
+                                    MatcherError::GolemBaseOfferError(
+                                        "Offer 'id' field is not a string".to_string(),
+                                    )
+                                })?,
+                        )
+                        .map_err(|e| {
+                            MatcherError::GolemBaseOfferError(format!(
+                                "Failed to hash from id field: {}",
+                                e
+                            ))
+                        })?;
+
                         let offer: GolemBaseOffer = serde_json::from_str(&data)?;
 
-                        let new_id = thread_rng().gen::<[u8; 32]>();
-                        let offer = offer.into_model_offer(Hash::from_slice(&new_id))?;
+                        let offer = offer.into_model_offer(hash)?;
                         // Register it
                         self.register_incoming_offers(vec![offer]).await?;
 
