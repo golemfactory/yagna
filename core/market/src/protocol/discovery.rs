@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -310,6 +311,41 @@ impl Discovery {
         Ok(())
     }
 
+    async fn read_offer_from_file(path: &Path) -> anyhow::Result<ModelOffer> {
+        // Read the file
+        let data = fs::read_to_string(path)?;
+
+        let val: Value = serde_json::from_str(&data)?;
+
+        let hash = Hash::from_str(
+            val.as_object()
+                .ok_or_else(|| {
+                    MatcherError::GolemBaseOfferError(
+                        "Offer serialized to non-object JSON".to_string(),
+                    )
+                })?
+                .get("id")
+                .ok_or_else(|| {
+                    MatcherError::GolemBaseOfferError("Offer JSON missing 'id' field".to_string())
+                })?
+                .as_str()
+                .ok_or_else(|| {
+                    MatcherError::GolemBaseOfferError(
+                        "Offer 'id' field is not a string".to_string(),
+                    )
+                })?,
+        )
+        .map_err(|e| {
+            MatcherError::GolemBaseOfferError(format!("Failed to hash from id field: {}", e))
+        })?;
+
+        let offer: GolemBaseOffer = serde_json::from_str(&data)?;
+
+        let offer = offer.into_model_offer(hash)?;
+
+        Ok(offer)
+    }
+
     async fn offers_events_loop(&self, _starting_block: u64) -> anyhow::Result<()> {
         loop {
             //read file from offer.json
@@ -317,46 +353,22 @@ impl Discovery {
                 #[allow(clippy::manual_flatten)]
                 for entry in paths {
                     if let Ok(path) = entry {
-                        // Read the file
-                        let data = fs::read_to_string(&path)?;
-
-                        let val: Value = serde_json::from_str(&data)?;
-
-                        let hash = Hash::from_str(
-                            val.as_object()
-                                .ok_or_else(|| {
-                                    MatcherError::GolemBaseOfferError(
-                                        "Offer serialized to non-object JSON".to_string(),
-                                    )
-                                })?
-                                .get("id")
-                                .ok_or_else(|| {
-                                    MatcherError::GolemBaseOfferError(
-                                        "Offer JSON missing 'id' field".to_string(),
-                                    )
-                                })?
-                                .as_str()
-                                .ok_or_else(|| {
-                                    MatcherError::GolemBaseOfferError(
-                                        "Offer 'id' field is not a string".to_string(),
-                                    )
-                                })?,
-                        )
-                        .map_err(|e| {
-                            MatcherError::GolemBaseOfferError(format!(
-                                "Failed to hash from id field: {}",
-                                e
-                            ))
-                        })?;
-
-                        let offer: GolemBaseOffer = serde_json::from_str(&data)?;
-
-                        let offer = offer.into_model_offer(hash)?;
-                        // Register it
-                        self.register_incoming_offers(vec![offer]).await?;
-
-                        // Remove file after processing
-                        fs::remove_file(&path)?;
+                        match Self::read_offer_from_file(&path).await {
+                            Ok(offer) => {
+                                log::info!("Registering incoming offer from file: {:?}", path);
+                                self.register_incoming_offers(vec![offer]).await?;
+                            }
+                            Err(e) => {
+                                log::error!(
+                                    "Failed to read and register offer from file {:?}: {}",
+                                    path,
+                                    e
+                                );
+                                fs::remove_file(path).map_err(|e| {
+                                    anyhow::anyhow!("Failed to remove invalid offer file: {}", e)
+                                })?;
+                            }
+                        }
                     }
                 }
             }
