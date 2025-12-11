@@ -364,11 +364,11 @@ impl Discovery {
                                     path,
                                     e
                                 );
-                                fs::remove_file(path).map_err(|e| {
-                                    anyhow::anyhow!("Failed to remove invalid offer file: {}", e)
-                                })?;
                             }
                         }
+                        fs::remove_file(path).map_err(|e| {
+                            anyhow::anyhow!("Failed to remove invalid offer file: {}", e)
+                        })?;
                     }
                 }
             }
