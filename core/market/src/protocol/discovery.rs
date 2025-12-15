@@ -2,9 +2,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use offer::GolemBaseOffer;
 use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
-use std::str::FromStr;
+use std::env;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinHandle;
@@ -26,16 +24,13 @@ use crate::db::model::{Offer as ModelOffer, SubscriptionId};
 use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
-use crate::testing::MatcherError;
 use arkiv_sdk::client::ArkivClient;
 use arkiv_sdk::entity::Create;
 use arkiv_sdk::events::Event;
 use arkiv_sdk::rpc::{QueryOptions, SearchResult};
 use arkiv_sdk::signers::TransactionSigner;
 use arkiv_sdk::{Address, Hash};
-use glob::glob;
 use rand::{thread_rng, Rng};
-use serde_json::Value;
 
 const ARKIV_CALLER: &str = "Arkiv";
 
@@ -311,74 +306,87 @@ impl Discovery {
         Ok(())
     }
 
-    async fn read_offer_from_file(path: &Path) -> anyhow::Result<ModelOffer> {
-        // Read the file
-        let data = fs::read_to_string(path)?;
-
-        let val: Value = serde_json::from_str(&data)?;
-
-        let hash = Hash::from_str(
-            val.as_object()
-                .ok_or_else(|| {
-                    MatcherError::GolemBaseOfferError(
-                        "Offer serialized to non-object JSON".to_string(),
-                    )
-                })?
-                .get("id")
-                .ok_or_else(|| {
-                    MatcherError::GolemBaseOfferError("Offer JSON missing 'id' field".to_string())
-                })?
-                .as_str()
-                .ok_or_else(|| {
-                    MatcherError::GolemBaseOfferError(
-                        "Offer 'id' field is not a string".to_string(),
-                    )
-                })?,
-        )
-        .map_err(|e| {
-            MatcherError::GolemBaseOfferError(format!("Failed to hash from id field: {}", e))
-        })?;
-
-        let offer: GolemBaseOffer = serde_json::from_str(&data)?;
-
-        let offer = offer.into_model_offer(hash)?;
-
-        Ok(offer)
-    }
-
     async fn offers_events_loop(&self, _starting_block: u64) -> anyhow::Result<()> {
+        let default_identity = self
+            .inner
+            .identity
+            .default_identity()
+            .await
+            .expect("Failed to get default identity");
+
         loop {
-            //read file from offer.json
-            if let Ok(paths) = glob("incoming-offer-*.json") {
-                #[allow(clippy::manual_flatten)]
-                for entry in paths {
-                    if let Ok(path) = entry {
-                        match Self::read_offer_from_file(&path).await {
-                            Ok(offer) => {
-                                log::info!("Registering incoming offer from file: {:?}", path);
-                                self.register_incoming_offers(vec![offer]).await?;
-                            }
-                            Err(e) => {
-                                log::error!(
-                                    "Failed to read and register offer from file {:?}: {}",
-                                    path,
-                                    e
-                                );
-                            }
-                        }
-                        fs::remove_file(path).map_err(|e| {
-                            anyhow::anyhow!("Failed to remove invalid offer file: {}", e)
-                        })?;
-                    }
-                }
-            }
             // Wait for either Ctrl+C or timeout to continue loop
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
                     log::info!("Received Ctrl+C, shutting down offers events loop");
                     break;
                 }
-                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+            }
+
+            let matcher = env::var("YAGNA_MARKET_MATCHER_URL");
+            if let Ok(matcher) = matcher {
+                let client = reqwest::Client::new();
+                let res = client
+                    .post(&(matcher + "/requestor/demand/take-from-queue"))
+                    .header("Content-Type", "application/json")
+                    .body(
+                        "{
+                            \"demandId\""
+                            .to_string()
+                            + ": \""
+                            + &default_identity.to_string()
+                            + "\"}",
+                    )
+                    .send()
+                    .await;
+                match res {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            let data = response.text().await.unwrap_or_default();
+
+                            let offer = serde_json::from_str::<ModelOffer>(&data);
+                            match offer {
+                                Ok(offer) => {
+                                    log::info!(
+                                        "Registering incoming offer from matcher: {:?}",
+                                        offer.id
+                                    );
+                                    self.register_incoming_offers(vec![offer]).await?;
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to parse offer from matcher response: {}",
+                                        e
+                                    );
+                                }
+                            }
+                        } else if response.status() == reqwest::StatusCode::NOT_FOUND {
+                            let response_text = response.text().await.unwrap_or_default();
+                            if response_text.is_empty() {
+                                log::error!(
+                                    "Failed to take offer due to other error (no body): {}",
+                                    default_identity
+                                );
+                            } else {
+                                log::info!(
+                                    "No offers available in matcher queue for demand {}",
+                                    response_text
+                                );
+                            }
+                        } else {
+                            log::error!(
+                                "Failed to take offer, other status: {}",
+                                response.status()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to take offer due to other error: {}", e);
+                    }
+                }
+            } else {
+                log::warn!("YAGNA_MARKET_MATCHER_URL not set, skipping demand notification");
             }
         }
         Ok(())
@@ -402,7 +410,7 @@ impl Discovery {
             DiscoveryInitError::GolemBaseInitFailed(format!("Failed to register offers: {}", e))
         })?;
 
-        let handle = tokio::spawn(async move {
+        let handle = tokio::task::spawn_local(async move {
             discovery
                 .offers_events_loop(starting_block)
                 .await

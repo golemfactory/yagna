@@ -4,10 +4,9 @@ use std::collections::HashSet;
 use std::ops::Div;
 use std::sync::Arc;
 
-use arkiv_sdk::client::{ArkivClient, TransactionConfig};
-
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
+use arkiv_sdk::client::{ArkivClient, TransactionConfig};
 
 use super::error::DiscoveryInitError;
 use super::{Discovery, DiscoveryImpl};

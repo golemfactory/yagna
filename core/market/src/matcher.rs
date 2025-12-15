@@ -347,6 +347,34 @@ impl Matcher {
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 
+        let matcher = env::var("YAGNA_MARKET_MATCHER_URL");
+        if let Ok(matcher) = matcher {
+            let client = reqwest::Client::new();
+            let res = client
+                .post(&(matcher + "/requestor/demand/new"))
+                .header("Content-Type", "application/json")
+                .body(serde_json::to_string(&demand).unwrap())
+                .send()
+                .await;
+            match res {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        log::info!("Successfully notified matcher about new demand");
+                    } else {
+                        log::error!(
+                            "Failed to notify matcher about new demand: HTTP {}",
+                            response.status()
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to notify matcher about new demand: {}", e);
+                }
+            }
+        } else {
+            log::warn!("YAGNA_MARKET_MATCHER_URL not set, skipping demand notification");
+        }
+
         // Track demand expiration
         self.expiration_tracker
             .send(TrackDeadline {
@@ -393,6 +421,34 @@ impl Matcher {
             })
             .await
             .ok();
+
+        let matcher = env::var("YAGNA_MARKET_MATCHER_URL");
+        if let Ok(matcher) = matcher {
+            let client = reqwest::Client::new();
+            let res = client
+                .post(&(matcher + "/requestor/demand/cancel"))
+                .header("Content-Type", "application/json")
+                .body("{\"demandId\":\"".to_string() + &demand_id.to_string() + "\"}")
+                .send()
+                .await;
+            match res {
+                Ok(response) => {
+                    if response.status().is_success() {
+                        log::info!("Successfully notified matcher about demand cancellation");
+                    } else {
+                        log::error!(
+                            "Failed to notify matcher about demand cancellation: HTTP {}",
+                            response.status()
+                        );
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to notify matcher about demand cancellation: {}", e);
+                }
+            }
+        } else {
+            log::warn!("YAGNA_MARKET_MATCHER_URL not set, skipping demand notification");
+        }
 
         // Check if this was the last demand - if so, stop listening for offers
         self.maybe_stop_listening().await;

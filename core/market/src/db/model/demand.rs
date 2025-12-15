@@ -1,5 +1,5 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
-
+use serde::{Deserialize, Serialize};
 use ya_client::model::{market::Demand as ClientDemand, ErrorMessage, NodeId};
 use ya_service_api_web::middleware::Identity;
 
@@ -7,7 +7,8 @@ use super::SubscriptionId;
 use crate::db::schema::market_demand;
 use ya_client::model::market::NewDemand;
 
-#[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
+#[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[table_name = "market_demand"]
 pub struct Demand {
     pub id: SubscriptionId,

@@ -9,7 +9,6 @@ use ya_client::model::market::{
     Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
     NewDemand, NewOffer, Offer, Reason, Role,
 };
-
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::{self as model};
 use ya_service_api_interfaces::{Provider, Service};
