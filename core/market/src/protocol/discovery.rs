@@ -349,8 +349,8 @@ impl Discovery {
                             match offer {
                                 Ok(offer) => {
                                     log::info!(
-                                        "Registering incoming offer from matcher: {:?}",
-                                        offer.id
+                                        "Registering incoming offer from provider: {}",
+                                        offer.node_id
                                     );
                                     self.register_incoming_offers(vec![offer]).await?;
                                 }
