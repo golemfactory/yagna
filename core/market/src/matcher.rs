@@ -318,18 +318,6 @@ impl Matcher {
             .await
             .ok();
 
-        // Broadcast only, if no Error occurred in previous step.
-        // We ignore broadcast errors. Unsubscribing was finished successfully, so:
-        // - We shouldn't bother agent with broadcasts errors.
-        // - Unsubscribe message probably will reach other markets, but later.
-        self.discovery
-            .bcast_unsubscribe(offer_id.clone())
-            .await
-            .map_err(|e| {
-                MatcherError::GolemBaseOfferError(format!(
-                    "Failed to bcast unsubscribe offer [{offer_id}]. Error: {e}."
-                ))
-            })?;
 
         log::info!(
             "Unsubscribed Offer: [{}] using identity: {} [{}]",
