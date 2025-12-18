@@ -1,12 +1,10 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Div;
 use std::sync::Arc;
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
-use arkiv_sdk::client::{ArkivClient, TransactionConfig};
 
 use super::error::DiscoveryInitError;
 use super::{Discovery, DiscoveryImpl};
@@ -76,14 +74,13 @@ impl DiscoveryBuilder {
         let config = self.config.clone().ok_or_else(|| {
             DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
         })?;
-        
 
         let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
                 config: config.clone(),
-                identities: std::sync::Mutex::new(HashSet::new()),
+                _identities: std::sync::Mutex::new(HashSet::new()),
                 websocket_task: std::sync::Mutex::new(None),
             }),
         };

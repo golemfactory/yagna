@@ -1,4 +1,4 @@
-mod agreement;
+pub(crate) mod agreement;
 mod agreement_events;
 mod demand;
 mod negotiation_events;

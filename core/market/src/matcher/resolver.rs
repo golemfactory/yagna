@@ -1,5 +1,5 @@
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-
+use tokio::time::Instant;
 use ya_market_resolver::{match_demand_offer, Match};
 
 use super::{error::ResolverError, RawProposal, SubscriptionStore};
@@ -84,12 +84,57 @@ impl Resolver {
             }
             Subscription::Demand(id) => {
                 let demand = self.store.get_demand(id).await?;
-                self.store
+
+                let perf_time = Instant::now();
+
+                let current_offers = self
+                    .store
                     .get_offers_before(demand.insertion_ts.unwrap())
                     .await?
                     .into_iter()
-                    .filter(|offer| matches(offer, &demand))
-                    .for_each(|offer| self.emit_proposal(offer, demand.clone()));
+                    .filter(|offer| matches(offer, &demand));
+                let agreements = match self.store.get_approved_agreements().await {
+                    Ok(agreements) => agreements,
+                    Err(e) => {
+                        return Err(ResolverError::Demand(e));
+                    }
+                };
+
+                let mut proposals_to_emit = Vec::new();
+                for offer in current_offers {
+                    //@todo check if offer is not used in open agreement
+                    if agreements.iter().any(|a| a.provider_id == offer.node_id) {
+                        log::info!(
+                            "Skipping offer from provider [{}] as it is used in approved agreement",
+                            offer.node_id
+                        );
+                        continue;
+                    }
+                    proposals_to_emit.push(offer);
+                }
+                let elapsed = perf_time.elapsed().as_secs_f64();
+
+                if elapsed > 0.1 {
+                    log::warn!(
+                        "Emitting {} proposals, preparation took {:.2} ms",
+                        proposals_to_emit.len(),
+                        elapsed * 1000.0
+                    );
+                } else {
+                    log::info!(
+                        "Emitting {} proposals, preparation took {:.2} ms",
+                        proposals_to_emit.len(),
+                        elapsed * 1000.0
+                    );
+                }
+                for offer in proposals_to_emit {
+                    log::info!(
+                        "Emitting proposal for Demand [{}] and Offer [{}]",
+                        demand.id,
+                        offer.id
+                    );
+                    self.emit_proposal(offer, demand.clone());
+                }
             }
         }
         Ok(())
@@ -98,6 +143,7 @@ impl Resolver {
     pub fn emit_proposal(&self, offer: Offer, demand: Demand) {
         let offer_id = offer.id.clone();
         let demand_id = demand.id.clone();
+        log::info!("PROPOSAL: Offer [{}] <-> Demand [{}]", offer_id, demand_id);
         if let Err(e) = self.proposal_tx.send(RawProposal { offer, demand }) {
             log::warn!(
                 "Emitting proposal for Offer [{}] and Demand [{}] error: {}",

@@ -3,7 +3,6 @@ use chrono::{NaiveDateTime, Utc};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
-
 use ya_client::model::market::{Demand as ClientDemand, NewDemand, Offer as ClientOffer};
 use ya_client::model::NodeId;
 use ya_service_api_web::middleware::Identity;
@@ -19,6 +18,7 @@ use crate::matcher::error::{
 use crate::matcher::sync::{OfferPlaceholderGuard, OfferSync};
 use crate::negotiation::ScannerSet;
 use crate::protocol::discovery::message::{QueryOffers, QueryOffersResult};
+use crate::testing::AgreementState;
 
 #[derive(Clone)]
 pub struct SubscriptionStore {
@@ -315,6 +315,22 @@ impl SubscriptionStore {
             Err(e) => Err(DemandError::GetSingle(e, id.clone())),
             Ok(Some(demand)) => Ok(demand),
             Ok(None) => Err(DemandError::NotFound(id.clone())),
+        }
+    }
+
+    pub async fn get_approved_agreements(
+        &self,
+    ) -> Result<Vec<crate::db::model::agreement::Agreement>, DemandError> {
+        match self
+            .db
+            .as_dao::<AgreementDao>()
+            .list(None, Some(AgreementState::Approved), None, None, None)
+            .await
+        {
+            Ok(agreements) => Ok(agreements),
+            Err(e) => Err(DemandError::Other(format!(
+                "Failed to get Agreements from database {e}"
+            ))),
         }
     }
 

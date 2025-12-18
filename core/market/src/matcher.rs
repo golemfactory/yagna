@@ -318,7 +318,6 @@ impl Matcher {
             .await
             .ok();
 
-
         log::info!(
             "Unsubscribed Offer: [{}] using identity: {} [{}]",
             &offer_id,

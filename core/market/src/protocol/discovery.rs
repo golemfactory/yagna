@@ -1,41 +1,22 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use offer::GolemBaseOffer;
 use std::collections::HashSet;
 use std::env;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use ya_service_bus::timeout::IntoTimeoutFuture;
 
 use ya_client::model::NodeId;
 use ya_core_model::bus::GsbBindPoints;
-use ya_core_model::identity::event::IdentityEvent;
-use ya_core_model::identity::Error;
-use ya_core_model::market::{local, GetGolemBaseOffer, GetGolemBaseOfferResponse};
-use ya_core_model::market::{
-    FundGolemBase, GetGolemBaseBalance, GolemBaseCommand, RpcMessageError,
-};
-use ya_service_bus::typed as bus;
 
 use super::callback::HandlerSlot;
 use crate::config::DiscoveryConfig;
-use crate::db::model::{Offer as ModelOffer, SubscriptionId};
-use crate::identity::{IdentityApi, IdentityError, YagnaIdSigner};
+use crate::db::model::Offer as ModelOffer;
+use crate::identity::IdentityApi;
 use crate::protocol::discovery::error::*;
 use crate::protocol::discovery::message::*;
-use arkiv_sdk::client::ArkivClient;
-use arkiv_sdk::entity::Create;
-use arkiv_sdk::events::Event;
-use arkiv_sdk::rpc::{QueryOptions, SearchResult};
-use arkiv_sdk::signers::TransactionSigner;
-use arkiv_sdk::{Address, Hash};
-use rand::{thread_rng, Rng};
 
 const ARKIV_CALLER: &str = "Arkiv";
-
-// TODO: Get this value from node configuration
-const BLOCK_TIME_SECONDS: i64 = 2;
 
 pub mod builder;
 pub mod error;
@@ -61,24 +42,11 @@ pub struct DiscoveryImpl {
     //arkiv: ArkivClient,
     offer_handlers: OfferHandlers,
     config: DiscoveryConfig,
-    identities: Mutex<HashSet<NodeId>>,
+    _identities: Mutex<HashSet<NodeId>>,
     websocket_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl Discovery {
-
-    /// Checks if an offer belongs to us based on metadata and entity_id
-    fn _is_own_offer(&self, metadata: &SearchResult) -> bool {
-        let Some(owner) = metadata.owner.as_ref() else {
-            log::warn!("[Programming error] Entity metadata should contain owner!");
-            return false;
-        };
-
-        let identities = self.inner.identities.lock().unwrap();
-        let owner_bytes = NodeId::from(owner.as_slice());
-        identities.contains(&owner_bytes)
-    }
-
     async fn offers_events_loop(&self, _starting_block: u64) -> anyhow::Result<()> {
         let default_identity = self
             .inner
@@ -246,10 +214,9 @@ impl Discovery {
         Ok(())
     }
 
-
     /// Function doesn't bind any GSB handlers.
     /// It's only used to sync with GolemBase node and initialize Discovery struct state.
-    pub async fn bind_gsb(&self, gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
+    pub async fn bind_gsb(&self, _gsb: GsbBindPoints) -> Result<(), DiscoveryInitError> {
         log::info!("Arkiv Configuration:");
         log::info!("  Network: {:?}", self.inner.config.get_network_type());
         log::info!("  RPC URL: {}", self.inner.config.get_rpc_url());
@@ -294,10 +261,6 @@ impl Discovery {
         //self.bind_fund_handler(gsb.local_addr()).await?;
         Ok(())
     }
-
-
-
-
 
     pub(crate) async fn get_last_bcast_ts(&self) -> DateTime<Utc> {
         Utc::now()

@@ -1,9 +1,6 @@
-use anyhow::anyhow;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use arkiv_sdk::{keccak256, signers::TransactionSigner, Address, Signature};
 use ya_client::model::NodeId;
 use ya_core_model::{
     bus::GsbBindPoints,
@@ -131,45 +128,5 @@ impl IdentityGSB {
         Arc::new(IdentityGSB {
             gsb: gsb.service(identity::BUS_SERVICE_NAME),
         })
-    }
-}
-
-pub struct YagnaIdSigner {
-    pub identity_api: Arc<dyn IdentityApi>,
-    pub node_id: NodeId,
-}
-
-#[async_trait]
-impl TransactionSigner for YagnaIdSigner {
-    fn address(&self) -> Address {
-        Address::from(&self.node_id.into_array())
-    }
-
-    async fn sign(&self, data: &[u8]) -> anyhow::Result<Signature> {
-        let hash = keccak256(data);
-        let identity_api = self.identity_api.clone();
-        let node_id = self.node_id;
-
-        Ok(tokio::task::spawn_local(async move {
-            let mut sig_bytes = identity_api.sign(&node_id, hash.as_ref()).await?;
-            let v = sig_bytes[0];
-            sig_bytes.append(&mut vec![v]);
-
-            anyhow::Ok(
-                Signature::from_raw(&sig_bytes[1..])
-                    .map_err(|e| anyhow!("Failed to parse signature: {e}"))?,
-            )
-        })
-        .await
-        .map_err(|e| anyhow!("Failed to sign data: {e}"))??)
-    }
-}
-
-impl YagnaIdSigner {
-    pub fn new(identity_api: Arc<dyn IdentityApi>, node_id: NodeId) -> Self {
-        Self {
-            identity_api,
-            node_id,
-        }
     }
 }
