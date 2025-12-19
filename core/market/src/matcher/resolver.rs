@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::time::Instant;
 use ya_market_resolver::{match_demand_offer, Match};
@@ -31,6 +32,7 @@ pub struct Resolver {
     pub(crate) store: SubscriptionStore,
     subscription_tx: UnboundedSender<Subscription>,
     proposal_tx: UnboundedSender<RawProposal>,
+    last_demand_id: Arc<Mutex<Option<SubscriptionId>>>,
 }
 
 impl Resolver {
@@ -41,6 +43,7 @@ impl Resolver {
             store,
             subscription_tx,
             proposal_tx,
+            last_demand_id: Arc::new(Mutex::new(None)),
         };
 
         let resolver = myself.clone();
@@ -83,6 +86,19 @@ impl Resolver {
                     .for_each(|demand| self.emit_proposal(offer.clone(), demand));
             }
             Subscription::Demand(id) => {
+                {
+                    let mut last_demand_id = self.last_demand_id.lock().expect("Lock poisoned");
+                    if let Some(last_id) = &*last_demand_id {
+                        if last_id == id {
+                            log::info!(
+                                "Skipping processing Demand [{}] as it was just processed",
+                                id
+                            );
+                            return Ok(());
+                        }
+                    }
+                    *last_demand_id = Some(id.clone());
+                }
                 let demand = self.store.get_demand(id).await?;
 
                 let perf_time = Instant::now();
