@@ -96,6 +96,25 @@ impl BatchCycleTask {
             waker: waker.clone(),
             finish: finish.clone(),
             handle: tokio::spawn(async move {
+                let disabled_platforms = vec![
+                    "rinkeby",
+                    "mumbai",
+                    "amoy",
+                    "mainnet",
+                    "goerli",
+                    "holesky",
+                    "sepolia",
+                ];
+                for disabled_platform in disabled_platforms {
+                    if platform.contains(disabled_platform) {
+                        log::warn!(
+                            "Batch cycle task is disabled for platform: {}",
+                            disabled_platform
+                        );
+                        return;
+                    }
+                }
+
                 log::info!(
                     "Starting batch cycle task for owner_id: {}, platform: {}",
                     node_id,
