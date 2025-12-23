@@ -147,7 +147,7 @@ impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbMixedExecutor>>(
         ctx: &Context,
     ) -> anyhow::Result<()> {
-        let central_net = env::var("YA_NET_RELAY_HOST").ok();
+        let central_net = env::var("CENTRAL_NET_HOST").ok();
         let market = MARKET.get_or_init_market(&ctx.component(), central_net)?;
         let gsb_market = model::market::bus_bindpoints(None);
         market.bind_gsb(gsb_market).await?;
@@ -155,7 +155,7 @@ impl MarketService {
     }
 
     pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
-        let central_net = env::var("YA_NET_RELAY_HOST").ok();
+        let central_net = env::var("CENTRAL_NET_HOST").ok();
         match MARKET.get_or_init_market(&ctx.component(), central_net) {
             Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
