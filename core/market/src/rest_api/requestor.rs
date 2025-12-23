@@ -41,7 +41,7 @@ async fn subscribe(
     id: Identity,
 ) -> impl Responder {
     market
-        .subscribe_demand(&body.into_inner(), &id, None)
+        .subscribe_demand(&body.into_inner(), &id, market.central_address.clone())
         .await
         .log_err()
         .map(|id| HttpResponse::Created().json(id))

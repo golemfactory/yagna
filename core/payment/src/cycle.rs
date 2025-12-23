@@ -97,13 +97,7 @@ impl BatchCycleTask {
             finish: finish.clone(),
             handle: tokio::spawn(async move {
                 let disabled_platforms = vec![
-                    "rinkeby",
-                    "mumbai",
-                    "amoy",
-                    "mainnet",
-                    "goerli",
-                    "holesky",
-                    "sepolia",
+                    "rinkeby", "mumbai", "amoy", "mainnet", "goerli", "holesky", "sepolia",
                 ];
                 for disabled_platform in disabled_platforms {
                     if platform.contains(disabled_platform) {

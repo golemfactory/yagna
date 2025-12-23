@@ -147,16 +147,14 @@ impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbMixedExecutor>>(
         ctx: &Context,
     ) -> anyhow::Result<()> {
-        let central_net = env::var("CENTRAL_NET_HOST").ok();
-        let market = MARKET.get_or_init_market(&ctx.component(), central_net)?;
+        let market = MARKET.get_or_init_market(&ctx.component())?;
         let gsb_market = model::market::bus_bindpoints(None);
         market.bind_gsb(gsb_market).await?;
         Ok(())
     }
 
     pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
-        let central_net = env::var("CENTRAL_NET_HOST").ok();
-        match MARKET.get_or_init_market(&ctx.component(), central_net) {
+        match MARKET.get_or_init_market(&ctx.component()) {
             Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
                 log::error!("REST API initialization failed: {}", e);
@@ -369,12 +367,16 @@ impl StaticMarket {
     pub fn get_or_init_market(
         &self,
         db: &DbMixedExecutor,
-        central_address: Option<String>,
     ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
+            let central_address = env::var("CENTRAL_NET_HOST").ok();
+            log::info!(
+                "Initializing Market Service. Central address: {}",
+                central_address.as_deref().unwrap_or("not set")
+            );
             let identity_api = IdentityGSB::new(GsbBindPoints::default());
             let config = Arc::new(Config::from_env()?);
             let market = Arc::new(MarketService::new(
