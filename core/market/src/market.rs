@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::{Arc, Mutex};
 
 use actix_web::web::Data;
@@ -71,6 +72,7 @@ pub struct MarketService {
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
     pub scan_set: Data<ScannerSet>,
+    pub central_address: Option<String>,
 }
 
 impl MarketService {
@@ -86,6 +88,7 @@ impl MarketService {
         db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
+        central_address: Option<String>,
     ) -> Result<Self, MarketInitError> {
         counter!("market.offers.subscribed", 0);
         counter!("market.offers.unsubscribed", 0);
@@ -129,6 +132,7 @@ impl MarketService {
             provider_engine,
             requestor_engine,
             scan_set,
+            central_address,
         })
     }
 
@@ -143,14 +147,16 @@ impl MarketService {
     pub async fn gsb<Context: Provider<Self, DbMixedExecutor>>(
         ctx: &Context,
     ) -> anyhow::Result<()> {
-        let market = MARKET.get_or_init_market(&ctx.component())?;
+        let central_net = env::var("YA_NET_RELAY_HOST").ok();
+        let market = MARKET.get_or_init_market(&ctx.component(), central_net)?;
         let gsb_market = model::market::bus_bindpoints(None);
         market.bind_gsb(gsb_market).await?;
         Ok(())
     }
 
     pub fn rest<Context: Provider<Self, DbMixedExecutor>>(ctx: &Context) -> actix_web::Scope {
-        match MARKET.get_or_init_market(&ctx.component()) {
+        let central_net = env::var("YA_NET_RELAY_HOST").ok();
+        match MARKET.get_or_init_market(&ctx.component(), central_net) {
             Ok(market) => MarketService::bind_rest(market),
             Err(e) => {
                 log::error!("REST API initialization failed: {}", e);
@@ -216,8 +222,12 @@ impl MarketService {
         &self,
         demand: &NewDemand,
         id: &Identity,
+        central_addr: Option<String>,
     ) -> Result<SubscriptionId, MarketError> {
-        let demand = self.matcher.subscribe_demand(demand, id).await?;
+        let demand = self
+            .matcher
+            .subscribe_demand(demand, id, central_addr)
+            .await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
 
         counter!("market.demands.subscribed", 1);
@@ -359,6 +369,7 @@ impl StaticMarket {
     pub fn get_or_init_market(
         &self,
         db: &DbMixedExecutor,
+        central_address: Option<String>,
     ) -> Result<Arc<MarketService>, MarketInitError> {
         let mut guarded_market = self.locked_market.lock().unwrap();
         if let Some(market) = &*guarded_market {
@@ -366,7 +377,12 @@ impl StaticMarket {
         } else {
             let identity_api = IdentityGSB::new(GsbBindPoints::default());
             let config = Arc::new(Config::from_env()?);
-            let market = Arc::new(MarketService::new(db, identity_api, config)?);
+            let market = Arc::new(MarketService::new(
+                db,
+                identity_api,
+                config,
+                central_address,
+            )?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

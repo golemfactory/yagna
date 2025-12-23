@@ -1,5 +1,5 @@
 use actix::prelude::*;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -33,9 +33,11 @@ use crate::db::dao::{DemandDao, DemandState};
 use error::{MatcherError, MatcherInitError, QueryOfferError, QueryOffersError};
 use futures::FutureExt;
 use resolver::Resolver;
+use serde::Serialize;
 use serde_json::Value;
 use store::SubscriptionStore;
 use tracing::Level;
+use ya_core_model::NodeId;
 
 /// Stores proposal generated from resolver.
 #[derive(Debug)]
@@ -58,6 +60,24 @@ pub struct Matcher {
     identity: Arc<dyn IdentityApi>,
     expiration_tracker: Addr<DeadlineChecker>,
     config: Arc<Config>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DemandToJson {
+    pub id: SubscriptionId,
+    pub properties: String,
+    pub constraints: String,
+    pub node_id: NodeId,
+
+    /// Creation time of Demand on Requestor side.
+    pub creation_ts: NaiveDateTime,
+    /// Timestamp of adding this Demand to database.
+    pub insertion_ts: Option<NaiveDateTime>,
+    /// Time when Demand expires; set by Requestor.
+    pub expiration_ts: NaiveDateTime,
+    /// Filter by central net address
+    pub central_net_address: Option<String>,
 }
 
 impl Matcher {
@@ -331,6 +351,7 @@ impl Matcher {
         &self,
         demand: &NewDemand,
         id: &Identity,
+        central_addr: Option<String>,
     ) -> Result<Demand, MatcherError> {
         let demand = self.store.create_demand(id, demand).await?;
 
@@ -340,7 +361,19 @@ impl Matcher {
             let res = client
                 .post(&(matcher + "/requestor/demand/new"))
                 .header("Content-Type", "application/json")
-                .body(serde_json::to_string(&demand).unwrap())
+                .body(
+                    serde_json::to_string(&DemandToJson {
+                        id: demand.id.clone(),
+                        properties: demand.properties.clone(),
+                        constraints: demand.constraints.clone(),
+                        node_id: demand.node_id,
+                        creation_ts: demand.creation_ts,
+                        insertion_ts: demand.insertion_ts,
+                        expiration_ts: demand.expiration_ts,
+                        central_net_address: central_addr.clone(),
+                    })
+                    .unwrap(),
+                )
                 .send()
                 .await;
             match res {
