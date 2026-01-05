@@ -54,7 +54,7 @@ pub(super) async fn receive_remote_offers(
         .await;
 
     counter!("market.offers.incoming", added_offers_ids.len() as u64);
-    log::trace!(
+    log::info!(
         "Received {} new Offers from [{}]",
         added_offers_ids.len(),
         caller

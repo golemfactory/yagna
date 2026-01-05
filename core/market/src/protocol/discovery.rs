@@ -425,6 +425,12 @@ impl Discovery {
                     log::debug!("Can't get Offers from [{caller}]. Error: {e}")
                 })?;
 
+            log::info!(
+                "Received {}/{} Offers from [{caller}].",
+                offers.len(),
+                num_ids_received,
+            );
+
             let end_remote = Instant::now();
             timing!(
                 "market.offers.incoming.get_remote.time",
