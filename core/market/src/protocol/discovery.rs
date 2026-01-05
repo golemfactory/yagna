@@ -86,14 +86,14 @@ impl Discovery {
                         if response.status().is_success() {
                             let data = response.text().await.unwrap_or_default();
 
-                            let offer = serde_json::from_str::<ModelOffer>(&data);
-                            match offer {
-                                Ok(offer) => {
+                            let offers = serde_json::from_str::<Vec<ModelOffer>>(&data);
+                            match offers {
+                                Ok(offers) => {
                                     log::info!(
-                                        "Registering incoming offer from provider: {}",
-                                        offer.node_id
+                                        "Registering incoming offers from providers: {:?}",
+                                        offers.iter().map(|f| f.node_id)
                                     );
-                                    self.register_incoming_offers(vec![offer]).await?;
+                                    self.register_incoming_offers(offers).await?;
                                 }
                                 Err(e) => {
                                     log::error!(
