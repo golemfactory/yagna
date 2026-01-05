@@ -390,6 +390,7 @@ impl Discovery {
 
     async fn bcast_receiver_loop(self, mut offers_channel: mpsc::Receiver<(NodeId, OffersBcast)>) {
         while let Some((caller, msg)) = offers_channel.recv().await {
+            log::info!("Processing broadcast of {:?} Offers from [{caller}].", msg.offer_ids);
             if !self.inner.ban_cache.is_banned_node(&caller) {
                 self.bcast_receiver_loop_step(caller, msg).await.ok();
             } else {
@@ -534,6 +535,7 @@ impl Discovery {
 }
 
 async fn broadcast_offers(node_id: NodeId, offer_ids: Vec<SubscriptionId>) {
+    log::info!("Broadcasting offers: {} {:?}", node_id, offer_ids);
     if let Err(e) = net::broadcast(node_id, OffersBcast { offer_ids }).await {
         log::error!("Error broadcasting offers: {e}");
         counter!("market.offers.broadcasts.net_errors", 1);
