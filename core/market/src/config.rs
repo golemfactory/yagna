@@ -157,7 +157,7 @@ pub struct DiscoveryConfig {
     #[clap(env = "ARKIV_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
     pub offer_publish_timeout: Duration,
     /// Number of retries for GolemBase transactions
-    #[clap(env = "ARKIV_PUBLISH_MAX_RETRIES", default_value = "2")]
+    #[clap(env = "ARKIV_PUBLISH_MAX_RETRIES", default_value = "10")]
     pub publish_max_retries: u32,
     /// Number of confirmations required for GolemBase transactions
     #[clap(env = "ARKIV_REQUIRED_CONFIRMATIONS", default_value = "1")]

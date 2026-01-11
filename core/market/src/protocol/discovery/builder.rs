@@ -1,10 +1,7 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Div;
 use std::sync::Arc;
-
-use arkiv_sdk::client::{ArkivClient, TransactionConfig};
 
 use crate::protocol::callback::{CallbackFuture, OutputFuture};
 use crate::protocol::callback::{CallbackHandler, CallbackMessage, HandlerSlot};
@@ -71,35 +68,20 @@ impl DiscoveryBuilder {
         let offer_handlers = OfferHandlers {
             filter_out_known_ids: self.get_handler(),
             receive_remote_offers: self.get_handler(),
-            offer_unsubscribe_handler: self.get_handler(),
+            _offer_unsubscribe_handler: self.get_handler(),
         };
 
         let config = self.config.clone().ok_or_else(|| {
             DiscoveryInitError::BuilderIncomplete("Configuration is required".to_string())
         })?;
 
-        let arkiv = ArkivClient::new_uninitialized(config.get_rpc_url().clone())
-            .map_err(|e| DiscoveryInitError::GolemBaseInitFailed(e.to_string()))?
-            .override_config(TransactionConfig {
-                max_retries: config.publish_max_retries,
-                transaction_receipt_timeout: config
-                    .offer_publish_timeout
-                    .div(config.publish_max_retries),
-                price_bump_percent: 100,
-                required_confirmations: config.required_confirmations,
-                chain_id: Some(config.get_chain_id()),
-                ..TransactionConfig::default()
-            });
-
         let discovery = Discovery {
             inner: Arc::new(DiscoveryImpl {
                 identity: self.get_data(),
                 offer_handlers,
                 config: config.clone(),
-                arkiv,
-                identities: std::sync::Mutex::new(HashSet::new()),
+                _identities: std::sync::Mutex::new(HashSet::new()),
                 websocket_task: std::sync::Mutex::new(None),
-                last_block_number: std::sync::atomic::AtomicU64::new(0),
             }),
         };
 

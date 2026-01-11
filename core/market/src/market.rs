@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::{Arc, Mutex};
 
 use actix_web::web::Data;
@@ -9,7 +10,6 @@ use ya_client::model::market::{
     Agreement, AgreementListEntry, AgreementOperationEvent as ClientAgreementEvent, Demand,
     NewDemand, NewOffer, Offer, Reason, Role,
 };
-
 use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::{self as model};
 use ya_service_api_interfaces::{Provider, Service};
@@ -72,6 +72,7 @@ pub struct MarketService {
     pub provider_engine: ProviderBroker,
     pub requestor_engine: RequestorBroker,
     pub scan_set: Data<ScannerSet>,
+    pub central_address: Option<String>,
 }
 
 impl MarketService {
@@ -87,6 +88,7 @@ impl MarketService {
         db: &DbMixedExecutor,
         identity_api: Arc<dyn IdentityApi>,
         config: Arc<Config>,
+        central_address: Option<String>,
     ) -> Result<Self, MarketInitError> {
         counter!("market.offers.subscribed", 0);
         counter!("market.offers.unsubscribed", 0);
@@ -130,6 +132,7 @@ impl MarketService {
             provider_engine,
             requestor_engine,
             scan_set,
+            central_address,
         })
     }
 
@@ -217,8 +220,12 @@ impl MarketService {
         &self,
         demand: &NewDemand,
         id: &Identity,
+        central_addr: Option<String>,
     ) -> Result<SubscriptionId, MarketError> {
-        let demand = self.matcher.subscribe_demand(demand, id).await?;
+        let demand = self
+            .matcher
+            .subscribe_demand(demand, id, central_addr)
+            .await?;
         self.requestor_engine.subscribe_demand(&demand).await?;
 
         counter!("market.demands.subscribed", 1);
@@ -365,9 +372,19 @@ impl StaticMarket {
         if let Some(market) = &*guarded_market {
             Ok(market.clone())
         } else {
+            let central_address = env::var("CENTRAL_NET_HOST").ok();
+            log::info!(
+                "Initializing Market Service. Central address: {}",
+                central_address.as_deref().unwrap_or("not set")
+            );
             let identity_api = IdentityGSB::new(GsbBindPoints::default());
             let config = Arc::new(Config::from_env()?);
-            let market = Arc::new(MarketService::new(db, identity_api, config)?);
+            let market = Arc::new(MarketService::new(
+                db,
+                identity_api,
+                config,
+                central_address,
+            )?);
             *guarded_market = Some(market.clone());
             Ok(market)
         }

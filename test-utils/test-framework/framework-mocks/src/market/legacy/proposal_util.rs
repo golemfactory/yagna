@@ -147,7 +147,7 @@ pub async fn exchange_proposals_impl(
     let req_mkt = network.get_market(req_name);
     let prov_mkt = network.get_market(prov_name);
 
-    let demand_id = req_mkt.subscribe_demand(demand, req_id).await?;
+    let demand_id = req_mkt.subscribe_demand(demand, req_id, None).await?;
     let offer_id = prov_mkt.subscribe_offer(offer, prov_id).await?;
 
     // Expect events generated on requestor market.

@@ -278,6 +278,7 @@ impl MarketsNetwork {
                 &db,
                 identity_api.clone() as Arc<dyn IdentityApi>,
                 self.config.clone(),
+                None,
             )
             .unwrap(),
         );

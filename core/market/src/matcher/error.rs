@@ -17,6 +17,8 @@ pub enum DemandError {
     NotFound(SubscriptionId),
     #[error(transparent)]
     JsonObjectExpected(#[from] serde_json::error::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 #[derive(thiserror::Error, Debug)]
