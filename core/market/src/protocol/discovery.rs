@@ -1,5 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use serde_json::json;
 use std::collections::HashSet;
 use std::env;
 use std::sync::{Arc, Mutex};
@@ -66,19 +67,27 @@ impl Discovery {
             }
 
             let matcher = env::var("YAGNA_MARKET_MATCHER_URL");
+            let take_at_once = env::var("YAGNA_MARKET_MATCHER_TAKE_AT_ONCE")
+                .unwrap_or_else(|_e| "20".to_string())
+                .parse::<u32>()
+                .unwrap_or_else(|_e| {
+                    log::error!(
+                        "Invalid YAGNA_MARKET_MATCHER_TAKE_AT_ONCE value, defaulting to 20"
+                    );
+                    20
+                });
             if let Ok(matcher) = matcher {
                 let client = reqwest::Client::new();
+
+                let body = json! {{
+                    "demandId": default_identity.to_string(),
+                    "takeAtOnce": take_at_once
+                }}
+                .to_string();
                 let res = client
                     .post(&(matcher + "/requestor/demand/take-from-queue"))
                     .header("Content-Type", "application/json")
-                    .body(
-                        "{
-                            \"demandId\""
-                            .to_string()
-                            + ": \""
-                            + &default_identity.to_string()
-                            + "\"}",
-                    )
+                    .body(body)
                     .send()
                     .await;
                 match res {
