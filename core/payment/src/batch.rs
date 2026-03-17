@@ -3,8 +3,6 @@ use crate::models::batch::DbBatchOrderItemFullInfo;
 use crate::timeout_lock::MutexTimeoutExt;
 use bigdecimal::{BigDecimal, Zero};
 use lazy_static::lazy_static;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
@@ -168,8 +166,6 @@ pub async fn send_batch_payments(
                     min_payment_amount
                 );
                     for item in items {
-                        //@todo mark item as skipped payment in db
-
                         let db_executor = db
                             .timeout_lock(crate::processor::DB_LOCK_TIMEOUT)
                             .await
@@ -180,19 +176,11 @@ pub async fn send_batch_payments(
                             })?;
                         db_executor
                             .as_dao::<BatchDao>()
-                            .batch_order_item_send(
+                            .batch_order_item_skip(
                                 order_id.to_string(),
                                 owner,
                                 key.payee_addr.clone(),
                                 item.allocation_id,
-                                format!(
-                                    "SKIPPED_PAYMENT_{}",
-                                    thread_rng()
-                                        .sample_iter(&Alphanumeric)
-                                        .take(10)
-                                        .map(char::from)
-                                        .collect::<String>()
-                                ),
                             )
                             .await?;
                     }

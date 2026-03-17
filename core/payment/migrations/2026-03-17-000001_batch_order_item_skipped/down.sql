@@ -1,0 +1,3 @@
+-- SQLite requires recreating the table to drop a column.
+-- Rollback is not implemented as it would require copying all data.
+-- This migration is intentionally not reversible.
