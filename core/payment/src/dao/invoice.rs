@@ -71,7 +71,7 @@ pub fn update_status(
     Ok(())
 }
 
-impl<'c> InvoiceDao<'c> {
+impl InvoiceDao<'_> {
     async fn insert(&self, invoice: WriteObj, activity_ids: Vec<String>) -> DbResult<()> {
         let invoice_id = invoice.id.clone();
         let owner_id = invoice.owner_id;

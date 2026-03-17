@@ -7,7 +7,7 @@ use ya_client::model::market::Reason;
 use ya_persistence::executor::ConnType;
 use ya_persistence::executor::{do_with_transaction, PoolType};
 
-use crate::config::DbConfig;
+use crate::config::{is_market_memory_on_disk, DbConfig};
 use crate::db::dao::demand::{demand_status, DemandState};
 use crate::db::dao::offer::{query_state, OfferState};
 use crate::db::dao::sql_functions::datetime;
@@ -30,12 +30,16 @@ pub struct NegotiationEventsDao<'c> {
 }
 
 impl<'a> AsMixedDao<'a> for NegotiationEventsDao<'a> {
-    fn as_dao(_disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
-        Self { pool: ram_pool }
+    fn as_dao(disk_pool: &'a PoolType, ram_pool: &'a PoolType) -> Self {
+        if is_market_memory_on_disk() {
+            Self { pool: disk_pool }
+        } else {
+            Self { pool: ram_pool }
+        }
     }
 }
 
-impl<'c> NegotiationEventsDao<'c> {
+impl NegotiationEventsDao<'_> {
     pub async fn add_proposal_event(&self, proposal: &Proposal, role: Owner) -> DbResult<()> {
         let event = MarketEvent::from_proposal(proposal, role);
         do_with_transaction(

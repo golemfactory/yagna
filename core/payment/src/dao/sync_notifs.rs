@@ -18,7 +18,7 @@ impl<'c> AsDao<'c> for SyncNotifsDao<'c> {
     }
 }
 
-impl<'c> SyncNotifsDao<'c> {
+impl SyncNotifsDao<'_> {
     /// Creates a new sync notif tracking entry for given node-id
     pub async fn upsert(&self, peer_id: NodeId) -> DbResult<()> {
         let sync_notif = WriteObj::new(peer_id);

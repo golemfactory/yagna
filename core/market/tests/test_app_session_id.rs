@@ -438,7 +438,7 @@ async fn test_session_timestamp_filtering() {
         .iter()
         .enumerate()
         .for_each(|(i, event)| match &event.event_type {
-            AgreementEventType::AgreementApprovedEvent {} => {
+            AgreementEventType::AgreementApprovedEvent => {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
@@ -452,7 +452,7 @@ async fn test_session_timestamp_filtering() {
         .iter()
         .enumerate()
         .for_each(|(i, event)| match &event.event_type {
-            AgreementEventType::AgreementApprovedEvent {} => {
+            AgreementEventType::AgreementApprovedEvent => {
                 assert_eq!(event.agreement_id, agreements[i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
@@ -493,7 +493,7 @@ async fn test_session_timestamp_filtering() {
         .iter()
         .enumerate()
         .for_each(|(i, event)| match &event.event_type {
-            AgreementEventType::AgreementApprovedEvent {} => {
+            AgreementEventType::AgreementApprovedEvent => {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
@@ -507,7 +507,7 @@ async fn test_session_timestamp_filtering() {
         .iter()
         .enumerate()
         .for_each(|(i, event)| match &event.event_type {
-            AgreementEventType::AgreementApprovedEvent {} => {
+            AgreementEventType::AgreementApprovedEvent => {
                 assert_eq!(event.agreement_id, agreements[num_before + i].into_client());
                 assert_ge!(event.event_date, timestamp_before);
             }
@@ -595,7 +595,7 @@ async fn test_common_event_flow() {
         assert_eq!(events[0].agreement_id, agreement.into_client());
 
         match &events[0].event_type {
-            AgreementEventType::AgreementApprovedEvent {} => (),
+            AgreementEventType::AgreementApprovedEvent => (),
             e => panic!(
                 "Expected AgreementEventType::AgreementApprovedEvent, got: {:?}",
                 e

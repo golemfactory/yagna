@@ -53,7 +53,6 @@ impl ProgressReporter {
         let update_interval: Duration = self
             .config
             .update_interval
-            .map(Into::into)
             .unwrap_or(Duration::from_secs(1));
         let _update_step = self.config.update_step;
 

@@ -1,3 +1,5 @@
+#![allow(clippy::needless_lifetimes)] // Error in serde macro.
+
 use std::collections::HashSet;
 use std::ops::Not;
 use std::string::ToString;
@@ -248,7 +250,7 @@ pub enum Command {
 
 struct CommandVisitor;
 
-impl<'de> serde::de::Visitor<'de> for CommandVisitor {
+impl serde::de::Visitor<'_> for CommandVisitor {
     type Value = Command;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -1,4 +1,4 @@
-use crate::api::allocations::{forced_release_allocation, release_allocation_after};
+use crate::api::allocations::{forced_release_allocation, schedule_release_allocation};
 use crate::cycle::BatchCycleTaskManager;
 use crate::dao::{
     ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, BatchItemFilter, PaymentDao,
@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::alloc_release_task::AllocationReleaseTasks;
 use crate::post_migrations::process_post_migration_jobs;
 use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
@@ -39,6 +40,7 @@ use ya_core_model::driver::{
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
     ValidateAllocationResult,
 };
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, ProcessBatchCycleError,
     ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet, ProcessPaymentsError,
@@ -310,6 +312,7 @@ pub struct PaymentProcessor {
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
     schedule_payment_guard: Arc<Mutex<()>>,
+    allocation_tasks: AllocationReleaseTasks,
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -362,14 +365,27 @@ struct PaymentNotificationValue {
 }
 
 impl PaymentProcessor {
-    pub fn new(db_executor: DbExecutor) -> Self {
+    pub fn new(db_executor: DbExecutor, allocation_release_tasks: AllocationReleaseTasks) -> Self {
         Self {
             db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
             schedule_payment_guard: Arc::new(Mutex::new(())),
             batch_cycle_tasks: Arc::new(std::sync::Mutex::new(BatchCycleTaskManager::new())),
+            allocation_tasks: allocation_release_tasks,
         }
+    }
+
+    pub async fn identity_event(&self, msg: IdentityEvent) -> Result<(), RegisterAccountError> {
+        match msg {
+            IdentityEvent::AccountLocked { .. } => {
+                log::warn!("Service tasks still running, but account is locked and no payment will be sent");
+            }
+            IdentityEvent::AccountUnlocked { identity } => {
+                self.batch_cycle_tasks.lock().unwrap().add_owner(identity);
+            }
+        }
+        Ok(())
     }
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
@@ -1349,10 +1365,11 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
                             .await
                         } else {
-                            release_allocation_after(
+                            schedule_release_allocation(
                                 db.clone(),
                                 allocation.allocation_id.clone(),
                                 allocation.timeout,
@@ -1372,8 +1389,8 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
-                            .await
                         }
                     }
                 } else {

@@ -99,7 +99,7 @@ async fn stream_results(
             response_builder.append_header((h.as_str(), v));
         }
     }
-    return match response.body {
+    match response.body {
         Ok(body) => Ok(response_builder
             .keep_alive()
             .content_type(content_type)
@@ -108,7 +108,7 @@ async fn stream_results(
             let reason = format!("{err}");
             Ok(response_builder.body(reason))
         }
-    };
+    }
 }
 
 async fn build_response(

@@ -680,7 +680,7 @@ pub fn get_batch_orders(
     Ok(batch_orders)
 }
 
-impl<'c> BatchDao<'c> {
+impl BatchDao<'_> {
     pub async fn get_batch_order(
         &self,
         batch_order_id: String,

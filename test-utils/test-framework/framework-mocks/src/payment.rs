@@ -1,15 +1,19 @@
 use anyhow::anyhow;
 use chrono::{DateTime, TimeZone, Utc};
+
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use ya_client::payment::PaymentApi;
 
+use ya_client::payment::PaymentApi;
 use ya_client_model::payment::{Acceptance, Allocation, DebitNote, Invoice, Payment};
 use ya_core_model::driver::{driver_bus_id, Fund};
-use ya_core_model::payment::local::BUS_ID;
+use ya_core_model::payment::local::{
+    NetworkName, ProcessBatchCycleResponse, ProcessBatchCycleSet, BUS_ID,
+};
 use ya_core_model::payment::public;
+use ya_core_model::NodeId;
 use ya_payment::api::web_scope;
 use ya_payment::config::Config;
 use ya_payment::migrations;
@@ -20,6 +24,7 @@ use ya_service_bus::typed::Endpoint;
 
 use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
+use ya_payment::alloc_release_task::AllocationReleaseTasks;
 
 pub mod fake_payment;
 
@@ -49,12 +54,18 @@ pub struct RealPayment {
     processor: Arc<PaymentProcessor>,
 
     config: Arc<Config>,
+
+    allocation_release_tasks: AllocationReleaseTasks,
 }
 
 impl RealPayment {
     pub fn new(name: &str, testdir: &Path) -> Self {
         let db = Self::create_db(testdir, "payment.db").unwrap();
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
+        let allocation_release_tasks = AllocationReleaseTasks::new_for_mocks_only();
+        let processor = Arc::new(PaymentProcessor::new(
+            db.clone(),
+            allocation_release_tasks.clone(),
+        ));
         let config = Config::from_env().unwrap().run_sync_job(false);
 
         RealPayment {
@@ -63,6 +74,7 @@ impl RealPayment {
             db,
             processor,
             config: Arc::new(config),
+            allocation_release_tasks,
         }
     }
 
@@ -81,7 +93,9 @@ impl RealPayment {
     pub async fn bind_gsb(&self) -> anyhow::Result<()> {
         log::info!("RealPayment ({}) - binding GSB", self.name);
 
-        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone());
+        ya_payment::service::bind_service(&self.db, self.processor.clone(), self.config.clone())
+            .await?;
+        self.processor.process_post_migration_jobs().await?;
 
         self.start_dummy_driver().await?;
         self.start_erc20_driver().await?;
@@ -90,7 +104,7 @@ impl RealPayment {
 
     pub fn bind_rest(&self) -> actix_web::Scope {
         let db = self.db.clone();
-        web_scope(&db)
+        web_scope(&db, self.allocation_release_tasks.clone())
     }
 
     pub async fn start_dummy_driver(&self) -> anyhow::Result<()> {
@@ -107,11 +121,62 @@ impl RealPayment {
         bus::service(driver_bus_id(driver.gsb_name()))
             .call(Fund::new(
                 address.to_string(),
-                Some("holesky".to_string()),
+                Some("hoodi".to_string()),
                 None,
                 false,
             ))
             .await??;
+        Ok(())
+    }
+
+    pub async fn set_payment_processing_interval(
+        &self,
+        driver: Driver,
+        network: NetworkName,
+        node_id: NodeId,
+        interval: Duration,
+    ) -> anyhow::Result<ProcessBatchCycleResponse> {
+        Ok(self
+            .gsb_local_endpoint()
+            .call(ProcessBatchCycleSet {
+                node_id,
+                interval: Some(interval),
+                platform: format!("{}-{}-{}", driver, network, network.get_token()).to_lowercase(),
+                cron: None,
+                next_update: None,
+                safe_payout: None,
+            })
+            .await??)
+    }
+
+    pub async fn set_all_payment_processing_intervals(
+        &self,
+        node_id: NodeId,
+        interval: Duration,
+    ) -> anyhow::Result<()> {
+        let drivers = vec![Driver::Dummy, Driver::Erc20];
+        let networks = vec![
+            NetworkName::Holesky,
+            NetworkName::Hoodi,
+            NetworkName::Amoy,
+            NetworkName::Mumbai,
+            NetworkName::Rinkeby,
+            NetworkName::Goerli,
+            NetworkName::Mainnet,
+            NetworkName::Polygon,
+        ];
+
+        for driver in drivers {
+            for network in &networks {
+                self.set_payment_processing_interval(
+                    driver.clone(),
+                    network.clone(),
+                    node_id,
+                    interval,
+                )
+                .await?;
+            }
+        }
         Ok(())
     }
 
