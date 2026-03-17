@@ -20,7 +20,7 @@ ya-service-api-interfaces.workspace = true
 ya-service-bus = { workspace = true }
 
 anyhow = "1.0"
-bigdecimal = "0.2"
+bigdecimal = "0.4"
 chrono = { version = "0.4", features = ["serde"] }
 futures3 = { version = "0.3", features = ["compat"], package = "futures" }
 log = "0.4"

@@ -30,7 +30,7 @@ pub struct MetricsPusherOpts {
     )]
     pub metrics_push_url: Url,
     /// Metrics job name, which allows to distinguish different groups of Nodes.
-    #[structopt(long, env = "YAGNA_METRICS_JOB_NAME", default_value = "community.1")]
+    #[structopt(long, env = "YAGNA_METRICS_JOB_NAME", default_value = "golembase")]
     pub metrics_job_name: String,
     #[structopt(flatten)]
     pub labels: MetricsLabels,
@@ -169,7 +169,7 @@ pub async fn export_metrics_for_push() -> String {
         .consent
         .unwrap_or(false);
     let filter = if stats_consent {
-        log::info!("Pushing all metrics, because stats consent is given");
+        log::debug!("Pushing all metrics, because stats consent is given");
         None
     } else {
         // !internal_consent && !external_consent

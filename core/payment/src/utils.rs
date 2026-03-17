@@ -8,7 +8,7 @@ use ya_core_model::market;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
-    bus::bind(market::BUS_ID, move |msg: market::GetAgreement| {
+    bus::bind(market::local::BUS_ID, move |msg: market::GetAgreement| {
         let agreement_id = agreement_id.clone();
         let agreement = agreement.clone();
         async move {
@@ -26,7 +26,7 @@ pub fn fake_get_agreement(agreement_id: String, agreement: Agreement) {
 
 pub async fn get_agreement(agreement_id: String, role: Role) -> Result<Option<Agreement>, Error> {
     match async move {
-        let agreement = bus::service(market::BUS_ID)
+        let agreement = bus::service(market::local::BUS_ID)
             .send(market::GetAgreement::as_role(agreement_id.clone(), role))
             .await??;
         Ok(agreement)
@@ -93,7 +93,7 @@ pub mod provider {
                     role,
                 })
                 .await??;
-            let agreement = bus::service(market::BUS_ID)
+            let agreement = bus::service(market::local::BUS_ID)
                 .send(market::GetAgreement::as_role(agreement_id.clone(), role))
                 .await??;
             Ok(agreement)

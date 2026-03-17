@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Stdio;
+use std::str::FromStr;
 use strum_macros::{Display, EnumString, EnumVariantNames, IntoStaticStr};
 use ya_client::model::payment::DriverStatusProperty;
 
@@ -330,6 +331,27 @@ impl YagnaCommand {
         self.cmd.args(["--driver", payment_platform.driver]);
 
         self.run().await
+    }
+
+    pub async fn market_fund(mut self, address: Option<&str>) -> anyhow::Result<()> {
+        self.cmd.args(["--json", "market", "golem-base", "fund"]);
+        if let Some(addr) = address {
+            self.cmd.args([addr]);
+        }
+        self.run::<serde_json::Value>().await?;
+        Ok(())
+    }
+
+    pub async fn market_balance(mut self, address: Option<&str>) -> anyhow::Result<BigDecimal> {
+        self.cmd.args(["--json", "market", "golem-base", "balance"]);
+        if let Some(addr) = address {
+            self.cmd.args([addr]);
+        }
+        let response: serde_json::Value = self.run().await?;
+        let balance = response["balance"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get balance from response"))?;
+        Ok(BigDecimal::from_str(balance)?)
     }
 
     pub async fn invoice_status(mut self) -> anyhow::Result<InvoiceStats> {

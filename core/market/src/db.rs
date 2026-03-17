@@ -7,7 +7,7 @@ pub(crate) mod migrations {
     struct _Dummy;
 }
 
-pub(crate) use ya_persistence::executor::Error as DbError;
-pub(crate) use ya_persistence::executor::{AsMixedDao, DbMixedExecutor};
+pub use ya_persistence::executor::Error as DbError;
+pub use ya_persistence::executor::{AsMixedDao, DbMixedExecutor};
 
-pub(crate) type DbResult<T> = Result<T, DbError>;
+pub type DbResult<T> = Result<T, DbError>;

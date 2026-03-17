@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tokio::time::timeout;
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
+use ya_client::error::Error as ClientError;
 use ya_client::market::MarketProviderApi;
 use ya_client::model::market::agreement_event::AgreementEventType;
 use ya_client::model::market::proposal::State;
@@ -62,6 +63,11 @@ pub enum OfferKind {
     WithIds(Vec<String>),
 }
 
+/// Get subscription by preset name.
+#[derive(Message)]
+#[rtype(result = "Result<Option<Subscription>>")]
+pub struct GetSubscriptionByPreset(pub String);
+
 /// Async code emits this event to ProviderMarket, which reacts to it
 /// and broadcasts same event to external world.
 #[derive(Clone, Debug, Message)]
@@ -77,10 +83,10 @@ pub struct NewAgreement {
 /// Sent when subscribing offer to the market will be finished.
 #[derive(Debug, Clone, Message)]
 #[rtype(result = "Result<()>")]
-struct Subscription {
-    id: String,
-    preset: Preset,
-    offer: NewOffer,
+pub struct Subscription {
+    pub id: String,
+    pub preset: Preset,
+    pub offer: NewOffer,
 }
 
 #[derive(Message)]
@@ -191,6 +197,13 @@ impl ProviderMarket {
         // At this moment we only forward agreement to outside world.
         self.agreement_signed_signal.send_signal(msg)
     }
+
+    /// Get subscription by preset name
+    fn get_subscription_by_preset(&self, preset_name: &str) -> Option<&Subscription> {
+        self.subscriptions
+            .values()
+            .find(|sub| sub.preset.name == preset_name)
+    }
 }
 
 async fn subscribe(
@@ -200,7 +213,6 @@ async fn subscribe(
     preset: Preset,
 ) -> Result<()> {
     let id = api.subscribe(&offer).await?;
-
     let _ = market.send(Subscription { id, offer, preset }).await?;
     Ok(())
 }
@@ -208,7 +220,17 @@ async fn subscribe(
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
     for subscription in subscriptions.iter() {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(subscription).await?;
+
+        match api.unsubscribe(subscription).await {
+            // Subscription expired, so we don't need to unsubscribe it. Silence error.
+            Err(ClientError::HttpError { code, .. }) if code.as_u16() == 410 => {}
+            Err(error) => {
+                log::warn!(
+                    "Failed to unsubscribe Offer [{subscription}] from the market. Error: {error}"
+                );
+            }
+            Ok(_) => {}
+        }
     }
     Ok(())
 }
@@ -516,17 +538,17 @@ async fn collect_negotiation_events(ctx: AsyncCtx, subscription: Subscription) {
     loop {
         match ctx.api.collect(&id, Some(timeout), Some(5)).await {
             Err(error) => {
-                log::warn!("Can't query market events. Error: {}", error);
                 match error {
-                    ya_client::error::Error::HttpError { code, .. } => {
-                        // this causes Offer refresh after its expiration
-                        if code.as_u16() == 404 {
-                            log::info!("Resubscribing subscription [{}]", id);
+                    ClientError::HttpError { code, .. } => {
+                        // Offer expired, so we need to resubscribe it.
+                        if code.as_u16() == 410 {
+                            log::info!("Resubscribing Offer [{}]", id);
                             ctx.market.do_send(ReSubscribe(id.clone()));
                             return;
                         }
                     }
-                    _ => {
+                    error => {
+                        log::warn!("Can't query market events. Error: {error}");
                         // We need to wait after failure, because in most cases it happens immediately
                         // and we are spammed with error logs.
                         tokio::time::sleep(std::time::Duration::from_secs_f32(timeout)).await;
@@ -556,9 +578,14 @@ impl Handler<ReSubscribe> for ProviderMarket {
 
         if !to_resubscribe.is_empty() {
             return ActorResponse::r#async(
-                resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
-                    .into_actor(self)
-                    .map(|_, _, _| Ok(())),
+                resubscribe_offers(
+                    ctx.address(),
+                    self.api.clone(),
+                    to_resubscribe,
+                    self.config.clone(),
+                )
+                .into_actor(self)
+                .map(|_, _, _| Ok(())),
             );
         };
         ActorResponse::reply(Ok(()))
@@ -695,7 +722,11 @@ impl Handler<CreateOffer> for ProviderMarket {
     }
 }
 
-async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalized) {
+async fn terminate_agreement(
+    api: Arc<MarketProviderApi>,
+    msg: AgreementFinalized,
+    config: Arc<MarketConfig>,
+) {
     let id = msg.id;
     let reason = match &msg.result {
         AgreementResult::ClosedByUs => GolemReason::success(),
@@ -713,7 +744,7 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
         &reason.message,
     );
 
-    let mut repeats = get_backoff();
+    let mut repeats = config.get_backoff();
     while let Err(e) = api.terminate_agreement(&id, &reason.to_client()).await {
         let delay = match repeats.next_backoff() {
             Some(delay) => delay,
@@ -744,6 +775,7 @@ async fn resubscribe_offers(
     market: Addr<ProviderMarket>,
     api: Arc<MarketProviderApi>,
     subscriptions: HashMap<String, Subscription>,
+    config: Arc<MarketConfig>,
 ) {
     let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
     match market
@@ -755,18 +787,56 @@ async fn resubscribe_offers(
         _ => (),
     }
 
-    for (_, sub) in subscriptions {
-        let offer = sub.offer;
-        let preset = sub.preset;
-        let preset_name = preset.name.clone();
+    let mut remaining = subscriptions;
+    let mut backoff = config.get_resubscribe_backoff();
 
-        subscribe(market.clone(), api.clone(), offer, preset)
-            .await
-            .log_warn_msg(&format!(
-                "Unable to create subscription for preset {}",
-                preset_name,
-            ))
-            .ok();
+    while !remaining.is_empty() {
+        let subscriptions = remaining.drain().collect::<Vec<_>>();
+        for (id, sub) in subscriptions {
+            let offer = sub.offer.clone();
+            let preset = sub.preset.clone();
+            let preset_name = preset.name.clone();
+
+            // Check if subscription for this preset already exists.
+            // This handles situation when user forced changing preset and new Offer was created.
+            // In this scenario Offer that we are trying to publish is outdated.
+            if let Ok(Ok(Some(_))) = market
+                .send(GetSubscriptionByPreset(preset_name.clone()))
+                .await
+            {
+                log::info!("Subscription for preset [{preset_name}] already exists, skipping resubscription");
+                continue;
+            }
+
+            match subscribe(market.clone(), api.clone(), offer, preset).await {
+                Ok(_) => {
+                    log::info!("Successfully re-subscribed Offer for preset: {preset_name}");
+                }
+                Err(error) => {
+                    log::warn!(
+                        "Failed to resubscribe Offer for preset [{preset_name}]. Error: {error}"
+                    );
+                    remaining.insert(id, sub);
+                }
+            }
+        }
+
+        if !remaining.is_empty() {
+            if let Some(delay) = backoff.next_backoff() {
+                log::info!(
+                    "Number of failed subscriptions: {}. Will retry after {} delay",
+                    remaining.len(),
+                    humantime::format_duration(delay)
+                );
+                tokio::time::sleep(delay).await;
+            } else {
+                log::error!(
+                    "Max backoff time exceeded. Giving up on {} failed subscriptions",
+                    remaining.len()
+                );
+                break;
+            }
+        }
     }
 }
 
@@ -831,7 +901,10 @@ impl Handler<AgreementFinalized> for ProviderMarket {
         }
         .into_actor(self)
         .map(|_, myself, ctx| {
-            ctx.spawn(terminate_agreement(myself.api.clone(), msg).into_actor(myself));
+            ctx.spawn(
+                terminate_agreement(myself.api.clone(), msg, myself.config.clone())
+                    .into_actor(myself),
+            );
 
             log::info!("Re-negotiating all demands");
 
@@ -865,6 +938,15 @@ impl Handler<AgreementBroken> for ProviderMarket {
         let myself = ctx.address();
 
         async move { myself.send(msg).await? }.boxed_local()
+    }
+}
+
+impl Handler<GetSubscriptionByPreset> for ProviderMarket {
+    type Result = Result<Option<Subscription>>;
+
+    fn handle(&mut self, msg: GetSubscriptionByPreset, _ctx: &mut Context<Self>) -> Self::Result {
+        let subscription = self.get_subscription_by_preset(&msg.0).cloned();
+        Ok(subscription)
     }
 }
 
@@ -916,18 +998,6 @@ forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
 forward_actix_handler!(ProviderMarket, NewAgreement, on_agreement_approved);
 actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
 actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
-
-fn get_backoff() -> backoff::ExponentialBackoff {
-    // TODO: We could have config for Market actor to be able to set at least initial interval.
-    backoff::ExponentialBackoff {
-        current_interval: std::time::Duration::from_secs(5),
-        initial_interval: std::time::Duration::from_secs(5),
-        multiplier: 1.5f64,
-        max_interval: std::time::Duration::from_secs(60 * 60),
-        max_elapsed_time: Some(std::time::Duration::from_secs(u64::MAX)),
-        ..Default::default()
-    }
-}
 
 // =========================================== //
 // Messages creation helpers

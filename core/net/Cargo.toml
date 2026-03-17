@@ -25,7 +25,7 @@ ya-sb-util = { workspace = true }
 ya-service-api.workspace = true
 ya-service-api-interfaces.workspace = true
 ya-service-bus = { workspace = true, features = ["tls"] }
-ya-utils-networking.workspace = true
+ya-utils-networking = { workspace = true, features = ["dns"] }
 ya-packet-trace = { git = "https://github.com/golemfactory/ya-packet-trace" }
 
 actix.workspace = true

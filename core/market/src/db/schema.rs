@@ -17,6 +17,7 @@ table! {
         properties -> Text,
         constraints -> Text,
         node_id -> Text,
+        owned -> Nullable<Bool>,
 
         creation_ts -> Timestamp,
         insertion_ts -> Nullable<Timestamp>,

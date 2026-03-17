@@ -69,6 +69,7 @@ impl Demand {
                 )
             })?,
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
+            expiration: Utc.from_utc_datetime(&self.expiration_ts),
         })
     }
 }

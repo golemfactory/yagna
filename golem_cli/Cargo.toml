@@ -20,7 +20,7 @@ ya-utils-process = { workspace = true, features = ["lock"] }
 actix-rt = "2.7"
 ansi_term = "0.12.1"
 anyhow = "1.0"
-bigdecimal = "0.2"
+bigdecimal = "0.4"
 byte-unit = "4.0"
 chrono = { version = "0.4", features = ["serde"] }
 crossterm = "0.23"

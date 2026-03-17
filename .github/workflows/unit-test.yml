@@ -18,6 +18,7 @@ on:
       - master
       - deposits
       - release/*
+      - '**/master'
 
 env:
   rust_stable: 1.90.0
@@ -36,6 +37,24 @@ jobs:
         os: [ macos-latest, windows-latest, ubuntu-latest ]
 
     steps:
+      # Linux runners fail with `no space left on the device` otherwise
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        if: runner.os == 'Linux'
+        with:
+            # this might remove tools that are actually needed,
+            # if set to "true" but frees about 6 GB
+            tool-cache: false
+            
+            # all of these default to true, but feel free to set to
+            # "false" if necessary for your workflow
+            android: true
+            dotnet: true
+            haskell: true
+            large-packages: true
+            docker-images: true
+            swap-storage: true
+
       - name: Checkout
         uses: actions/checkout@v4
 

@@ -6,6 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use anyhow::anyhow;
 use clap::Parser;
 use rand::{seq::SliceRandom, RngCore};
 use serde_json::Value;

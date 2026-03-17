@@ -1,6 +1,11 @@
+use anyhow::Result;
+use clap::Parser;
+use clap::ValueEnum;
+use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
-use structopt::StructOpt;
+use url::Url;
+use ya_utils_cli::define_from_env;
 
 pub fn is_market_memory_on_disk() -> bool {
     // This options is used to troubleshoot memory issues with market.
@@ -11,79 +16,247 @@ pub fn is_market_memory_on_disk() -> bool {
     str == "true" || str == "1"
 }
 
-#[derive(StructOpt, Clone)]
+#[derive(Parser, Clone)]
 pub struct Config {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub discovery: DiscoveryConfig,
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub subscription: SubscriptionConfig,
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub events: EventsConfig,
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub db: DbConfig,
 }
 
-#[derive(StructOpt, Clone)]
-pub struct DiscoveryConfig {
-    // don't set this value higher than SQLITE_MAX_VARIABLE_NUMBER, which defaults to 999 for SQLite versions prior to 3.32.0 (2020-05-22)
-    #[structopt(env, default_value = "200")]
-    pub max_bcasted_offers: u32,
-    #[structopt(env, default_value = "200")]
-    pub max_bcasted_unsubscribes: u32,
-    /// If number of broadcasts at the same time exceeds this value, than all new broadcasts will be dropped.  
-    #[structopt(env, default_value = "14")]
-    pub bcast_receiving_queue_size: usize,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
-    pub mean_cyclic_bcast_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "4min")]
-    pub mean_cyclic_unsubscribes_interval: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub offer_broadcast_delay: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "5sec")]
-    pub unsub_broadcast_delay: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "50ms")]
-    pub bcast_tile_time_margin: Duration,
-    #[structopt(env, parse(try_from_str = humantime::parse_duration), default_value = "300s")]
-    pub bcast_node_ban_timeout: Duration,
+#[derive(Parser, derive_more::Display, Clone, Debug, ValueEnum, PartialEq, Eq, Hash)]
+pub enum GolemBaseNetwork {
+    #[clap(name = "Kaolin")]
+    Kaolin,
+    #[clap(name = "Marketplace")]
+    Marketplace,
+    #[clap(name = "MarketplaceLoadTests")]
+    MarketplaceLoadTests,
+    /// Furby is a load and stress tests network.
+    #[clap(name = "Furby")]
+    Furby,
+    #[clap(name = "Nolock")]
+    Nolock,
+    #[clap(name = "Local")]
+    Local,
+    #[clap(name = "Custom")]
+    Custom,
 }
 
-#[derive(StructOpt, Clone)]
-pub struct SubscriptionConfig {
-    #[structopt(env = "DEFAULT_SUBSCRIPTION_TTL", parse(try_from_str = parse_chrono_duration), default_value = "1h")]
-    pub default_ttl: chrono::Duration,
-}
+impl GolemBaseNetwork {
+    pub fn default_config() -> HashMap<GolemBaseNetwork, GolemBaseRpcConfig> {
+        let mut configs = HashMap::new();
+        let default = GolemBaseRpcConfig {
+            faucet_url: Url::parse("http://localhost:8545").unwrap(),
+            rpc_url: Url::parse("http://localhost:8545").unwrap(),
+            ws_url: Url::parse("ws://localhost:8545").unwrap(),
+            l2_rpc_url: Url::parse("http://localhost:8555").unwrap(),
+            chain_id: 1337,
+            fund_preallocated: true,
+        };
 
-#[derive(StructOpt, Clone)]
-pub struct EventsConfig {
-    #[structopt(env = "MARKET_MAX_EVENTS_DEFAULT", default_value = "20")]
-    pub max_events_default: i32,
-    #[structopt(env = "MARKET_MAX_EVENTS_MAX", default_value = "100")]
-    pub max_events_max: i32,
-}
-
-#[derive(StructOpt, Clone)]
-pub struct DbConfig {
-    /// Interval in which Market cleaner will be invoked
-    #[structopt(env = "MARKET_DB_CLEANUP_INTERVAL", parse(try_from_str = humantime::parse_duration), default_value = "4h")]
-    pub cleanup_interval: Duration,
-    /// Number of days to persist Agreements and related Agreement Events
-    #[structopt(env = "MARKET_AGREEMENT_STORE_DAYS", default_value = "90")]
-    pub agreement_store_days: i32,
-    /// Number of days to persist Negotiation Events
-    #[structopt(env = "MARKET_EVENT_STORE_DAYS", default_value = "1")]
-    pub event_store_days: i32,
-}
-
-impl Config {
-    pub fn from_env() -> Result<Config, structopt::clap::Error> {
-        // Empty command line arguments, because we want to use ENV fallback
-        // or default values if ENV variables are not set.
-        Config::from_iter_safe(&[""])
+        // Configuration: https://kaolin.hoodi.arkiv.network/
+        // Explorer: https://explorer.kaolin.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Kaolin,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://kaolin.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://kaolin.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://kaolin.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453025,
+                fund_preallocated: false,
+            },
+        );
+        // Configuration: https://marketplace.hoodi.arkiv.network/
+        // Explorer: https://explorer.marketplace.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Marketplace,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://marketplace.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://marketplace.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://marketplace.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453027,
+                fund_preallocated: false,
+            },
+        );
+        // Configuration: https://furby.hoodi.arkiv.network/
+        // Explorer: https://explorer.furby.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Furby,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://furby.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://furby.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://furby.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453060,
+                fund_preallocated: false,
+            },
+        );
+        // Configuration: https://nolock.hoodi.arkiv.network/
+        configs.insert(
+            GolemBaseNetwork::Nolock,
+            GolemBaseRpcConfig {
+                faucet_url: Url::parse("https://nolock.hoodi.arkiv.network/faucet/").unwrap(),
+                rpc_url: Url::parse("https://nolock.hoodi.arkiv.network/rpc").unwrap(),
+                ws_url: Url::parse("wss://nolock.hoodi.arkiv.network/rpc/ws").unwrap(),
+                l2_rpc_url: Url::parse("https://l2.hoodi.arkiv.network/rpc").unwrap(),
+                chain_id: 60138453070,
+                fund_preallocated: false,
+            },
+        );
+        configs.insert(GolemBaseNetwork::Local, default.clone());
+        configs.insert(
+            GolemBaseNetwork::Custom,
+            GolemBaseRpcConfig::from_env()
+                .map_err(|e| {
+                    log::error!("Error parsing GolemBase configuration: {e}");
+                })
+                .unwrap_or_else(|_| default.clone()),
+        );
+        configs
     }
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct GolemBaseRpcConfig {
+    #[clap(env = "ARKIV_CUSTOM_FAUCET_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub faucet_url: Url,
+    #[clap(env = "ARKIV_CUSTOM_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub rpc_url: Url,
+    #[clap(env = "ARKIV_CUSTOM_WS_URL", value_parser = parse_url, default_value = "ws://localhost:8545")]
+    pub ws_url: Url,
+    #[clap(env = "ARKIV_CUSTOM_L2_RPC_URL", value_parser = parse_url, default_value = "http://localhost:8545")]
+    pub l2_rpc_url: Url,
+    #[clap(env = "ARKIV_CUSTOM_CHAIN_ID", default_value = "1337")]
+    pub chain_id: u64,
+    // In local developer Arkiv environment, pre-allocated account is available to fund other accounts.
+    #[clap(env = "ARKIV_CUSTOM_FUND_PREALLOCATED", default_value_t = false, long)]
+    pub fund_preallocated: bool,
+}
+
+define_from_env!(GolemBaseRpcConfig);
+
+#[derive(Parser, Clone, Debug)]
+pub struct DiscoveryConfig {
+    #[clap(skip = GolemBaseNetwork::default_config())]
+    pub configs: HashMap<GolemBaseNetwork, GolemBaseRpcConfig>,
+    #[clap(env = "ARKIV_NETWORK", default_value = "Marketplace")]
+    pub network: GolemBaseNetwork,
+    // PoW faucets require to compute PoW solutions. This variable determines how many threads
+    // will be used to compute solutions. Note that this is margin realtive to maximal avaiable
+    // threads. If machine has N cores, then N - ARKIV_FUND_POW_THREADS_MARGIN will be used.
+    #[clap(env = "ARKIV_FUND_POW_THREADS_MARGIN", default_value = "2")]
+    pub pow_threads_margin: usize,
+    /// Timeout for publishing offers on the market
+    #[clap(env = "ARKIV_OFFER_PUBLISH_TIMEOUT", value_parser = humantime::parse_duration, default_value = "120s")]
+    pub offer_publish_timeout: Duration,
+    /// Number of retries for GolemBase transactions
+    #[clap(env = "ARKIV_PUBLISH_MAX_RETRIES", default_value = "2")]
+    pub publish_max_retries: u32,
+    /// Number of confirmations required for GolemBase transactions
+    #[clap(env = "ARKIV_REQUIRED_CONFIRMATIONS", default_value = "1")]
+    pub required_confirmations: u64,
+    /// Batch size for querying offers from GolemBase
+    #[clap(env = "ARKIV_OFFER_QUERY_BATCH_SIZE", default_value = "20")]
+    pub offer_query_batch_size: usize,
+    /// If true, collect all offers independently if we have any Reqeustor connected.
+    /// It is determined by the number of active demands.
+    #[clap(env = "MARKET_RUN_AS_INDEXER", default_value_t = false, long)]
+    pub run_as_indexer: bool,
+}
+
+impl Default for DiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            configs: GolemBaseNetwork::default_config(),
+            network: GolemBaseNetwork::Kaolin,
+            pow_threads_margin: 2,
+            offer_publish_timeout: Duration::from_secs(30),
+            publish_max_retries: 3,
+            required_confirmations: 1,
+            offer_query_batch_size: 20,
+            run_as_indexer: false,
+        }
+    }
+}
+
+impl DiscoveryConfig {
+    pub fn get_network_type(&self) -> &GolemBaseNetwork {
+        &self.network
+    }
+
+    pub fn get_rpc_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().rpc_url
+    }
+
+    pub fn get_ws_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().ws_url
+    }
+
+    pub fn get_faucet_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().faucet_url
+    }
+
+    pub fn get_l2_rpc_url(&self) -> &Url {
+        &self.configs.get(&self.network).unwrap().l2_rpc_url
+    }
+
+    pub fn get_pow_threads(&self) -> usize {
+        std::cmp::max(1, num_cpus::get() - self.pow_threads_margin)
+    }
+
+    pub fn fund_preallocated(&self) -> bool {
+        self.configs.get(&self.network).unwrap().fund_preallocated
+    }
+
+    pub fn get_chain_id(&self) -> u64 {
+        self.configs.get(&self.network).unwrap().chain_id
+    }
+}
+
+#[derive(Parser, Clone)]
+pub struct SubscriptionConfig {
+    #[clap(env = "DEFAULT_SUBSCRIPTION_TTL", value_parser = parse_chrono_duration, default_value = "1h")]
+    pub default_ttl: chrono::Duration,
+}
+
+#[derive(Parser, Clone)]
+pub struct EventsConfig {
+    #[clap(env = "MARKET_MAX_EVENTS_DEFAULT", default_value = "20")]
+    pub max_events_default: i32,
+    #[clap(env = "MARKET_MAX_EVENTS_MAX", default_value = "100")]
+    pub max_events_max: i32,
+}
+
+#[derive(Parser, Clone)]
+pub struct DbConfig {
+    /// Interval in which Market cleaner will be invoked
+    #[clap(env = "MARKET_DB_CLEANUP_INTERVAL", value_parser = humantime::parse_duration, default_value = "4h")]
+    pub cleanup_interval: Duration,
+    /// Number of days to persist Agreements and related Agreement Events
+    #[clap(env = "MARKET_AGREEMENT_STORE_DAYS", default_value = "90")]
+    pub agreement_store_days: i32,
+    /// Number of days to persist Negotiation Events
+    #[clap(env = "MARKET_EVENT_STORE_DAYS", default_value = "1")]
+    pub event_store_days: i32,
+}
+
+define_from_env!(Config);
+
+define_from_env!(DiscoveryConfig);
+
 fn parse_chrono_duration(s: &str) -> Result<chrono::Duration, anyhow::Error> {
     Ok(chrono::Duration::from_std(humantime::parse_duration(s)?)?)
+}
+
+fn parse_url(s: &str) -> Result<Url, anyhow::Error> {
+    Ok(Url::parse(s)?)
 }
 
 #[cfg(test)]
@@ -91,20 +264,20 @@ mod test {
     use super::Config;
 
     #[test]
-    fn test_default_structopt_subscription_ttl() {
+    fn test_default_clap_subscription_ttl() {
         let c = Config::from_env().unwrap();
         assert_eq!(60, c.subscription.default_ttl.num_minutes());
     }
 
     #[test]
-    fn test_default_structopt_events() {
+    fn test_default_clap_events() {
         let c = Config::from_env().unwrap();
         assert_eq!(20, c.events.max_events_default);
         assert_eq!(100, c.events.max_events_max);
     }
 
     #[test]
-    fn test_default_structopt_db_config() {
+    fn test_default_clap_db_config() {
         let c = Config::from_env().unwrap();
         assert_eq!(4 * 3600, c.db.cleanup_interval.as_secs());
         assert_eq!(90, c.db.agreement_store_days);

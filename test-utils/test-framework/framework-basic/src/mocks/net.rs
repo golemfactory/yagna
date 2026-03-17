@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use ya_client_model::NodeId;
+use ya_core_model::bus::GsbBindPoints;
 use ya_core_model::net;
 
 pub trait IMockBroadcast {
@@ -19,14 +20,10 @@ pub trait IMockNet: IMockBroadcast {
     fn unregister_node(&self, node_id: &NodeId) -> Result<()>;
 }
 
-pub fn gsb_prefixes(test_name: &str, name: &str) -> (String, String) {
-    let public_gsb_prefix = format!("/{}/{}/public", test_name, name);
-    let local_gsb_prefix = format!("/{}/{}/local", test_name, name);
-    (public_gsb_prefix, local_gsb_prefix)
+pub fn gsb_prefixes(test_name: &str, name: &str) -> GsbBindPoints {
+    GsbBindPoints::default().prefix(&format!("/{}/{}", test_name, name))
 }
 
-pub fn gsb_market_prefixes(public: &str, local: &str) -> (String, String) {
-    let public_gsb_prefix = format!("{}/market", public);
-    let local_gsb_prefix = format!("{}/market", local);
-    (public_gsb_prefix, local_gsb_prefix)
+pub fn gsb_market_prefixes(base: GsbBindPoints) -> GsbBindPoints {
+    ya_core_model::market::bus_bindpoints(Some(base))
 }

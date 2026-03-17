@@ -1,13 +1,16 @@
 use all_asserts::*;
 use chrono::{Duration, Utc};
-
-use ya_market::testing::agreement_utils::{negotiate_agreement, negotiate_agreement_with_ids};
-use ya_market::testing::proposal_util::exchange_proposals_exclusive;
-use ya_market::testing::MarketsNetwork;
-use ya_market::testing::Owner;
+use ya_framework_basic::log::enable_logs;
+use ya_framework_basic::temp_dir;
+use ya_framework_mocks::market::legacy::agreement_utils::{
+    negotiate_agreement, negotiate_agreement_with_ids,
+};
+use ya_framework_mocks::market::legacy::mock_node::MarketsNetwork;
+use ya_framework_mocks::market::legacy::proposal_util::exchange_proposals_exclusive;
+use ya_framework_mocks::net::MockNet;
 
 use ya_client::model::market::AgreementEventType;
-use ya_framework_mocks::net::MockNet;
+use ya_market::testing::Owner;
 
 const REQ_NAME: &str = "Node-1";
 const PROV_NAME: &str = "Node-2";
@@ -16,9 +19,13 @@ const PROV_NAME: &str = "Node-2";
 /// events using different session ids on both Provider and Requestor side.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_events_filtering() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_session_events_filtering() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+    let dir = temp_dir!("test_session_events_filtering")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
@@ -26,8 +33,8 @@ async fn test_session_events_filtering() {
 
     let req_market = network.get_market(REQ_NAME);
     let req_engine = &req_market.requestor_engine;
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let num = 4;
@@ -75,7 +82,7 @@ async fn test_session_events_filtering() {
             prov_market
                 .provider_engine
                 .approve_agreement(
-                    network.get_default_id(PROV_NAME),
+                    prov_id.clone(),
                     &agreement_id.clone().translate(Owner::Provider),
                     Some(session_id.clone()),
                     0.1,
@@ -186,23 +193,29 @@ async fn test_session_events_filtering() {
         .await
         .unwrap()
         .unwrap();
+
+    Ok(())
 }
 
 /// AppSessionId isn't propagated to Provider and vice versa.
 /// They are completely independent and this test checks this.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_should_be_independent_on_both_sides() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_session_should_be_independent_on_both_sides() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+    let dir = temp_dir!("test_session_should_be_independent_on_both_sides")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let negotiation = negotiate_agreement(
@@ -242,20 +255,27 @@ async fn test_session_should_be_independent_on_both_sides() {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
+
+    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_session_negotiation_on_the_same_node() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_session_negotiation_on_the_same_node")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance("Node")
         .await;
 
     let req_market = network.get_market("Node");
-    let req_id = network.get_default_id("Node");
-    let prov_id = network.create_identity("Node", "Provider");
+    let req_id = network.get_default_id("Node").await;
+    let prov_id = network.create_identity("Node", "Provider").await;
     let prov_market = req_market.clone();
 
     let negotiation = negotiate_agreement_with_ids(
@@ -297,20 +317,27 @@ async fn test_session_negotiation_on_the_same_node() {
     // Each side gets only his own event.
     assert_eq!(p_events.len(), 1);
     assert_eq!(r_events.len(), 1);
+
+    Ok(())
 }
 
 /// Test case, when Provider and Requestor is on the same node and use the same session.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_negotiation_on_the_same_node_same_session() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_session_negotiation_on_the_same_node_same_session() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+
+    let dir = temp_dir!("test_session_negotiation_on_the_same_node_same_session")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance("Node")
         .await;
 
     let req_market = network.get_market("Node");
-    let req_id = network.get_default_id("Node");
-    let prov_id = network.create_identity("Node", "Provider");
+    let req_id = network.get_default_id("Node").await;
+    let prov_id = network.create_identity("Node", "Provider").await;
     let prov_market = req_market.clone();
 
     let negotiation = negotiate_agreement_with_ids(
@@ -353,22 +380,28 @@ async fn test_session_negotiation_on_the_same_node_same_session() {
     // we will get events for both. Note that we use the same Identity for both.
     assert_eq!(p_events.len(), 2);
     assert_eq!(r_events.len(), 2);
+
+    Ok(())
 }
 
 /// We expect to get only events after specified timestamp.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_session_timestamp_filtering() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_session_timestamp_filtering() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+    let dir = temp_dir!("test_session_timestamp_filtering")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
-    let prov_id = network.get_default_id(PROV_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
+    let prov_id = network.get_default_id(PROV_NAME).await;
     let prov_market = network.get_market(PROV_NAME);
 
     let num_before = 4;
@@ -542,22 +575,28 @@ async fn test_session_timestamp_filtering() {
 
     assert_eq!(p_events.len(), 0);
     assert_eq!(r_events.len(), 0);
+
+    Ok(())
 }
 
 /// In the most common flow, user of the API queries events, saves timestamp
 /// of the newest event and uses this timestamp in next calls.
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
-async fn test_common_event_flow() {
-    let network = MarketsNetwork::new(None, MockNet::new())
-        .await
+async fn test_common_event_flow() -> Result<(), anyhow::Error> {
+    enable_logs(false);
+    let dir = temp_dir!("test_common_event_flow")?;
+    let dir = dir.path();
+
+    let network = MarketsNetwork::new_mocked(dir, MockNet::new())
+        .await?
         .add_market_instance(REQ_NAME)
         .await
         .add_market_instance(PROV_NAME)
         .await;
 
     let req_market = network.get_market(REQ_NAME);
-    let req_id = network.get_default_id(REQ_NAME);
+    let req_id = network.get_default_id(REQ_NAME).await;
 
     let num: i32 = 10;
     let timestamp_before = Utc::now();
@@ -617,4 +656,6 @@ async fn test_common_event_flow() {
         .unwrap();
 
     assert_eq!(events.len(), 0);
+
+    Ok(())
 }

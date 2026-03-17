@@ -105,6 +105,10 @@ def vm_exe_script(
                 "to": f"{web_server_addr}/upload/{output_file}",
             }
         },
+        {"transfer": {
+            "from": f"container:/golem/output/output.json",
+            "to": f"{web_server_addr}/upload/{output_file}"
+        }}
     ]
 
 

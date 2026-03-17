@@ -96,7 +96,8 @@ mod tests {
             "()".to_string(),
             "demand_id".to_string(),
             Default::default(),
-            Default::default(),
+            Utc::now() + Duration::minutes(1),
+            Utc::now(),
         );
 
         let offer = Offer::new(
@@ -104,7 +105,8 @@ mod tests {
             "()".to_string(),
             "offer_id".to_string(),
             Default::default(),
-            Default::default(),
+            Utc::now() + Duration::minutes(1),
+            Utc::now(),
         );
 
         Agreement::new(

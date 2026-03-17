@@ -46,6 +46,9 @@ impl ResponseError for MatcherError {
             MatcherError::QueryOffer(e) => e.error_response(),
             MatcherError::SaveOffer(e) => e.error_response(),
             MatcherError::ModifyOffer(e) => e.error_response(),
+            e @ MatcherError::GolemBaseOfferError(_) => {
+                HttpResponse::InternalServerError().json(ErrorMessage::new(e))
+            }
         }
     }
 }
@@ -121,8 +124,9 @@ impl ResponseError for QueryEventsError {
         let msg = ErrorMessage::new(self.to_string());
         match self {
             QueryEventsError::TakeEvents(TakeEventsError::NotFound(_))
-            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_)) => {
-                HttpResponse::NotFound().json(msg)
+            | QueryEventsError::TakeEvents(TakeEventsError::Expired(_))
+            | QueryEventsError::TakeEvents(TakeEventsError::Unsubscribed(_)) => {
+                HttpResponse::Gone().json(msg)
             }
             QueryEventsError::InvalidSubscriptionId(_) | QueryEventsError::InvalidMaxEvents(..) => {
                 HttpResponse::BadRequest().json(msg)

@@ -7,8 +7,8 @@ use actix::prelude::*;
 use futures::channel::oneshot::Canceled;
 use futures::channel::{mpsc, oneshot};
 use futures::{future, future::BoxFuture, Future, FutureExt, SinkExt, StreamExt, TryFutureExt};
-use smoltcp::iface::Route;
-use smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
+use net::ya_smoltcp::iface::Route;
+use net::ya_smoltcp::wire::{EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use uuid::Uuid;
 
@@ -785,10 +785,7 @@ fn create_ethernet_addr(ip: IpCidr) -> Result<EthernetAddress> {
         IpAddress::Ipv6(ip6) => Ok(EthernetAddress([
             0xA0, 0x13, ip6.0[12], ip6.0[13], ip6.0[14], ip6.0[15],
         ])),
-        _ => Err(Error::Other(format!(
-            "Could not create ethernet addr from ip: {:?}",
-            ip
-        ))),
+        _ => Err(Error::NetAddr(ip.to_string())),
     }
 }
 

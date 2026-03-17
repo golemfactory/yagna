@@ -28,7 +28,7 @@ pytest-asyncio = "^1.2.0"
 pytest-split = "^0.10.0"
 #goth = "0.18.1"
 # to use development goth version uncomment below
-goth = { git = "https://github.com/golemfactory/goth.git", rev = "8b8f7aaee302705859917298129e752dcee06f1f" }
+goth = { git = "https://github.com/golemfactory/goth.git", rev = "b8bd47c051ccfae24f4262d24d55d9fd5a0fd00e" }
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
@@ -38,5 +38,14 @@ poethepoet = "^0.37.0"
 [tool.poe.tasks]
 codestyle = "black --check --diff ."
 goth-tests = "pytest -svx ."
+goth-tests-local = ["_build-yagna", "_copy_binaries", "_test_local_build"]
 provider-tests = "pytest -svx ./domain/ya-provider"
 typecheck = "mypy ."
+
+_build-yagna = "cargo build -j 3 --features require-consent,static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor"
+_test_local_build = "pytest -W ignore::DeprecationWarning -svx . --config-override docker-compose.build-environment.binary-path=$POE_ROOT/../target/goth/"
+_copy_binaries = "./copy_binaries.sh"
+
+[tool.poe]
+envfile = [".env"]
+shell_interpreter = "bash"
