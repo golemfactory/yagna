@@ -14,7 +14,7 @@ server = ['prost', 'futures', 'tokio', 'tokio-util']
 
 [dependencies]
 anyhow = "1.0.31"
-bytes = "1.0"
+bytes = "1.11"
 futures = { version = "0.3", optional = true }
 log = "0.4"
 prost = { version = "0.10", optional = true }
