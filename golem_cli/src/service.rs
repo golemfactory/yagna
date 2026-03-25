@@ -80,7 +80,7 @@ impl AbortableChild {
         let (tx, rx) = oneshot::channel();
         let _ = self.0.take().unwrap().send(tx);
         rx.await
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "process exited too early"))?
+            .map_err(|_| io::Error::other("process exited too early"))?
     }
 }
 
@@ -115,6 +115,7 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&config, false).await?;
 
     let cmd = YaCommand::new()?;
+
     let service = cmd.yagna()?.service_run(&config).await?;
     let app_key = appkey::get_app_key().await?;
 

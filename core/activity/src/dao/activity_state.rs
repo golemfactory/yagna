@@ -24,7 +24,7 @@ impl<'a> AsDao<'a> for ActivityStateDao<'a> {
     }
 }
 
-impl<'c> ActivityStateDao<'c> {
+impl ActivityStateDao<'_> {
     pub async fn get(&self, activity_id: &str) -> Result<ActivityState> {
         use schema::activity::dsl;
 

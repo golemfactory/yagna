@@ -78,7 +78,7 @@ jobs:
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor
+          cargo build --features require-consent,static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor
 
       - name: Move target binaries
         run: |
@@ -103,7 +103,7 @@ jobs:
 
   multi-payment-test:
     name: Multi-payment test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
       - name: Checkout
@@ -133,6 +133,7 @@ jobs:
       - name: Check installed binaries
         run: |
           yagna --version
+          yagna consent allow-all
           erc20_processor --version
 
       - name: Run test
@@ -142,7 +143,7 @@ jobs:
 
   integration-test-groups:
     name: T
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     timeout-minutes: 15
     strategy:
@@ -186,10 +187,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
+        run: curl -sSL https://install.python-poetry.org | python3 - --version 2.2.1
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --no-root
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -203,23 +204,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          poetry run pytest -W ignore::DeprecationWarning -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
+          poetry run pytest -svx . -k ${{ matrix.test_name }} --config-override docker-compose.build-environment.binary-path=/tmp/yagna-build
 
       - name: Check test result
         if: ${{ steps.poetry_test.outcome != 'success' }}
         run: |
           echo "::warning::Test ${{ matrix.test_name }} failed"
+          exit 1
 
       - name: Upload test logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}
-          path: /tmp/goth-tests
+          path: goth_tests/logs
 
   integration-test:
     name: Integration Tests (hybrid-net)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [ integration-test-groups ]
     steps:
       - name: Check status

@@ -26,7 +26,7 @@ impl<'a> AsMixedDao<'a> for AgreementEventsDao<'a> {
     }
 }
 
-impl<'c> AgreementEventsDao<'c> {
+impl AgreementEventsDao<'_> {
     pub async fn select(
         &self,
         node_id: &NodeId,

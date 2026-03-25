@@ -117,7 +117,7 @@ impl ResponseError for Error {
             }
             _ => {
                 let e = self.to_string();
-                log::error!("Activity API server error: {}", e);
+                //log::error!("Activity API server error: {}", e);
                 HttpResponse::InternalServerError().json(ErrorMessage::new(e))
             }
         }

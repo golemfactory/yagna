@@ -6,7 +6,7 @@ edition = "2018"
 
 [features]
 default = []
-framework-test = []
+system-test = []
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
@@ -32,6 +32,7 @@ anyhow = "1.0"
 base64 = "0.12"
 bigdecimal = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+cron = "0.12"
 derive_more = "0.99.18"
 diesel = { version = "1.4", features = [
     "sqlite",
@@ -53,7 +54,9 @@ log = "0.4"
 metrics = "0.12"
 num-bigint = "0.3"
 open = "5.1.2"
+parking_lot = { workspace = true }
 problem_details = "0.6.0"
+rand = { workspace = true }
 r2d2 = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

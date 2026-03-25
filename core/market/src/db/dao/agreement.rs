@@ -60,7 +60,7 @@ pub enum AgreementDaoError {
     InvalidId(#[from] ProposalIdParseError),
 }
 
-impl<'c> AgreementDao<'c> {
+impl AgreementDao<'_> {
     pub async fn list(
         &self,
         node_id: Option<NodeId>,

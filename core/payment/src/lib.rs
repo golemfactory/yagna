@@ -1,11 +1,12 @@
 #![allow(dead_code)] // Crate under development
 #![allow(unused_variables)] // Crate under development
+#![allow(non_local_definitions)] // Due to Diesel macros.
+
 pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
 
 use futures::FutureExt;
 use std::{sync::Arc, time::Duration};
-
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -15,13 +16,17 @@ use ya_service_bus::typed as bus;
 extern crate diesel;
 
 pub mod accounts;
+pub mod alloc_release_task;
 pub mod api;
+mod batch;
 mod cli;
 pub mod config;
+mod cycle;
 pub mod dao;
 pub mod error;
 pub mod models;
 pub mod payment_sync;
+mod post_migrations;
 pub mod processor;
 pub mod schema;
 pub mod service;
@@ -29,11 +34,14 @@ pub mod timeout_lock;
 pub mod utils;
 mod wallet;
 
+pub use batch::send_batch_payments;
+
 pub mod migrations {
     #[derive(diesel_migrations::EmbedMigrations)]
     struct _Dummy;
 }
 
+use crate::alloc_release_task::get_allocation_release_tasks;
 pub use ya_core_model::payment::local::DEFAULT_PAYMENT_DRIVER;
 
 lazy_static::lazy_static! {
@@ -54,12 +62,16 @@ impl Service for PaymentService {
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db = context.component();
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::run_with_output)
+            .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);
+        let allocation_release_tasks = get_allocation_release_tasks();
 
-        let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), config);
+        let processor = Arc::new(PaymentProcessor::new(db.clone(), allocation_release_tasks));
+        self::service::bind_service(&db, processor.clone(), config).await?;
+
+        processor.process_post_migration_jobs().await?;
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;
@@ -69,7 +81,7 @@ impl PaymentService {
     }
 
     pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        api::web_scope(&ctx.component())
+        api::web_scope(&ctx.component(), get_allocation_release_tasks())
     }
 
     pub async fn shut_down() {

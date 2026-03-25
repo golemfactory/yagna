@@ -20,7 +20,7 @@ on:
       - release/*
 
 env:
-  rust_stable: 1.81.0
+  rust_stable: 1.90.0
 
 jobs:
   build:
@@ -73,4 +73,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --workspace --exclude=["./agent/provider/src/market"] --locked
+          args: --workspace --features require-consent --exclude=["./agent/provider/src/market"] --locked

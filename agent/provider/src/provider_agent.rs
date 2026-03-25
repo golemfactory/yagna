@@ -153,6 +153,7 @@ impl ProviderAgent {
                 NetworkName::Mumbai => yansi::Color::Cyan,
                 NetworkName::Goerli => yansi::Color::Cyan,
                 NetworkName::Holesky => yansi::Color::Cyan,
+                NetworkName::Hoodi => yansi::Color::Cyan,
                 _ => yansi::Color::Red,
             };
             log::info!("Using payment network: {}", net_color.paint(&n.network));
@@ -540,7 +541,6 @@ pub struct Shutdown;
 struct CreateOffers(pub OfferKind);
 
 /// Tests
-
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(payload_manifest_prop, expected_manifest_suport);
     }
 
-    /// Test utilities
+    // Test utilities
 
     struct FakeData {
         node_info: NodeInfo,

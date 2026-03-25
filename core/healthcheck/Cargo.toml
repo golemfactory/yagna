@@ -1,0 +1,25 @@
+[package]
+name = "ya-healthcheck"
+version = "0.1.0"
+description = "Node health monitoring"
+authors = ["Golem Factory <contact@golem.network>"]
+edition = "2021"
+
+[dependencies]
+ya-service-api-web.workspace = true
+ya-client.workspace = true
+ya-core-model = { workspace = true, features = ["version"] }
+ya-net = { workspace = true, features = ["service"] }
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
+ya-service-bus = { workspace = true }
+
+actix-web = "4"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["time", "sync"] }
+problem_details = "0.6.0"
+http = "1.1.0"

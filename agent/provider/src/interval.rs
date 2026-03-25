@@ -28,7 +28,7 @@ impl RelativeInterval {
 
             let value = self.base + (self.interval * i);
             if value >= now {
-                break (value - now);
+                break value - now;
             } else if i == i32::MAX {
                 anyhow::bail!("A maximum of {} intervals has passed", i);
             }

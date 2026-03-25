@@ -16,7 +16,7 @@ impl<Type> EnableDisplay<Type> for Type {
     }
 }
 
-impl<'a> std::fmt::Display for DisplayEnabler<'a, chrono::Duration> {
+impl std::fmt::Display for DisplayEnabler<'_, chrono::Duration> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self.0.clone().to_std() {
             Ok(duration) => write!(f, "{}", format_duration(duration)),
@@ -26,7 +26,7 @@ impl<'a> std::fmt::Display for DisplayEnabler<'a, chrono::Duration> {
     }
 }
 
-impl<'a> std::fmt::Display for DisplayEnabler<'a, NewOffer> {
+impl std::fmt::Display for DisplayEnabler<'_, NewOffer> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         let mut offer = self.0.clone();
         offer.properties = flatten_value(offer.properties);
@@ -39,7 +39,7 @@ impl<'a> std::fmt::Display for DisplayEnabler<'a, NewOffer> {
     }
 }
 
-impl<'a, Type> std::fmt::Display for DisplayEnabler<'a, Option<Type>>
+impl<Type> std::fmt::Display for DisplayEnabler<'_, Option<Type>>
 where
     Type: std::fmt::Display,
 {

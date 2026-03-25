@@ -24,13 +24,13 @@ use crate::tasks::config::TaskConfig;
 // Messages modifying agreement state
 // =========================================== //
 
-/// These events can be sent to TaskManager:
-/// - AgreementApproved
-/// - ActivityCreated
-/// - ActivityDestroyed
-/// - BreakAgreement
-/// - CloseAgreement
-/// - Shutdown
+// These events can be sent to TaskManager:
+// - AgreementApproved
+// - ActivityCreated
+// - ActivityDestroyed
+// - BreakAgreement
+// - CloseAgreement
+// - Shutdown
 
 /// Event forces agreement termination, what includes killing ExeUnit.
 /// Sending this event indicates, that agreement conditions were broken

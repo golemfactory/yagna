@@ -84,12 +84,13 @@ where
         let cache = self.cache.clone();
         let service = self.service.clone();
 
-        // TODO: remove this hack; possibly by enabling creation of arbitrary appkey from CLI
-        if req.uri().to_string().starts_with("/metrics-api")
-            || req.uri().to_string().starts_with("/version")
-        {
-            log::debug!("skipping authorization for uri={}", req.uri());
-            return Box::pin(service.borrow_mut().call(req));
+        let allowed_uris = vec!["/metrics-api", "/version/get", "/dashboard"];
+
+        for uri in allowed_uris {
+            if req.uri().to_string().starts_with(uri) {
+                log::debug!("skipping authorization for uri={}", req.uri());
+                return Box::pin(service.borrow_mut().call(req));
+            }
         }
 
         Box::pin(async move {

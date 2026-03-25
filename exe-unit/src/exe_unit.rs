@@ -457,7 +457,7 @@ impl<R: Runtime> Actor for ExeUnit<R> {
 
         let addr_ = addr.clone();
         async move {
-            addr.send(Initialize).await?.map_err(Error::from)?;
+            addr.send(Initialize).await??;
             addr.send(SetState::from(State::Initialized)).await?;
             Ok::<_, Error>(())
         }

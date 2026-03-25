@@ -20,7 +20,7 @@ impl<'c> AsDao<'c> for IdentityDao<'c> {
     }
 }
 
-impl<'c> IdentityDao<'c> {
+impl IdentityDao<'_> {
     #[inline]
     async fn with_transaction<
         R: Send + 'static,

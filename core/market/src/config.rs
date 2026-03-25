@@ -1,5 +1,15 @@
+use std::env;
 use std::time::Duration;
 use structopt::StructOpt;
+
+pub fn is_market_memory_on_disk() -> bool {
+    // This options is used to troubleshoot memory issues with market.
+    // Use only for debugging purposes, default value is false.
+    let str = env::var("MARKET_MEMORY_USE_DISK")
+        .unwrap_or_default()
+        .to_lowercase();
+    str == "true" || str == "1"
+}
 
 #[derive(StructOpt, Clone)]
 pub struct Config {

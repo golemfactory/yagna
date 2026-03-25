@@ -1,15 +1,14 @@
 // External crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
+use bigdecimal::BigDecimal;
 use serde_json::value::Value::Null;
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Instant;
-
 // Workspace uses
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
-use ya_core_model::payment::local::{SchedulePayment, BUS_ID as LOCAL_SERVICE};
 use ya_core_model::payment::public::{
     AcceptInvoice, AcceptRejectError, CancelError, CancelInvoice, RejectInvoiceV2, SendError,
     SendInvoice, BUS_ID as PUBLIC_SERVICE,
@@ -20,7 +19,6 @@ use ya_persistence::executor::DbExecutor;
 use ya_persistence::types::Role;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::timeout::IntoTimeoutFuture;
-use ya_service_bus::{typed as bus, RpcEndpoint};
 
 // Local uses
 use super::guard::AgreementLock;
@@ -469,7 +467,7 @@ async fn accept_invoice(
         log::warn!("{}", msg);
         return response::bad_request(&msg);
     }
-    let amount_to_pay = &invoice.amount - &agreement.total_amount_scheduled.0;
+    let amount_to_pay = &invoice.amount - &agreement.total_amount_accepted.0;
 
     log::trace!(
         "Querying DB for Allocation [{}] for Invoice [{}]",
@@ -503,18 +501,28 @@ async fn accept_invoice(
         return response::bad_request(&msg);
     }
 
+    if amount_to_pay > BigDecimal::from(0) {
+        match db
+            .as_dao::<AllocationDao>()
+            .spend_from_allocation_transaction(SpendFromAllocationArgs {
+                owner_id: node_id,
+                allocation_id: allocation_id.clone(),
+                agreement_id: agreement_id.clone(),
+                activity_id: None,
+                amount: amount_to_pay.clone(),
+            })
+            .await
+        {
+            Ok(_) => (),
+            Err(e) => return response::server_error(&e),
+        }
+    }
+
     let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
     let result = async move {
         let issuer_id = invoice.issuer_id;
         let accept_msg = AcceptInvoice::new(invoice_id.clone(), acceptance, issuer_id);
-        let schedule_msg = SchedulePayment::from_invoice(invoice, allocation_id, amount_to_pay);
         match async move {
-            // Schedule payment (will be none for amount=0, which is OK)
-            if let Some(msg) = schedule_msg {
-                log::trace!("Calling SchedulePayment [{}] locally", invoice_id);
-                bus::service(LOCAL_SERVICE).send(msg).await??;
-            }
-
             // Mark the invoice as accepted in DB
             log::trace!("Accepting Invoice [{}] in DB", invoice_id);
             dao.accept(invoice_id.clone(), node_id).await?;

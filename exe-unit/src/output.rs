@@ -101,7 +101,7 @@ impl From<Option<CaptureMode>> for CapturedOutput {
                         (CaptureBuffer::discard(), CaptureBuffer::ring(limit))
                     }
                     Some(CapturePart::HeadTail(limit)) => {
-                        let head_limit = (limit + 1) / 2;
+                        let head_limit = limit.div_ceil(2);
                         let tail_limit = limit - head_limit;
                         (
                             CaptureBuffer::capped(head_limit),
@@ -204,17 +204,13 @@ impl CaptureBuffer {
                 };
 
                 let mut end_idx = len + slice.len();
-                let shift = if end_idx >= *limit {
-                    end_idx - *limit
-                } else {
-                    0
-                };
+                let shift = end_idx.saturating_sub(*limit);
                 let start_idx = len - shift;
                 end_idx -= shift;
 
                 vec.rotate_left(shift);
                 if len < end_idx {
-                    vec.extend(std::iter::repeat(0).take(end_idx - len));
+                    vec.extend(std::iter::repeat_n(0, end_idx - len));
                 }
                 vec.as_mut_slice()[start_idx..end_idx].copy_from_slice(slice);
                 Some(slice)
