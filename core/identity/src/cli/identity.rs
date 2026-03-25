@@ -341,7 +341,7 @@ impl IdentityCommand {
                 let from_private_key_slice = match from_private_key {
                     Some(from_private_key) => hex::decode(from_private_key)
                         .map_err(|e| anyhow::anyhow!("Private key has to be plain hex string without 0x prefix - {e}"))
-                        .and_then(|v| v[0..32].try_into().map_err(|e| anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}"))),
+                        .and_then(|v| v.as_slice().try_into().map_err(|e| anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}"))),
                     None => Err(anyhow::anyhow!("No private key provided")),
                 }.ok();
 
