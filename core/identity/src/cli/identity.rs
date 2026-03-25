@@ -338,13 +338,32 @@ impl IdentityCommand {
                     log::warn!("Using private key directly is not recommended. Use keystore instead. Your key could leak in command history, check and clean logs.")
                 }
 
-                let from_private_key_slice = match from_private_key {
-                    Some(from_private_key) => hex::decode(from_private_key)
-                        .map_err(|e| anyhow::anyhow!("Private key has to be plain hex string without 0x prefix - {e}"))
-                        .and_then(|v| v.as_slice().try_into().map_err(|e| anyhow::anyhow!("Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}"))),
-                    None => Err(anyhow::anyhow!("No private key provided")),
-                }.ok();
+                let from_private_key_slice = if let Some(from_private_key) = from_private_key {
+                    let bytes = hex::decode(from_private_key).map_err(|e| {
+                        anyhow::anyhow!(
+                            "Private key has to be plain hex string without 0x prefix - {e}"
+                        )
+                    })?;
 
+                    if bytes.len() != 32 {
+                        anyhow::bail!(
+                            "Ethereum key has to be 32 bytes long. Provide hex string of length 64"
+                        );
+                    }
+
+                    let slice: [u8; 32] = bytes
+                        .as_slice()
+                        .try_into()
+                        .map_err(|e| {
+                            anyhow::anyhow!(
+                                "Ethereum key has to be 32 bytes long. Provide hex string of length 64 - {e}"
+                            )
+                        })?;
+
+                    Some(slice)
+                } else {
+                    None
+                };
                 let key_file = from_keystore
                     .as_ref()
                     .map(|p| std::fs::read_to_string(p).context("unable to read input path"))
