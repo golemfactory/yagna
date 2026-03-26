@@ -124,7 +124,7 @@ fn get_or_insert_default_entry_private(
     }
 }
 
-impl<'c> BatchCycleDao<'c> {
+impl BatchCycleDao<'_> {
     pub async fn get_or_insert_default(
         &self,
         node_id: NodeId,

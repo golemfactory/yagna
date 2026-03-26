@@ -20,7 +20,7 @@ use ya_framework_mocks::payment::{Driver, PaymentRestExt};
 use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_service_bus::RpcEndpoint;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -54,6 +54,10 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
     node1
         .get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node1
+        .get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(5))
         .await?;
 
     let node2 = MockNode::new(net.clone(), "node-2", dir)
@@ -241,25 +245,27 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         }
 
         assert!(!sync.payments.is_empty());
-        let payment = sync
+        let payment_amount = sync
             .payments
             .iter()
-            .find(|p| {
+            .map(|p| {
                 p.payment
                     .agreement_payments
                     .iter()
-                    .any(|a| a.agreement_id == agreement.agreement_id)
+                    .filter(|a| a.agreement_id == agreement.agreement_id)
+                    .map(|a| a.amount.clone())
+                    .sum::<BigDecimal>()
             })
-            .unwrap();
+            .sum::<BigDecimal>();
 
-        assert_eq!(payment.payment.amount, invoice.amount);
+        assert_eq!(payment_amount, invoice.amount);
         break;
     }
 
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -292,6 +298,10 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
     node1
         .get_payment()?
         .fund_account(Driver::Erc20, &appkey_req.identity.to_string())
+        .await?;
+    node1
+        .get_payment()?
+        .set_all_payment_processing_intervals(appkey_req.identity, Duration::from_secs(10))
         .await?;
 
     let node2 = MockNode::new(net.clone(), "node-2", dir)
@@ -434,17 +444,19 @@ async fn test_payment_sync_fallback(ctx: &mut DroppableTestContext) -> anyhow::R
         }
 
         assert!(!sync.payments.is_empty());
-        let payment = sync
+        let payment_amount = sync
             .payments
             .iter()
-            .find(|p| {
+            .map(|p| {
                 p.payment
                     .agreement_payments
                     .iter()
-                    .any(|a| a.agreement_id == agreement.agreement_id)
+                    .filter(|a| a.agreement_id == agreement.agreement_id)
+                    .map(|a| a.amount.clone())
+                    .sum::<BigDecimal>()
             })
-            .unwrap();
-        assert_eq!(payment.payment.amount, invoice.amount);
+            .sum::<BigDecimal>();
+        assert_eq!(payment_amount, invoice.amount);
 
         // Check if AcceptInvoice was delivered.
         assert!(!sync.invoice_accepts.is_empty());

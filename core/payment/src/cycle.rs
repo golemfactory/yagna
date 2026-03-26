@@ -21,11 +21,19 @@ impl BatchCycleTaskManager {
 
     pub fn add_owner(&mut self, owner_id: NodeId) {
         log::info!("Adding owner: {}", owner_id);
+        if self.owners.contains(&owner_id) {
+            log::warn!("Owner {} already exists", owner_id);
+            return;
+        }
         self.owners.push(owner_id);
         self.start_tasks_if_not_started();
     }
     pub fn add_platform(&mut self, platform: String) {
         log::info!("Adding platform: {}", platform);
+        if self.platforms.contains(&platform) {
+            log::warn!("Platform {} already exists", platform);
+            return;
+        }
         self.platforms.push(platform);
         self.start_tasks_if_not_started();
     }
@@ -65,6 +73,7 @@ impl BatchCycleTaskManager {
     }
 }
 
+#[derive(Debug)]
 pub struct BatchCycleTask {
     node_id: NodeId,
     platform: String,

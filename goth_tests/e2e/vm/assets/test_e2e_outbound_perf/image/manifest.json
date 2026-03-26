@@ -14,15 +14,19 @@
                 "os": "linux"
             },
             "urls": [
-                "http://registry.golem.network/download/1b77dda5fb08fb22ab433cbe99eb532141209eca23f8f0eec4b3989320945914"
+                "https://registry.golem.network/download/4c8e9d3f25dceb731c3abd3830566908f69f1166ebf6c034170213c9b8880a9e"
             ],
-            "hash": "sha3:a77d6b5a945e1b1067f9bab623f1ab1271eee77c97851cbd5539e050"
+            "hash": "sha3:71d1aceefe848a8ed3639c93ed6a73b7481a63ccc1c60cfd1cd84863"
         }
     ],
     "compManifest": {
         "version": "0.1.0",
         "script": {
             "commands": [
+                "run .*curl.*",
+                "run .*dig.*",
+                "run .*ping.*",
+                "run .*ls.*",
                 "run .*outbound-bench.*",
                 "run .*iperf3.*",
                 "run .*entrypoint.sh.*",

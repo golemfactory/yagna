@@ -53,7 +53,7 @@ use crate::{dns, Error, Result};
 const IP4_ADDRESS: Ipv4Addr = Ipv4Addr::new(10, 42, 42, 1);
 const IP6_ADDRESS: Ipv6Addr = IP4_ADDRESS.to_ipv6_mapped();
 const TCP_KEEP_ALIVE: Duration = Duration::from_secs(30);
-const DEFAULT_MAX_PACKET_SIZE: usize = 1400;
+const DEFAULT_MAX_PACKET_SIZE: usize = 0xff00;
 const DEFAULT_PREFIX_LEN: u8 = 24;
 
 type TcpSender = Arc<Mutex<SplitSink<Framed<TcpStream, BytesCodec>, Bytes>>>;
@@ -822,7 +822,7 @@ fn get_handle(network: &net::Network, meta: &ConnectionMeta) -> Option<SocketHan
     network.connections().get(meta).map(|conn| conn.handle)
 }
 
-async fn inet_tcp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
+async fn inet_tcp_proxy(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
     log::debug!("[inet] connecting TCP to {}:{}", ip, port);
 
     let tcp_stream = tcp_connect(&SocketAddr::new(ip, port), None)
@@ -928,7 +928,7 @@ fn bind_local_address(
     Ok(())
 }
 
-async fn inet_udp_proxy<'a>(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
+async fn inet_udp_proxy(ip: IpAddr, port: u16) -> Result<(TransportSender, TransportReceiver)> {
     log::debug!("[inet] opening UDP socket with {}:{}", ip, port);
 
     let socket_addr: SocketAddr = (ip, port).into();
@@ -1057,7 +1057,7 @@ trait TransportKeyExt {
     }
 }
 
-impl<'a> TransportKeyExt for &'a ConnectionMeta {
+impl TransportKeyExt for &ConnectionMeta {
     fn proxy_key(self) -> Result<TransportKey> {
         Ok(TransportKey(
             Some(self.protocol),
@@ -1069,7 +1069,7 @@ impl<'a> TransportKeyExt for &'a ConnectionMeta {
     }
 }
 
-impl<'a> TransportKeyExt for &'a SocketDesc {
+impl TransportKeyExt for &SocketDesc {
     fn proxy_key(self) -> Result<TransportKey> {
         let local = self.local.ip_endpoint()?;
         let remote = self.remote.ip_endpoint()?;

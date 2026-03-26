@@ -173,6 +173,8 @@ pub mod processor {
         Sign(#[from] ya_core_model::driver::GenericError),
         #[error("Internal timeout")]
         InternalTimeout(#[from] Elapsed),
+        #[error("Critical error when notifying: {0}")]
+        Critical(String),
         #[error("Other")]
         Other(String),
     }

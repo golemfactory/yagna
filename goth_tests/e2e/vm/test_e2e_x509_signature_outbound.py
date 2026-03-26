@@ -49,17 +49,26 @@ async def test_e2e_x509_signature_outbound(
         provider = runner.get_probes(probe_type=ProviderProbe)[0]
 
         manifest = open(f"{runner.web_root_path}/outbound_manifest.json").read()
-        signature = open(f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_signature.sha256.base64").read()
-        certificate = open(f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_certificate.cert").read()
+        signature = open(
+            f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_signature.sha256.base64"
+        ).read()
+        certificate = open(
+            f"{runner.web_root_path}/test_e2e_x509_signature_outbound/outbound_certificate.cert"
+        ).read()
 
         # Market
         demand = (
             DemandBuilder(requestor)
-            .props_from_template(task_package = None)
-            .property("golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode())
+            .props_from_template(task_package=None)
+            .property(
+                "golem.srv.comp.payload", base64.b64encode(manifest.encode()).decode()
+            )
             .property("golem.srv.comp.payload.sig", signature)
             .property("golem.srv.comp.payload.sig.algorithm", "sha256")
-            .property("golem.srv.comp.payload.cert", base64.b64encode(certificate.encode()).decode())
+            .property(
+                "golem.srv.comp.payload.cert",
+                base64.b64encode(certificate.encode()).decode(),
+            )
             .constraints("(&(golem.runtime.name=vm))")
             .build()
         )

@@ -1,4 +1,4 @@
-use crate::api::allocations::{forced_release_allocation, release_allocation_after};
+use crate::api::allocations::{forced_release_allocation, schedule_release_allocation};
 use crate::cycle::BatchCycleTaskManager;
 use crate::dao::{
     ActivityDao, AgreementDao, AllocationDao, BatchCycleDao, BatchDao, BatchItemFilter, PaymentDao,
@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
+use crate::alloc_release_task::AllocationReleaseTasks;
 use crate::post_migrations::process_post_migration_jobs;
 use crate::send_batch_payments;
 use ya_client_model::payment::allocation::Deposit;
@@ -39,6 +40,7 @@ use ya_core_model::driver::{
     GetRpcEndpointsResult, PaymentConfirmation, PaymentDetails, ShutDown, ValidateAllocation,
     ValidateAllocationResult,
 };
+use ya_core_model::identity::event::IdentityEvent;
 use ya_core_model::payment::local::{
     GenericError, GetAccountsError, GetDriversError, NotifyPayment, ProcessBatchCycleError,
     ProcessBatchCycleInfo, ProcessBatchCycleResponse, ProcessBatchCycleSet, ProcessPaymentsError,
@@ -310,6 +312,7 @@ pub struct PaymentProcessor {
     registry: RwLock<DriverRegistry>,
     in_shutdown: AtomicBool,
     schedule_payment_guard: Arc<Mutex<()>>,
+    allocation_tasks: AllocationReleaseTasks,
 }
 
 #[derive(Debug, PartialEq, Error)]
@@ -362,14 +365,27 @@ struct PaymentNotificationValue {
 }
 
 impl PaymentProcessor {
-    pub fn new(db_executor: DbExecutor) -> Self {
+    pub fn new(db_executor: DbExecutor, allocation_release_tasks: AllocationReleaseTasks) -> Self {
         Self {
             db_executor: Arc::new(Mutex::new(db_executor)),
             registry: Default::default(),
             in_shutdown: AtomicBool::new(false),
             schedule_payment_guard: Arc::new(Mutex::new(())),
             batch_cycle_tasks: Arc::new(std::sync::Mutex::new(BatchCycleTaskManager::new())),
+            allocation_tasks: allocation_release_tasks,
         }
+    }
+
+    pub async fn identity_event(&self, msg: IdentityEvent) -> Result<(), RegisterAccountError> {
+        match msg {
+            IdentityEvent::AccountLocked { .. } => {
+                log::warn!("Service tasks still running, but account is locked and no payment will be sent");
+            }
+            IdentityEvent::AccountUnlocked { identity } => {
+                self.batch_cycle_tasks.lock().unwrap().add_owner(identity);
+            }
+        }
+        Ok(())
     }
 
     pub async fn register_driver(&self, msg: RegisterDriver) -> Result<(), RegisterDriverError> {
@@ -782,12 +798,18 @@ impl PaymentProcessor {
         let payments: Vec<Payment> = {
             let db_executor = self.db_executor.timeout_lock(DB_LOCK_TIMEOUT).await?;
 
+            log::trace!("get_batch_order_items_by_payment_id {}...", msg.payment_id);
             let order_items = db_executor
                 .as_dao::<BatchDao>()
                 .get_batch_order_items_by_payment_id(msg.payment_id, payer_id)
                 .await?;
+            log::trace!(
+                "get_batch_order_items_by_payment_id finished and received {} items",
+                order_items.len()
+            );
 
             for order_item in order_items.iter() {
+                log::trace!("Getting documents for order item: {:?}", order_item);
                 let order_documents = match db_executor
                     .as_dao::<BatchDao>()
                     .get_batch_items(
@@ -808,6 +830,7 @@ impl PaymentProcessor {
                         )));
                     }
                 };
+                log::trace!("Set orders paid: {:?}", order_item);
 
                 db_executor
                     .as_dao::<BatchDao>()
@@ -819,6 +842,8 @@ impl PaymentProcessor {
                     )
                     .await?;
                 for order in order_documents.iter() {
+                    log::trace!("Find activity for order: {:?}", order);
+
                     //get agreement by id
                     let agreement = db_executor
                         .as_dao::<AgreementDao>()
@@ -862,6 +887,11 @@ impl PaymentProcessor {
                     }
                 }
             }
+
+            log::trace!(
+                "Summing up notifications for peers: {:?}",
+                peers_to_sent_to.values()
+            );
 
             // Sum up the amounts for each peer
             for (key, value) in peers_to_sent_to.iter_mut() {
@@ -907,10 +937,13 @@ impl PaymentProcessor {
                 value.agreement_payments = agreement_map.into_values().collect();
             }
 
+            log::trace!("Signing {} payments...", peers_to_sent_to.len());
+
             let mut payloads = Vec::new();
             for (key, value) in peers_to_sent_to.iter() {
                 let payment_dao: PaymentDao = db_executor.as_dao();
 
+                log::trace!("Creating new payment for peer: {}", value.payee_id);
                 payment_dao
                     .create_new(
                         value.payment_id.clone(),
@@ -926,12 +959,18 @@ impl PaymentProcessor {
                     )
                     .await?;
 
+                log::trace!("Get signed payment for peer: {}", value.payee_id);
                 let signed_payment = payment_dao
                     .get(payment_id.clone(), payer_id)
                     .await?
-                    .unwrap();
+                    .ok_or_else(|| {
+                        NotifyPaymentError::Critical(format!(
+                            "Cannot find payment object payment id: {payment_id} payer id: {payer_id}"
+                        ))
+                    })?;
                 payloads.push(signed_payment.payload);
             }
+            log::trace!("Part of processing blocking DB done, releasing DB");
             payloads
         };
 
@@ -1330,10 +1369,11 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
                             .await
                         } else {
-                            release_allocation_after(
+                            schedule_release_allocation(
                                 db.clone(),
                                 allocation.allocation_id.clone(),
                                 allocation.timeout,
@@ -1353,8 +1393,8 @@ impl PaymentProcessor {
                                         );
                                         NodeId::default()
                                     }),
+                                self.allocation_tasks.clone(),
                             )
-                            .await
                         }
                     }
                 } else {

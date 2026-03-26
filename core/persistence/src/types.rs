@@ -58,7 +58,7 @@ impl<'a> Add<&'a BigDecimalField> for BigDecimalField {
     }
 }
 
-impl<'a, 'b> Add<&'b BigDecimalField> for &'a BigDecimalField {
+impl<'b> Add<&'b BigDecimalField> for &BigDecimalField {
     type Output = BigDecimalField;
 
     fn add(self, rhs: &'b BigDecimalField) -> Self::Output {
@@ -82,7 +82,7 @@ impl<'a> Sub<&'a BigDecimalField> for BigDecimalField {
     }
 }
 
-impl<'a, 'b> Sub<&'b BigDecimalField> for &'a BigDecimalField {
+impl<'b> Sub<&'b BigDecimalField> for &BigDecimalField {
     type Output = BigDecimalField;
 
     fn sub(self, rhs: &'b BigDecimalField) -> Self::Output {

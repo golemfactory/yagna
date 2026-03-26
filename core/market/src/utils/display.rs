@@ -16,25 +16,25 @@ impl<Type> EnableDisplay<Type> for Type {
     }
 }
 
-impl<'a> std::fmt::Display for DisplayEnabler<'a, SubscriptionId> {
+impl std::fmt::Display for DisplayEnabler<'_, SubscriptionId> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         self.0.fmt(f)
     }
 }
 
-impl<'a> std::fmt::Display for DisplayEnabler<'a, AgreementId> {
+impl std::fmt::Display for DisplayEnabler<'_, AgreementId> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         self.0.fmt(f)
     }
 }
 
-impl<'a> std::fmt::Display for DisplayEnabler<'a, Identity> {
+impl std::fmt::Display for DisplayEnabler<'_, Identity> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "'{}' [{}]", &self.0.name, &self.0.identity)
     }
 }
 
-impl<'a, Type> std::fmt::Display for DisplayEnabler<'a, Option<Type>>
+impl<Type> std::fmt::Display for DisplayEnabler<'_, Option<Type>>
 where
     Type: std::fmt::Display,
 {

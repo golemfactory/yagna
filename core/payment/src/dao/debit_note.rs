@@ -113,7 +113,7 @@ pub fn get_paid_amount_per_activity(
     Ok(activity_amounts)
 }
 
-impl<'c> DebitNoteDao<'c> {
+impl DebitNoteDao<'_> {
     pub async fn create_new(
         &self,
         debit_note: NewDebitNote,

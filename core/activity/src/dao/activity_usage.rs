@@ -20,7 +20,7 @@ impl<'a> AsDao<'a> for ActivityUsageDao<'a> {
     }
 }
 
-impl<'c> ActivityUsageDao<'c> {
+impl ActivityUsageDao<'_> {
     pub async fn get(&self, activity_id: &str) -> Result<ActivityUsage> {
         use schema::activity::dsl;
         use schema::activity_usage::dsl as dsl_usage;

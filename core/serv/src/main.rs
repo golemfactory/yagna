@@ -53,6 +53,7 @@ use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
+use ya_payment::alloc_release_task::init_allocation_release_tasks;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 use ya_utils_consent::{
     consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
@@ -503,6 +504,13 @@ impl ServiceCommand {
                         "info,actix_web::middleware::logger=warn,sqlx=warn".to_string()
                     }),
                 );
+                if env::var("YAGNA_TRACE_DB_LOCKS") == Ok("1".to_string()) {
+                    env::set_var(
+                        "RUST_LOG",
+                        env::var("RUST_LOG").unwrap_or("info".to_string())
+                            + ",ya_payment::timeout_lock=trace,ya_payment::processor=trace",
+                    );
+                }
 
                 //this force_debug flag sets default log level to debug
                 //if the --debug option is set
@@ -767,8 +775,12 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
+    init_allocation_release_tasks();
+
     #[cfg(feature = "static-openssl")]
-    openssl_probe::init_ssl_cert_env_vars();
+    unsafe {
+        openssl_probe::init_openssl_env_vars();
+    }
     let args = CliArgs::from_args();
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
