@@ -963,7 +963,11 @@ impl PaymentProcessor {
                 let signed_payment = payment_dao
                     .get(payment_id.clone(), payer_id)
                     .await?
-                    .unwrap();
+                    .ok_or_else(|| {
+                        NotifyPaymentError::Critical(format!(
+                            "Cannot find payment object payment id: {payment_id} payer id: {payer_id}"
+                        ))
+                    })?;
                 payloads.push(signed_payment.payload);
             }
             log::trace!("Part of processing blocking DB done, releasing DB");

@@ -13,8 +13,8 @@ Official Rust implementation of Golem. Golem is a network of nodes that implemen
 
 </p>
 <p align="center">
-    <a href="https://github.com/golemfactory/yagna/workflows/CI/badge.svg" alt="CI">
-        <img src="https://github.com/golemfactory/yagna/workflows/CI/badge.svg" /></a>
+    <a href="https://github.com/golemfactory/yagna/actions" alt="Unit Test">
+        <img src="https://github.com/golemfactory/yagna/actions/workflows/unit-test.yml/badge.svg" /></a>
     <a href="https://github.com/golemfactory/yagna/watchers" alt="Watch on GitHub">
         <img src="https://img.shields.io/github/watchers/golemfactory/yagna.svg?style=social" /></a>
     <a href="https://github.com/golemfactory/yagna/stargazers" alt="Star on GitHub">
