@@ -4,7 +4,7 @@
     "nodeId": "0xd1d84f0e28d6fedf03c73151f98df95139700aa7",
     "validityPeriod": {
       "notBefore": "2023-01-01T00:00:00Z",
-      "notAfter": "2025-01-01T00:00:00Z"
+      "notAfter": "2030-01-01T00:00:00Z"
     },
     "permissions": {
       "outbound": "unrestricted"
@@ -15,7 +15,7 @@
       "hash": "sha512",
       "encryption": "EdDSA"
     },
-    "value": "79b5b6a7b6300c7335158ccfd5f5573e62bfe59bfb93e58019b5cca23f92a5c63a28b94bfcb1733fb9bd36aa676d86f94551b36fcad8e41c751c1f5ead05f600",
+    "value": "6a1cf92df4b607013417e763038d32b2b1742a3f34d470ba07cd562b005a2e169744fe82f76fdbf028090427df9b2f5556e9eaec5d826a836bd637a4ca4cf501",
     "signer": {
       "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
       "certificate": {
@@ -29,18 +29,22 @@
         "permissions": {
           "outbound": "unrestricted"
         },
-        "subject": {
-          "displayName": "Example partner cert",
-          "contact": {
-            "email": "example@partner.tld"
-          }
-        },
         "publicKey": {
           "algorithm": "EdDSA",
           "key": "1ea5e52503bb6cc26c3e29cadd3a3142a60dfbbc5956b1f15d791cef13abb0ea",
           "parameters": {
             "scheme": "Ed25519"
           }
+        },
+        "subject": {
+          "displayName": "Example partner cert",
+          "contact": {
+            "email": "example@partner.tld"
+          }
+        },
+        "validityPeriod": {
+          "notBefore": "2023-01-01T00:00:00Z",
+          "notAfter": "2030-01-01T00:00:00Z"
         }
       },
       "signature": {
@@ -48,7 +52,7 @@
           "hash": "sha512",
           "encryption": "EdDSA"
         },
-        "value": "74122f37e5f17a262afa535df8669e50ac810e49774f13574750ad9c9236da60adf26c81615331c531a9a39336adf7ca62d6909448b133394581bc4e4cefc700",
+        "value": "85436d36cacd09109f0ae9f59b43aef5754371c33d9c47f7603f8194c1e9a909a5490a9496a99c8e4817377f08217174ce927679a9cc66ae1098398277177b02",
         "signer": {
           "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
           "certificate": {

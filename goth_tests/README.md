@@ -89,6 +89,10 @@ This path will depend either on the shell environment or the operating system on
 
 ## Running tests locally
 
+### Disable UFW (if applicable)
+
+UFW firewall blocks some of the traffic between containers, so it is required to disable it while running the tests
+
 ### Building yagna binaries
 
 Build yagna workspace and copy binaries used by tests to temp directory (can be skipped when using `release-tag` property).
@@ -283,7 +287,7 @@ docker-compose:
 
   compose-log-patterns:                         # Log message patterns used for container ready checks
     ethereum-mainnet: ".*Wallets supplied."
-    ethereum-holesky: ".*Wallets supplied."
+    ethereum-hoodi: ".*Wallets supplied."
     ethereum-polygon: ".*Wallets supplied."
     ...
 

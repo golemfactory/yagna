@@ -15,7 +15,7 @@ impl<'a> AsDao<'a> for ActivityCredentialsDao<'a> {
     }
 }
 
-impl<'c> ActivityCredentialsDao<'c> {
+impl ActivityCredentialsDao<'_> {
     pub async fn get(&self, activity_id: &str) -> Result<Option<ActivityCredentials>> {
         use schema::activity_credentials::dsl as dsl_cred;
         let activity_id = activity_id.to_owned();

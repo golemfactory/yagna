@@ -483,7 +483,7 @@ fn io_error<E>(err: E) -> io::Error
 where
     E: std::error::Error + Unpin + Send + Sync + 'static,
 {
-    io::Error::new(io::ErrorKind::Other, err)
+    io::Error::other(err)
 }
 
 struct TokioAsyncRead<R>(R);

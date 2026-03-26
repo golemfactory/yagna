@@ -37,7 +37,7 @@ impl<'c> AsDao<'c> for DebitNoteEventDao<'c> {
     }
 }
 
-impl<'c> DebitNoteEventDao<'c> {
+impl DebitNoteEventDao<'_> {
     pub async fn create(
         &self,
         debit_note_id: String,

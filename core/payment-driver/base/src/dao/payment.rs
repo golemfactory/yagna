@@ -28,7 +28,7 @@ impl<'c> AsDao<'c> for PaymentDao<'c> {
     }
 }
 
-impl<'c> PaymentDao<'c> {
+impl PaymentDao<'_> {
     pub async fn get_pending_payments(
         &self,
         address: String,

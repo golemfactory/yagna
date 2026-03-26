@@ -1,14 +1,16 @@
 use crate::dao::{agreement, debit_note, debit_note_event};
-use crate::error::DbResult;
+use crate::error::{DbError, DbResult};
 use crate::models::activity::{ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl as debit_note_dsl;
 use bigdecimal::{BigDecimal, Zero};
+use chrono::NaiveDateTime;
 use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::HashMap;
+use std::str::FromStr;
 use ya_client_model::payment::{DebitNoteEventType, DocumentStatus};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
@@ -75,7 +77,7 @@ pub fn increase_amount_scheduled(
 
 pub fn increase_amount_paid(
     activity_id: &String,
-    owner_id: &NodeId,
+    owner_id: NodeId,
     amount: &BigDecimalField,
     conn: &ConnType,
 ) -> DbResult<()> {
@@ -89,23 +91,42 @@ pub fn increase_amount_paid(
         .set(dsl::total_amount_paid.eq(&total_amount_paid))
         .execute(conn)?;
 
-    let debit_note_ids: Vec<String> = debit_note_dsl::pay_debit_note
+    //extract all debit notes for this activity
+    //check if the total amount paid is equal to the total amount due
+    //we cannot do that in sql due to lack of decimal support in sqlite
+    let debit_note_ids = debit_note_dsl::pay_debit_note
         .filter(debit_note_dsl::activity_id.eq(activity_id))
         .filter(debit_note_dsl::owner_id.eq(owner_id))
         .filter(debit_note_dsl::status.ne_all(vec![
             DocumentStatus::Cancelled.to_string(),
             DocumentStatus::Settled.to_string(),
         ]))
-        .filter(debit_note_dsl::total_amount_due.le(&total_amount_paid))
-        .select(debit_note_dsl::id)
-        .load(conn)?;
+        .select((debit_note_dsl::id, debit_note_dsl::total_amount_due))
+        .load::<(String, String)>(conn)?
+        .iter()
+        .filter_map(|(debit_note_id, total_amount_due)| {
+            match BigDecimal::from_str(total_amount_due) {
+                Ok(d) => {
+                    if total_amount_paid.0 >= d {
+                        Some(Ok(debit_note_id.clone()))
+                    } else {
+                        None
+                    }
+                }
+                Err(e) => Some(Err(DbError::Query(format!(
+                    "Error parsing decimal in debit note: {}",
+                    e
+                )))),
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
 
-    debit_note::update_status(&debit_note_ids, owner_id, &DocumentStatus::Settled, conn)?;
+    debit_note::update_status(&debit_note_ids, owner_id, DocumentStatus::Settled, conn)?;
 
     for debit_note_id in debit_note_ids {
         debit_note_event::create(
             debit_note_id,
-            *owner_id,
+            owner_id,
             DebitNoteEventType::DebitNoteSettledEvent,
             conn,
         )?;
@@ -138,7 +159,7 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
     }
 }
 
-impl<'a> ActivityDao<'a> {
+impl ActivityDao<'_> {
     pub async fn get(&self, activity_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
         readonly_transaction(self.pool, "activity_dao_get", move |conn| {
             let activity = dsl::pay_activity
@@ -156,6 +177,8 @@ impl<'a> ActivityDao<'a> {
                     dsl::total_amount_accepted,
                     dsl::total_amount_scheduled,
                     dsl::total_amount_paid,
+                    dsl::created_ts,
+                    dsl::updated_ts,
                     agreement_dsl::peer_id,
                     agreement_dsl::payee_addr,
                     agreement_dsl::payer_addr,
@@ -165,6 +188,46 @@ impl<'a> ActivityDao<'a> {
                 .first(conn)
                 .optional()?;
             Ok(activity)
+        })
+        .await
+    }
+
+    pub async fn list(
+        &self,
+        role: Option<Role>,
+        agreement_id: Option<String>,
+    ) -> DbResult<Vec<crate::models::activity::WriteObj>> {
+        readonly_transaction(self.pool, "pay_activity_dao_list", move |conn| {
+            let mut query = dsl::pay_activity.into_boxed();
+            if let Some(agreement_id) = agreement_id {
+                query = query.filter(dsl::agreement_id.eq(agreement_id));
+            };
+            if let Some(role) = role {
+                query = query.filter(dsl::role.eq(role));
+            };
+            let activities = query.load(conn)?;
+            Ok(activities.into_iter().collect())
+        })
+        .await
+    }
+    pub async fn get_for_node_id(
+        &self,
+        node_id: NodeId,
+        after_timestamp: Option<NaiveDateTime>,
+        max_items: Option<u32>,
+    ) -> DbResult<Vec<WriteObj>> {
+        readonly_transaction(self.pool, "activity_dao_get_for_node_id", move |conn| {
+            let mut query = dsl::pay_activity.into_boxed();
+            query = query.filter(dsl::owner_id.eq(node_id));
+            if let Some(date) = after_timestamp {
+                query = query.filter(dsl::created_ts.gt(date))
+            }
+            query = query.order_by(dsl::created_ts.asc());
+            if let Some(items) = max_items {
+                query = query.limit(items.into())
+            }
+            let activities: Vec<WriteObj> = query.load(conn)?;
+            Ok(activities)
         })
         .await
     }

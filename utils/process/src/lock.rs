@@ -62,11 +62,11 @@ impl ProcLock {
         };
 
         if let Err(e) = pid_file.write_all(pid.to_string().as_bytes()) {
-            let _ = lock_file.unlock();
+            let _ = fs2::FileExt::unlock(&lock_file);
             bail!("unable to write to file {}: {}", pid_path.display(), e);
         }
         if let Err(e) = pid_file.flush() {
-            let _ = lock_file.unlock();
+            let _ = fs2::FileExt::unlock(&lock_file);
             bail!("unable to flush file {}: {}", pid_path.display(), e);
         }
 
@@ -80,7 +80,7 @@ impl ProcLock {
     pub fn read_pid(&self) -> Result<u32> {
         let (lock_file, _) = self.lock_file(&self.name)?;
         if lock_file.try_lock_exclusive().is_ok() {
-            let _ = lock_file.unlock();
+            let _ = fs2::FileExt::unlock(&lock_file);
             bail!("{} is not running", self.name);
         }
 
@@ -126,7 +126,7 @@ impl Drop for ProcLock {
         let pid_path = self.pid_path.take();
 
         if let Some(f) = lock {
-            if let Err(e) = f.unlock() {
+            if let Err(e) = fs2::FileExt::unlock(&f) {
                 eprintln!("cannot unlock file: {}", e);
             }
             if let Err(e) = std::fs::remove_file(lock_path.unwrap()) {
