@@ -10,7 +10,7 @@ use url::Url;
 
 use ya_client_model::activity::TransferArgs;
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::file::generate_file_with_hash;
+use ya_framework_basic::file::generate_random_file_with_hash;
 use ya_framework_basic::hash::verify_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
@@ -113,6 +113,7 @@ async fn transfer_with_args(
         from: from.to_owned(),
         to: to.to_owned(),
         args,
+        progress_config: None,
     })
     .await??;
 
@@ -127,7 +128,7 @@ async fn transfer(
     transfer_with_args(addr, from, to, TransferArgs::default()).await
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -161,7 +162,8 @@ async fn test_transfer_resume(ctx: &mut DroppableTestContext) -> anyhow::Result<
     }];
     addr.send(AddVolumes::new(volumes)).await??;
 
-    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 3 * 1024);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", 4096_usize, 3 * 1024);
 
     log::debug!("Starting HTTP servers");
     start_http(ctx, temp_dir.to_path_buf())

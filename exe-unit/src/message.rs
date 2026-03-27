@@ -5,6 +5,7 @@ use crate::Result;
 
 use actix::prelude::*;
 use futures::channel::mpsc;
+use futures::{Sink, SinkExt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -12,7 +13,9 @@ use std::path::PathBuf;
 use ya_client_model::activity;
 use ya_client_model::activity::activity_state::{State, StatePair};
 use ya_client_model::activity::exe_script_command::Network;
-use ya_client_model::activity::{CommandOutput, ExeScriptCommand, ExeScriptCommandResult};
+use ya_client_model::activity::{
+    CommandOutput, CommandProgress, ExeScriptCommand, ExeScriptCommandResult,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Message)]
 #[rtype(result = "GetStateResponse")]
@@ -99,8 +102,19 @@ impl ExecuteCommand {
             },
         )
     }
+
+    pub fn progress_sink(&self) -> impl Sink<CommandProgress, Error = ya_transfer::error::Error> {
+        let CommandContext { batch_id, idx, .. } = self.clone().split().1;
+        self.tx.clone().with(move |item| {
+            let batch_id = batch_id.clone();
+            futures::future::ok(RuntimeEvent::Process(activity::RuntimeEvent::progress(
+                batch_id, idx, item,
+            )))
+        })
+    }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum RuntimeEvent {
     Process(activity::RuntimeEvent),

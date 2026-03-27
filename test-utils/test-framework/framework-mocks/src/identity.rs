@@ -106,16 +106,16 @@ impl RealIdentity {
     }
 
     fn register_identity_in_net(&self, id: NodeId) {
-        // This line is temporary, until we will be able to rebind all modules to non-fixed prefix.
-        // Currently, all modules must be bound under `/local/{module}` and `/public/{module}`.
-        // Not doing so would break most of them.
-        // For example Payment module uses fixed prefix to call market and identity modules.
-        // When we will work around this problem, we will be able to instantiate many nodes in tests.
-        self.net.register_node(&id, "/public");
-
-        // Should be instead in the future:
-        // self.net
-        //     .register_node(&id, &format!("/{}/public/{id}", self.name));
+        if let Some(gsb) = &self.gsb {
+            self.net.register_node(&id, gsb.public_addr());
+        } else {
+            // This line is temporary, until we will be able to rebind all modules to non-fixed prefix.
+            // Currently, all modules must be bound under `/local/{module}` and `/public/{module}`.
+            // Not doing so would break most of them.
+            // For example Payment module uses fixed prefix to call market and identity modules.
+            // When we will work around this problem, we will be able to instantiate many nodes in tests.
+            self.net.register_node(&id, "/public");
+        }
     }
 
     pub async fn create_identity(&self, name: &str) -> anyhow::Result<IdentityInfo> {

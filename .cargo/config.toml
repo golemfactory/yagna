@@ -11,12 +11,25 @@ name = "Golem Factory"
 email = "contact@golem.network"
 
 [profile.release]
-lto="fat"
-opt-level=3
-codegen-units=1
+lto = "fat"
+opt-level = 3
+codegen-units = 1
 
 [profile.release-fast]
 inherits = "release"
-opt-level=2
-lto="off"
-codegen-units=16
+opt-level = 2
+lto = "off"
+codegen-units = 16
+
+[profile.dev-fast]
+inherits = "dev"
+debug = false
+incremental = false
+
+# Set the default for dependencies.
+[profile.dev-fast.package."*"]
+opt-level = 2
+
+[alias]
+system-test = "test  -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features framework-test"
+market-test = "test --tests -p ya-market --features ya-market/test-suite --locked"

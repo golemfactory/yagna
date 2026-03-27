@@ -25,19 +25,19 @@ use futures::prelude::*;
 use futures::task::{Context, Poll};
 use url::Url;
 
-use crate::error::Error;
-
 pub use crate::archive::{archive, extract, ArchiveFormat};
 pub use crate::container::ContainerTransferProvider;
+use crate::error::Error;
 pub use crate::file::{DirTransferProvider, FileTransferProvider};
 pub use crate::gftp::GftpTransferProvider;
+use crate::hash::with_hash_stream;
 pub use crate::http::HttpTransferProvider;
 pub use crate::location::{TransferUrl, UrlExt};
+use crate::progress::{progress_report_channel, ProgressReporter};
 pub use crate::progress::{wrap_sink_with_progress_reporting, wrap_stream_with_progress_reporting};
 pub use crate::retry::Retry;
 pub use crate::traverse::PathTraverse;
 
-use crate::hash::with_hash_stream;
 use ya_client_model::activity::TransferArgs;
 
 /// Transfers data from `stream` to a `TransferSink`
@@ -73,17 +73,22 @@ where
             log::debug!("Transferring from offset: {}", ctx.state.offset());
 
             let stream = with_hash_stream(src.source(&src_url.url, ctx), src_url, dst_url, ctx)?;
-            let sink = dst.destination(&dst_url.url, ctx);
+            let sink = progress_report_channel(dst.destination(&dst_url.url, ctx), ctx);
 
             transfer(stream, sink).await?;
             Ok::<_, Error>(())
         };
 
         match fut.await {
-            Ok(val) => return Ok(val),
+            Ok(val) => {
+                return Ok(val);
+            }
             Err(err) => match ctx.state.delay(&err) {
                 Some(delay) => {
-                    log::warn!("Retrying in {}s because: {}", delay.as_secs_f32(), err);
+                    let msg = format!("Retry in {}s because of error: {err}", delay.as_secs_f32());
+                    log::warn!("{}", msg);
+
+                    ctx.progress.report_message(msg);
                     tokio::time::sleep(delay).await;
                 }
                 None => return Err(err),
@@ -296,6 +301,7 @@ impl From<Box<[u8]>> for TransferData {
 pub struct TransferContext {
     pub state: TransferState,
     pub args: TransferArgs,
+    pub progress: ProgressReporter,
 }
 
 impl TransferContext {
@@ -304,7 +310,15 @@ impl TransferContext {
         let state = TransferState::default();
         state.set_offset(offset);
 
-        Self { args, state }
+        Self {
+            args,
+            state,
+            progress: ProgressReporter::default(),
+        }
+    }
+
+    pub fn reporter(&self) -> ProgressReporter {
+        self.progress.clone()
     }
 }
 

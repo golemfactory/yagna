@@ -5,13 +5,17 @@ version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
+[features]
+require-consent = ['ya-utils-consent/require-consent']
+
 [dependencies]
 ya-client = { workspace = true, features = ['cli'] }
-ya-compile-time-utils = "0.2"
+ya-compile-time-utils.workspace = true
 ya-core-model = { workspace = true, features = ["payment", "version"] }
-ya-provider = "0.3"
-ya-utils-path = "0.1.0"
-ya-utils-process = { version = "0.3", features = ["lock"] }
+ya-provider.path = "../agent/provider"
+ya-utils-consent.workspace = true
+ya-utils-path.workspace = true
+ya-utils-process = { workspace = true, features = ["lock"] }
 
 actix-rt = "2.7"
 ansi_term = "0.12.1"
@@ -29,7 +33,7 @@ log = "0.4"
 names = "0.10.0"
 openssl.workspace = true
 prettytable-rs = "0.10.0"
-promptly = "0.3.0"
+promptly.workspace = true
 rustyline = "6.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

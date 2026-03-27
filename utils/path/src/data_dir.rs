@@ -1,6 +1,7 @@
 use crate::normalize_path;
 use anyhow::Context;
-use std::{ops::Not, path::PathBuf, str::FromStr, string::ToString};
+use std::fmt::Display;
+use std::{ops::Not, path::PathBuf, str::FromStr};
 
 const ORGANIZATION: &str = "GolemFactory";
 const QUALIFIER: &str = "";
@@ -20,7 +21,7 @@ impl DataDir {
     pub fn get_or_create(&self) -> anyhow::Result<PathBuf> {
         if self.0.exists().not() {
             // not using logger here bc it might haven't been initialized yet
-            eprintln!("Creating data dir: {}", self.0.display());
+            log::info!("Creating data dir: {}", self.0.display());
             std::fs::create_dir_all(&self.0)
                 .context(format!("data dir {:?} creation error", self))?;
         }
@@ -36,14 +37,8 @@ impl FromStr for DataDir {
     }
 }
 
-impl ToString for DataDir {
-    fn to_string(&self) -> String {
-        /*
-        It's important for output to not include quotes.
-        Otherwise flexi logger tries to create a path like
-        "/home/user/.local/share/yagna"/yagna.log
-        and those extra quotes are causing problems.
-         */
-        self.0.to_string_lossy().to_string()
+impl Display for DataDir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.display())
     }
 }

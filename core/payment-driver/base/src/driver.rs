@@ -22,6 +22,7 @@ pub use ya_client_model::payment::network::Network;
 pub use ya_client_model::NodeId;
 pub use ya_core_model::identity::event::IdentityEvent;
 pub use ya_core_model::identity::Error as IdentityError;
+use ya_core_model::signable::{prepare_signature_hash, Signable};
 
 #[async_trait(?Send)]
 pub trait PaymentDriver {
@@ -63,57 +64,52 @@ pub trait PaymentDriver {
 
     async fn schedule_payment(
         &self,
-
         caller: String,
         msg: SchedulePayment,
     ) -> Result<String, GenericError>;
 
     async fn verify_payment(
         &self,
-
         caller: String,
         msg: VerifyPayment,
     ) -> Result<PaymentDetails, GenericError>;
 
     async fn validate_allocation(
         &self,
-
         caller: String,
         msg: ValidateAllocation,
     ) -> Result<ValidateAllocationResult, GenericError>;
 
     async fn release_deposit(
         &self,
-
         caller: String,
         msg: DriverReleaseDeposit,
     ) -> Result<(), GenericError>;
 
     async fn sign_payment(
         &self,
-
         _caller: String,
         msg: SignPayment,
     ) -> Result<Vec<u8>, GenericError> {
-        let payload = utils::payment_hash(&msg.0);
-        let node_id = msg.0.payer_id;
+        let payment = msg.0.remove_private_info();
+        let payload = utils::payment_hash(&payment);
+        let node_id = payment.payer_id;
         bus::sign(node_id, payload).await
     }
 
-    async fn sign_payment_canonicalized(
+    async fn sign_payment_canonical(
         &self,
-
         _caller: String,
         msg: SignPaymentCanonicalized,
     ) -> Result<Vec<u8>, GenericError> {
-        let payload = utils::payment_hash_canonicalized(&msg.0);
-        let node_id = msg.0.payer_id;
+        let payment = msg.0;
+        let payload = payment.hash_canonical().map_err(GenericError::new)?;
+        let node_id = payment.payer_id;
         bus::sign(node_id, payload).await
     }
 
     async fn verify_signature(
         &self,
-
         _caller: String,
         msg: VerifySignature,
     ) -> Result<bool, GenericError> {
@@ -125,9 +121,19 @@ pub trait PaymentDriver {
         let s: [u8; 32] = msg.signature[33..65].try_into().unwrap();
         let signature = Signature { v, r, s };
 
-        let payload = if msg.canonicalized {
-            utils::payment_hash_canonicalized(&msg.payment)
+        let payload = if let Some(payload) = msg.canonical {
+            match msg.payment.verify_canonical(payload.as_slice()) {
+                Ok(_) => prepare_signature_hash(&payload),
+                Err(e) => {
+                    log::info!(
+                        "Signature verification: canonical representation doesn't match struct: {e}"
+                    );
+                    return Ok(false);
+                }
+            }
         } else {
+            // Backward compatibility version for older Nodes that don't send canonical
+            // signed bytes and used Payment debug formatting as representation.
             utils::payment_hash(&msg.payment)
         };
         let pub_key = match signature.recover(payload.as_slice()) {
@@ -140,7 +146,6 @@ pub trait PaymentDriver {
 
     async fn status(
         &self,
-
         _caller: String,
         _msg: DriverStatus,
     ) -> Result<Vec<DriverStatusProperty>, DriverStatusError>;

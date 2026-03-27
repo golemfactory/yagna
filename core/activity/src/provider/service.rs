@@ -205,7 +205,7 @@ async fn create_activity_gsb(
         msg.timeout,
     )
     .await
-    .map_err(|e| {
+    .inspect_err(|_e| {
         tokio::task::spawn_local(enqueue_destroy_evt(
             db.clone(),
             tracker.clone(),
@@ -213,7 +213,6 @@ async fn create_activity_gsb(
             *agreement.provider_id(),
             app_session_id,
         ));
-        e
     })?;
 
     log::info!(

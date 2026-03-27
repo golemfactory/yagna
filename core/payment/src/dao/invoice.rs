@@ -373,7 +373,10 @@ impl<'c> InvoiceDao<'c> {
             let invoices: Vec<ReadObj> = query!()
                 .filter(dsl::owner_id.eq(owner_id))
                 .filter(dsl::send_accept.eq(true))
-                .filter(dsl::status.eq(DocumentStatus::Accepted.to_string()))
+                .filter(dsl::status.eq_any([
+                    DocumentStatus::Accepted.to_string(),
+                    DocumentStatus::Settled.to_string(),
+                ]))
                 .filter(agreement_dsl::peer_id.eq(peer_id))
                 .load(conn)?;
 

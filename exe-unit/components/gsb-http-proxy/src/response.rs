@@ -22,6 +22,7 @@ pub struct GsbHttpCallResponseHeader {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct GsbHttpCallResponseBody {
+    #[serde(with = "serde_bytes")]
     pub msg_bytes: Vec<u8>,
 }
 

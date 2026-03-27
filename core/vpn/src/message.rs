@@ -37,10 +37,12 @@ pub struct RemoveNode {
     pub id: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Message)]
 #[rtype(result = "Result<Vec<Connection>>")]
 pub struct GetConnections;
 
+#[allow(dead_code)]
 #[derive(Message)]
 #[rtype(result = "Result<UserConnection>")]
 pub struct Connect {
@@ -73,6 +75,7 @@ pub struct Packet {
 #[rtype(result = "Result<()>")]
 pub struct Shutdown;
 
+#[allow(dead_code)]
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct DataSent;

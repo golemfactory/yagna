@@ -1,9 +1,10 @@
 #![allow(clippy::obfuscated_if_else)]
 
-use actix_web::{middleware, web, App, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use anyhow::{Context, Result};
 use futures::prelude::*;
 use metrics::{counter, gauge};
+use ya_healthcheck::HealthcheckService;
 #[cfg(feature = "static-openssl")]
 extern crate openssl_probe;
 
@@ -53,6 +54,9 @@ use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_service_api_web::middleware::cors::AppKeyCors;
+use ya_utils_consent::{
+    consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
+};
 
 lazy_static::lazy_static! {
     static ref DEFAULT_DATA_DIR: String = DataDir::new(clap::crate_name!()).to_string();
@@ -241,6 +245,8 @@ impl TryFrom<CliCtx> for ServiceContext {
 enum Services {
     #[enable(gsb, cli)]
     Db(PersistenceService),
+    #[enable(rest)]
+    Healthcheck(HealthcheckService),
     // Metrics service must be activated before all other services
     // to that will use it. Identity service is used by the Metrics,
     // so must be initialized before.
@@ -261,6 +267,8 @@ enum Services {
     Activity(ActivityService),
     #[enable(gsb, rest, cli)]
     Payment(PaymentService),
+    #[enable(cli)]
+    Consent(ConsentService),
     #[enable(gsb)]
     SgxDriver(SgxService),
     #[enable(gsb, rest)]
@@ -475,6 +483,7 @@ impl ServiceCommand {
         if !ctx.accept_terms {
             prompt_terms()?;
         }
+
         match self {
             Self::Run(ServiceCommandOpts {
                 api_url,
@@ -541,6 +550,9 @@ impl ServiceCommand {
 
                 let _lock = ProcLock::new(app_name, &ctx.data_dir)?.lock(std::process::id())?;
 
+                //before running yagna check consents
+                consent_check_before_startup(false)?;
+
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
@@ -568,6 +580,8 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
+                        .route("/dashboard", web::get().to(redirect_to_dashboard))
+                        .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
                         .route("/me", web::get().to(me))
                         .service(forward_gsb);
                     let rest = Services::rest(app, &context);
@@ -710,6 +724,46 @@ async fn forward_gsb(
     Ok::<_, actix_web::Error>(web::Json(json_resp))
 }
 
+#[cfg(feature = "dashboard")]
+#[derive(rust_embed::RustEmbed)]
+#[folder = "dashboard"]
+struct Asset;
+
+pub async fn redirect_to_dashboard() -> impl Responder {
+    #[cfg(feature = "dashboard")]
+    {
+        let target = "/dashboard/";
+        log::debug!("Redirecting to endpoint: {target}");
+        HttpResponse::Ok()
+            .status(actix_web::http::StatusCode::PERMANENT_REDIRECT)
+            .append_header((actix_web::http::header::LOCATION, target))
+            .finish()
+    }
+    #[cfg(not(feature = "dashboard"))]
+    HttpResponse::NotFound().body("404 Not Found")
+}
+
+pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
+    #[cfg(feature = "dashboard")]
+    {
+        let mut path = path.as_str();
+        let mut content = Asset::get(path);
+        if content.is_none() && !path.contains('.') {
+            path = "index.html";
+            content = Asset::get(path);
+        }
+        log::debug!("Serving frontend file: {path}");
+        match content {
+            Some(content) => HttpResponse::Ok()
+                .content_type(mime_guess::from_path(path).first_or_octet_stream().as_ref())
+                .body(content.data.into_owned()),
+            None => HttpResponse::NotFound().body("404 Not Found"),
+        }
+    }
+    #[cfg(not(feature = "dashboard"))]
+    HttpResponse::NotFound().body(format!("404 Not Found: {}", path))
+}
+
 #[actix_rt::main]
 async fn main() -> Result<()> {
     dotenv::dotenv().ok();
@@ -719,6 +773,7 @@ async fn main() -> Result<()> {
 
     std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
 
+    set_consent_path_in_yagna_dir()?;
     match args.run_command().await {
         Ok(()) => Ok(()),
         Err(err) => {

@@ -1,0 +1,9 @@
+[
+    {
+        "name": "ya-mock-runtime",
+        "version": "0.1.0",
+        "supervisor-path": "exe-unit",
+        "runtime-path": "ya-mock-runtime",
+        "description": "Mock runtime for testing purposes"
+    }
+]

@@ -6,7 +6,7 @@ use test_context::test_context;
 use ya_client_model::activity::TransferArgs;
 use ya_exe_unit::error::Error;
 use ya_framework_basic::async_drop::DroppableTestContext;
-use ya_framework_basic::file::generate_file_with_hash;
+use ya_framework_basic::file::generate_random_file_with_hash;
 use ya_framework_basic::hash::verify_hash;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
@@ -32,13 +32,14 @@ async fn transfer_with_args(
         from: from.to_owned(),
         to: to.to_owned(),
         args,
+        progress_config: None,
     })
     .await??;
 
     Ok(())
 }
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -70,7 +71,8 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         }, // Uncomment to enable logs
     ];
 
-    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 256_usize);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", 4096_usize, 256_usize);
 
     log::debug!("Starting HTTP servers");
 
@@ -79,10 +81,10 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         .await
         .expect("unable to start http servers");
 
-    let task_package = Some(format!(
+    let task_package = format!(
         "hash://sha3:{}:http://127.0.0.1:8001/rnd",
         hex::encode(hash)
-    ));
+    );
 
     log::debug!("Starting TransferService");
     let exe_ctx = TransferServiceContext {
@@ -97,18 +99,14 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 
     println!();
     log::warn!("[>>] Deployment with hash verification");
-    addr.send(DeployImage {
-        task_package: task_package.clone(),
-    })
-    .await??;
+    addr.send(DeployImage::with_package(&task_package))
+        .await??;
     log::warn!("Deployment complete");
 
     println!();
     log::warn!("[>>] Deployment from cache");
-    addr.send(DeployImage {
-        task_package: task_package.clone(),
-    })
-    .await??;
+    addr.send(DeployImage::with_package(&task_package))
+        .await??;
     log::warn!("Deployment from cache complete");
 
     println!();
@@ -155,7 +153,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
 }
 
 #[ignore]
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+//#[cfg_attr(not(feature = "system-test"), ignore)]
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
 async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
@@ -186,7 +184,8 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
             path: "/extract".into(),
         },
     ];
-    let hash = generate_file_with_hash(temp_dir, "rnd", 4096_usize, 256_usize);
+    let hash =
+        generate_random_file_with_hash::<sha3::Sha3_512>(temp_dir, "rnd", 4096_usize, 256_usize);
 
     log::debug!("Starting HTTP servers");
 

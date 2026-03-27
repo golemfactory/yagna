@@ -23,6 +23,7 @@ pub struct GolemCertificateEntry {
     cert: ValidatedCertificate,
 }
 
+#[allow(dead_code)]
 pub(super) trait GolemCertAddParams {}
 
 pub struct GolemKeystoreBuilder {

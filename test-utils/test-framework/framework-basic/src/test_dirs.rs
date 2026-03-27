@@ -1,7 +1,9 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use tempdir::TempDir;
+use test_binary::TestBinary;
 
 pub mod macros {
     /// Creates temporary directory in cargo target directory.
@@ -31,6 +33,65 @@ pub fn temp_dir_(base_dir: &str, prefix: &str) -> anyhow::Result<TempDir> {
     fs::create_dir_all(temp_dir)?;
 
     Ok(dir)
+}
+
+#[cfg(debug_assertions)]
+pub fn is_debug() -> bool {
+    true
+}
+
+#[cfg(not(debug_assertions))]
+pub fn is_debug() -> bool {
+    false
+}
+
+#[cfg(target_family = "windows")]
+pub fn extension() -> String {
+    ".exe".to_string()
+}
+
+#[cfg(not(target_family = "windows"))]
+pub fn extension() -> String {
+    "".to_string()
+}
+
+fn find_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
+    let current = std::env::current_exe()
+        .map_err(|e| anyhow!("Failed to get path to current binary. {e}"))?
+        .parent()
+        .and_then(|path| path.parent())
+        .ok_or(anyhow!("No parent dir for current binary."))?
+        .to_path_buf();
+    let bin_name = format!("{bin_name}{}", extension());
+    let bin_path = current.join(&bin_name);
+    if !bin_path.exists() {
+        bail!(
+            "Path doesn't exist: {}, when looking for binary: {}",
+            bin_path.display(),
+            bin_name
+        );
+    }
+
+    if !bin_path.is_file() {
+        bail!("Expected {} to be binary file.", bin_path.display());
+    }
+
+    Ok(bin_path)
+}
+
+/// Returns path to test binary from workspace.
+pub fn cargo_binary(bin_name: &str) -> anyhow::Result<PathBuf> {
+    // Check if binary is already compiled.
+    if find_binary(bin_name).is_err() {
+        TestBinary::from_workspace(bin_name)?
+            .build()
+            .map_err(|e| anyhow!("Failed to compile binary: {e}"))?
+            .to_str()
+            .map(PathBuf::from_str)
+            .ok_or(anyhow!("Failed to convert path from OsString"))??;
+    };
+
+    find_binary(bin_name)
 }
 
 /// Returns resource from `resources` directory in tests.

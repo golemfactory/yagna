@@ -13,6 +13,7 @@ use ya_service_bus::{RpcMessage, RpcStreamMessage};
 pub struct GsbHttpCallMessage {
     pub method: String,
     pub path: String,
+    #[serde(with = "serde_bytes")]
     pub body: Option<Vec<u8>>,
     pub headers: HashMap<String, Vec<String>>,
 }
@@ -28,6 +29,7 @@ impl RpcMessage for GsbHttpCallMessage {
 pub struct GsbHttpCallStreamingMessage {
     pub method: String,
     pub path: String,
+    #[serde(with = "serde_bytes")]
     pub body: Option<Vec<u8>>,
     pub headers: HashMap<String, Vec<String>>,
 }

@@ -35,6 +35,7 @@ impl<'de> Deserialize<'de> for GlobalsState {
         pub enum Account {
             NodeId(NodeId),
             Deprecated {
+                #[allow(dead_code)]
                 platform: Option<String>,
                 address: NodeId,
             },

@@ -1,9 +1,13 @@
 use actix::prelude::*;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use metrics::counter;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use ya_core_model::market::{GetLastBcastTs, RpcMessageError};
+use ya_service_bus::timeout::IntoTimeoutFuture;
+use ya_service_bus::typed::ServiceBinder;
 
 use ya_client::model::market::{NewDemand, NewOffer};
 use ya_service_api_web::middleware::Identity;
@@ -121,6 +125,24 @@ impl Matcher {
         self.bind_expiration_tracker()
             .await
             .map_err(|e| MatcherInitError::ExpirationTrackerError(e.to_string()))?;
+
+        let discovery = self.discovery.clone();
+        async fn handler(
+            _: (),
+            discovery: Discovery,
+            caller: String,
+            _msg: GetLastBcastTs,
+        ) -> Result<DateTime<Utc>, RpcMessageError> {
+            log::debug!("Got GetLastBcastTs from {caller}");
+
+            discovery
+                .get_last_bcast_ts()
+                .timeout(Some(Duration::from_secs(5)))
+                .await
+                .map_err(|_| RpcMessageError::Timeout)
+        }
+
+        ServiceBinder::new(local_prefix, &(), discovery).bind_with_processor(handler);
 
         Ok(())
     }

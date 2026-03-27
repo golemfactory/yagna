@@ -6,12 +6,14 @@ authors = ["Golem Factory <contact@golem.network>"]
 edition = "2018"
 
 [dependencies]
+ya-service-api-web.workspace = true
 ya-client.workspace = true
-ya-compile-time-utils = "0.2"
+ya-compile-time-utils.workspace = true
 ya-core-model = { workspace = true, features = ["version"] }
-ya-persistence = "0.3"
-ya-service-api = "0.1"
-ya-service-api-interfaces = "0.2"
+ya-net = { workspace = true, features = ["service"] }
+ya-persistence.workspace = true
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
 ya-service-bus = { workspace = true }
 
 actix-web = "4"
@@ -27,3 +29,5 @@ serde_json = "1.0"
 structopt = "0.3.21"
 thiserror = "^1.0"
 tokio = { version = "1", features = ["time", "sync"] }
+problem_details = "0.6.0"
+http = "1.1.0"

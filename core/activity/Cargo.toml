@@ -10,11 +10,11 @@ framework-test = ['ya-gsb-http-proxy/framework-test']
 [dependencies]
 ya-core-model = { workspace = true, features = ["activity", "market"] }
 ya-client-model = { workspace = true, features = ["sgx"] }
-ya-net = "0.3"
-ya-persistence = "0.3"
-ya-service-api = "0.1"
-ya-service-api-interfaces = "0.2"
-ya-service-api-web = "0.2"
+ya-net.workspace = true
+ya-persistence.workspace = true
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
+ya-service-api-web.workspace = true
 ya-service-bus = { workspace = true }
 ya-gsb-http-proxy = { path = "../../exe-unit/components/gsb-http-proxy" }
 

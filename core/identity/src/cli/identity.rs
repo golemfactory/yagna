@@ -314,6 +314,13 @@ impl IdentityCommand {
                     )
                     .await
                     .map_err(anyhow::Error::msg)?;
+
+                if *set_default {
+                    log::warn!(
+                        "Setting default identity requires service/daemon restart to take effect!"
+                    )
+                }
+
                 CommandOutput::object(id)
             }
             IdentityCommand::Create {
@@ -381,6 +388,13 @@ impl IdentityCommand {
                     .send(identity::Update::with_id(id.node_id).with_default(*set_default))
                     .await
                     .map_err(anyhow::Error::msg)?;
+
+                if *set_default {
+                    log::warn!(
+                        "Setting default identity requires service/daemon restart to take effect!"
+                    )
+                }
+
                 CommandOutput::object(id)
             }
             IdentityCommand::Lock {
@@ -426,7 +440,11 @@ impl IdentityCommand {
             IdentityCommand::Drop {
                 node_or_alias,
                 force,
-            } => drop_id::drop_id(&gsb, node_or_alias, *force).await,
+            } => {
+                log::warn!("Dropping identity requires service/daemon restart to take effect!");
+
+                drop_id::drop_id(&gsb, node_or_alias, *force).await
+            }
             IdentityCommand::Export {
                 node_or_alias,
                 file_path,

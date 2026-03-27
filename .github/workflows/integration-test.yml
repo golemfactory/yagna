@@ -10,7 +10,7 @@ on:
       rust_version:
         description: 'Rust version'
         required: true
-        default: '1.77.0'
+        default: '1.81.0'
       strip_binaries:
         description: 'Strip binaries'
         required: true
@@ -40,12 +40,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set input variables
         id: variables
         run: |
           echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "rust_version=${{ github.event.inputs.rust_version || '1.77.0' }}" >> $GITHUB_OUTPUT
+          echo "rust_version=${{ github.event.inputs.rust_version || '1.81.0' }}" >> $GITHUB_OUTPUT
           echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
 
       - name: Musl
@@ -78,7 +80,7 @@ jobs:
 
       - name: Build binaries
         run: |
-          cargo build --features static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor
+          cargo build --features require-consent,static-openssl --target x86_64-unknown-linux-musl -p yagna -p ya-exe-unit -p gftp -p golemsp -p ya-provider -p erc20_processor
 
       - name: Move target binaries
         run: |
@@ -133,6 +135,7 @@ jobs:
       - name: Check installed binaries
         run: |
           yagna --version
+          yagna consent allow-all
           erc20_processor --version
 
       - name: Run test

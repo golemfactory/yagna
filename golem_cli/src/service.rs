@@ -115,6 +115,7 @@ pub async fn run(config: RunConfig) -> Result</*exit code*/ i32> {
     crate::setup::setup(&config, false).await?;
 
     let cmd = YaCommand::new()?;
+
     let service = cmd.yagna()?.service_run(&config).await?;
     let app_key = appkey::get_app_key().await?;
 

@@ -55,6 +55,7 @@ pub enum AgreementState {
 #[derive(Clone, Debug)]
 pub struct Transition(AgreementState, Option<AgreementState>);
 
+#[allow(dead_code)]
 #[derive(Clone)]
 pub enum StateChange {
     TransitionStarted(Transition),

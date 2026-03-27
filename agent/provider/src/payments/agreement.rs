@@ -47,6 +47,7 @@ pub enum ActivityPayment {
 /// Note that we can have multiple activities during duration of agreement.
 /// We must wait until agreement will be closed, before we send invoice.
 pub struct AgreementPayment {
+    #[allow(dead_code)]
     pub agreement_id: String,
     pub approved_ts: DateTime<Utc>,
     pub payment_model: Arc<dyn PaymentModel>,

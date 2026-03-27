@@ -17,8 +17,8 @@ serial_test = { git = "https://github.com/golemfactory/serial_test.git", branch 
 tokio = { version = "1", features = ["rt"] }
 url = "2.3"
 
-ya-utils-process = "0.3"
-ya-framework-macro = "0.1"
+ya-utils-process.workspace = true
+ya-framework-macro = { path = "./framework-macro" }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.73"

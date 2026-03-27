@@ -134,9 +134,8 @@ impl TimedMutex {
     ) -> Result<TimedMutexGuard<'_>, Elapsed> {
         let result = tokio::time::timeout(duration, self.mutex.lock())
             .await
-            .map_err(|e| {
+            .inspect_err(|e| {
                 log::warn!("Failed to lock mutex in scenario {0}", name);
-                e
             })?;
 
         let id = Uuid::new_v4().to_simple().to_string();

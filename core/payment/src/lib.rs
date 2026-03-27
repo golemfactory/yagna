@@ -2,9 +2,10 @@
 #![allow(unused_variables)] // Crate under development
 pub use crate::config::Config;
 use crate::processor::PaymentProcessor;
+
 use futures::FutureExt;
-use service::BindOptions;
 use std::{sync::Arc, time::Duration};
+
 use ya_core_model::payment::local as pay_local;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_interfaces::*;
@@ -58,7 +59,7 @@ impl PaymentService {
         let config = Arc::new(Config::from_env()?);
 
         let processor = Arc::new(PaymentProcessor::new(db.clone()));
-        self::service::bind_service(&db, processor.clone(), BindOptions::default(), config);
+        self::service::bind_service(&db, processor.clone(), config);
 
         tokio::task::spawn(async move {
             processor.release_allocations(false).await;

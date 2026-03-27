@@ -16,6 +16,7 @@ use ya_core_model::payment::local::{
 };
 use ya_core_model::version::VersionInfo;
 
+#[allow(dead_code)]
 pub struct PaymentPlatform {
     pub platform: &'static str,
     pub driver: &'static str,
@@ -173,6 +174,7 @@ pub trait PaymentSummary {
     fn unconfirmed(&self) -> (BigDecimal, u64);
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivityStatus {

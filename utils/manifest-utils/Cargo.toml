@@ -21,7 +21,7 @@ schema = ["schemars"]
 
 [dependencies]
 ya-agreement-utils = { workspace = true }
-ya-utils-path = "0.1"
+ya-utils-path.workspace = true
 ya-client-model.workspace = true
 golem-certificate = "0.1.1"
 
@@ -57,7 +57,7 @@ serial_test = "2"
 shlex = "1.1"
 tar = "0.4"
 test-case = "3.1"
-ya-manifest-test-utils = "0.1"
+ya-manifest-test-utils.workspace = true
 openssl.workspace = true
 
 [lints]

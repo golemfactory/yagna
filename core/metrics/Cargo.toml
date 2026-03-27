@@ -11,9 +11,10 @@ license = "LGPL-3.0"
 
 [dependencies]
 ya-core-model = { workspace = true, features = ["identity"] }
-ya-service-api = "0.1"
-ya-service-api-interfaces = "0.2"
-ya-service-bus = { workspace = true }
+ya-service-api.workspace = true
+ya-service-api-interfaces.workspace = true
+ya-service-bus = {  workspace = true }
+ya-utils-consent = {  workspace = true }
 
 awc = "3"
 actix-web = { version = "4", features = ["openssl"] }

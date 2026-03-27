@@ -1,4 +1,6 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
+use futures::TryFutureExt;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -21,10 +23,18 @@ pub struct MockNet {
     broadcast: BCastService,
 }
 
+#[derive(Clone)]
+struct NodeInfo {
+    pub prefix: String,
+    // Indicates that connection is broken. Sending message to this node
+    // will result with following error.
+    pub break_error: Option<String>,
+}
+
 #[derive(Default)]
 struct MockNetInner {
     /// Maps NodeIds to gsb prefixes of other nodes.
-    pub nodes: HashMap<NodeId, String>,
+    pub nodes: HashMap<NodeId, NodeInfo>,
 }
 
 impl Default for MockNet {
@@ -56,7 +66,11 @@ impl IMockNet for MockNet {
         log::info!("[MockNet] Registering node {node_id} at prefix: {prefix}");
 
         let mut inner = self.inner.lock().unwrap();
-        if inner.nodes.insert(*node_id, prefix.to_string()).is_some() {
+        let info = NodeInfo {
+            prefix: prefix.to_string(),
+            break_error: None,
+        };
+        if inner.nodes.insert(*node_id, info).is_some() {
             panic!("[MockNet] Node [{}] already existed.", node_id);
         }
     }
@@ -88,6 +102,22 @@ impl MockNet {
         self
     }
 
+    pub fn break_network_for(&self, node_id: NodeId) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.nodes.entry(node_id).and_modify(|info| {
+            log::info!("Disabling networking for: {node_id}");
+            info.break_error = Some("Unreachable".to_string());
+        });
+    }
+
+    pub fn enable_network_for(&self, node_id: NodeId) {
+        let mut inner = self.inner.lock().unwrap();
+        inner.nodes.entry(node_id).and_modify(|info| {
+            log::info!("Enabling networking for: {node_id}");
+            info.break_error = None;
+        });
+    }
+
     fn translate_to(&self, id: NodeId, addr: &str) -> Result<String> {
         let prefix = self.node_prefix(id)?;
         let net_prefix = format!("/net/{}", id);
@@ -97,19 +127,21 @@ impl MockNet {
     }
 
     fn node_prefix(&self, id: NodeId) -> Result<String> {
-        let inner = self.inner.lock().unwrap();
-        inner
-            .nodes
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Node not registered: {id}"))
+        let mut inner = self.inner.lock().unwrap();
+        match inner.nodes.entry(id) {
+            Entry::Occupied(info) => match info.get().break_error {
+                Some(ref err) => bail!("{err}"),
+                None => Ok(info.get().prefix.clone()),
+            },
+            Entry::Vacant(_) => bail!("Node not registered: {id}"),
+        }
     }
 
-    pub fn node_by_prefix(&self, address: &str) -> Option<NodeId> {
+    fn node_by_prefix(&self, address: &str) -> Option<NodeInfo> {
         let inner = self.inner.lock().unwrap();
-        for (id, prefix) in inner.nodes.iter() {
-            if address.contains(prefix) {
-                return Some(*id);
+        for (_id, info) in inner.nodes.iter() {
+            if address.contains(&info.prefix) {
+                return Some(info.clone());
             }
         }
         None
@@ -162,8 +194,8 @@ impl MockNet {
                     let addr_local = addr.replacen("local", "public", 1);
 
                     let node_id = match mock_net.node_by_prefix(&addr_local) {
-                        Some(node_id) => node_id,
-                        None => {
+                        Some(info) if info.break_error.is_none() => info.prefix,
+                        _ => {
                             log::debug!(
                                 "Not broadcasting on topic {topic} to {addr}. Node not found on list. \
                                 Probably networking was disabled for this Node."
@@ -207,6 +239,7 @@ impl MockNet {
                 let data = Vec::from(msg);
                 let caller = caller.to_string();
                 let addr = addr.to_string();
+                let addr_ = addr.to_string();
                 let resolver_ = resolver.clone();
 
                 async move {
@@ -222,7 +255,7 @@ impl MockNet {
                         "[MockNet] Sending message from [{from}], to: [{to}], address [{translated}]."
                     );
                     local_bus::send(&translated, &from.to_string(), &data).await
-                }
+                }.inspect_err(move |e| log::warn!("[MockNet] Sending message [{addr_}]: {e}"))
             },
             // TODO: Implement stream handler
             (),
