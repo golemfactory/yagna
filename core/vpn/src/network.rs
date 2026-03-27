@@ -210,13 +210,6 @@ impl VpnSupervisor {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RawConnectionMeta {
-    pub local: IpAddr,
-    pub remote: IpAddr,
-    pub remote_id: String,
-}
-
 pub struct Vpn {
     node_id: String,
     vpn: Network<network::DuoEndpoint<Endpoint>>,
@@ -431,7 +424,12 @@ impl Handler<ConnectTcp> for Vpn {
         };
 
         let vpn_id = self.vpn.id().clone();
-        log::info!("VPN {}: connecting (tcp) to {:?}", vpn_id, remote);
+        log::info!(
+            "VPN {}: connecting ({}) to {:?}",
+            vpn_id,
+            msg.protocol,
+            remote
+        );
 
         let network = self.stack_network.clone();
 
@@ -528,7 +526,11 @@ impl Handler<DisconnectRaw> for Vpn {
     fn handle(&mut self, msg: DisconnectRaw, _: &mut Self::Context) -> Self::Result {
         match self.connections_raw.remove(&msg.raw_socket_desc) {
             Some(mut _connection) => {
-                log::info!("Dropping raw connection {:?}", msg.raw_socket_desc);
+                log::info!(
+                    "Dropping raw connection {:?}: {:?}",
+                    msg.raw_socket_desc,
+                    msg.reason
+                );
                 Ok(())
             }
             None => {

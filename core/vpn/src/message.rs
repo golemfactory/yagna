@@ -38,10 +38,6 @@ pub struct RemoveNode {
     pub id: String,
 }
 
-#[derive(Debug, Message)]
-#[rtype(result = "Result<Vec<Connection>>")]
-pub struct GetConnections;
-
 #[derive(Message)]
 #[rtype(result = "Result<UserTcpConnection>")]
 pub struct ConnectTcp {
@@ -87,10 +83,6 @@ pub struct Packet {
 #[derive(Debug, Message)]
 #[rtype(result = "Result<()>")]
 pub struct Shutdown;
-
-#[derive(Debug, Message)]
-#[rtype(result = "Result<()>")]
-pub struct DataSent;
 
 #[derive(Debug)]
 pub struct UserTcpConnection {
