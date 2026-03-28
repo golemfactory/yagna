@@ -99,7 +99,7 @@ pub fn spend_from_allocation(conn: &ConnType, args: SpendFromAllocationArgs) -> 
     Ok(())
 }
 
-impl<'c> AllocationDao<'c> {
+impl AllocationDao<'_> {
     pub async fn spend_from_allocation_transaction(
         &self,
         args: SpendFromAllocationArgs,

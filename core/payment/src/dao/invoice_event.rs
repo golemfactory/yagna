@@ -37,7 +37,7 @@ impl<'c> AsDao<'c> for InvoiceEventDao<'c> {
     }
 }
 
-impl<'c> InvoiceEventDao<'c> {
+impl InvoiceEventDao<'_> {
     pub async fn create(
         &self,
         invoice_id: String,

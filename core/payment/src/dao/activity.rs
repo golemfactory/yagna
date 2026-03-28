@@ -159,7 +159,7 @@ impl<'a> AsDao<'a> for ActivityDao<'a> {
     }
 }
 
-impl<'a> ActivityDao<'a> {
+impl ActivityDao<'_> {
     pub async fn get(&self, activity_id: String, owner_id: NodeId) -> DbResult<Option<ReadObj>> {
         readonly_transaction(self.pool, "activity_dao_get", move |conn| {
             let activity = dsl::pay_activity

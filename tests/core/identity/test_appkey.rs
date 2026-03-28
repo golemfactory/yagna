@@ -2,7 +2,7 @@ use ya_test_framework::framework::macros::{prepare_test_dir, serial_test};
 use ya_test_framework::framework::{framework_test, YagnaFramework};
 use ya_test_framework::utils::YagnaCli;
 
-#[cfg_attr(not(feature = "framework-test"), ignore)]
+#[cfg_attr(not(feature = "system-test"), ignore)]
 #[framework_test]
 async fn test_appkey_removal(framework: YagnaFramework) -> anyhow::Result<()> {
     let yagna = framework.new_node("node1").service_run().await?;

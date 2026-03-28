@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
@@ -19,8 +18,7 @@ use tokio::sync::mpsc;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
 use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
-use ya_utils_networking::vpn::common::DEFAULT_MAX_FRAME_SIZE;
-use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
+use ya_utils_networking::vpn::network::DuoEndpoint;
 
 use crate::error::Error;
 use crate::state::DeploymentNetwork;
@@ -35,7 +33,7 @@ type SocketChannel = (
 );
 
 const SOCKET_BUFFER_SIZE: usize = 2097152;
-const BUFFER_SIZE: usize = DEFAULT_MAX_FRAME_SIZE * 4;
+const BUFFER_SIZE: usize = 0x20000;
 
 pub(crate) enum Endpoint {
     New {
@@ -310,7 +308,7 @@ impl RemoteEndpoint {
                 match StreamExt::next(&mut rx).await {
                     Some(Ok(data)) => {
                         if let Err(e) = write.send_to(data.as_slice(), addr).await {
-                            log::error!("error writing to VM endpoint: {e}");
+                            log::error!("error writing {}  byes to VM endpoint: {e}", data.len());
                             break;
                         }
                     }
@@ -332,24 +330,12 @@ impl RemoteEndpoint {
     }
 }
 
-impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
-    type Error = Error;
-
-    fn try_from(net: &'a DeploymentNetwork) -> Result<Self> {
-        let ip = net.network.addr();
-        let mask = net.network.netmask();
-        let gateway = net
-            .network
-            .hosts()
-            .find(|ip_| ip_ != &ip)
-            .ok_or(NetError::NetAddrTaken(ip))?;
-
-        Ok(Network {
-            addr: ip.to_string(),
-            gateway: gateway.to_string(),
-            mask: mask.to_string(),
-            if_addr: net.node_ip.to_string(),
-        })
+fn network_to_runtime_command(net: &DeploymentNetwork) -> Network {
+    Network {
+        addr: net.network.addr().to_string(),
+        gateway: net.gateway.map(|g| g.to_string()).unwrap_or_default(),
+        mask: net.network.netmask().to_string(),
+        if_addr: net.node_ip.to_string(),
     }
 }
 
@@ -616,7 +602,7 @@ mod test {
     async fn process_rx_buffer_stream(mode: TxMode, size: usize) {
         let src = (0..=255u8)
             .flat_map(|e| {
-                let vec = Vec::from_iter(std::iter::repeat(e).take(size));
+                let vec = Vec::from_iter(std::iter::repeat_n(e, size));
                 mode.split(vec)
                     .into_iter()
                     .map(|mut v| {

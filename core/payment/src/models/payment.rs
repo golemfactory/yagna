@@ -139,8 +139,8 @@ impl ReadObj {
             payment_platform: self.payment_platform,
             amount: self.amount.into(),
             timestamp: Utc.from_utc_datetime(&self.timestamp),
-            activity_payments: activity_payments.into_iter().map(Into::into).collect(),
-            agreement_payments: agreement_payments.into_iter().map(Into::into).collect(),
+            activity_payments: activity_payments.into_iter().collect(),
+            agreement_payments: agreement_payments.into_iter().collect(),
             details: base64::encode(&self.details),
         }
     }

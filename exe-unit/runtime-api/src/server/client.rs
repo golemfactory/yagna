@@ -152,7 +152,7 @@ where
         .boxed_local()
     }
 
-    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<CreateNetworkResp> {
+    fn create_network(&self, network: CreateNetwork) -> AsyncResponse<'_, CreateNetworkResp> {
         let id = REQUEST_ID.fetch_add(1, Relaxed);
         let request = proto::Request {
             id,
