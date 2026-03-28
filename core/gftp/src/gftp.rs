@@ -107,7 +107,7 @@ pub async fn publish(path: &Path) -> Result<Url> {
 
 pub async fn close(url: &Url) -> Result<bool> {
     let hash_name = match url.path_segments() {
-        Some(segments) => match segments.last() {
+        Some(mut segments) => match segments.next_back() {
             Some(segment) => segment,
             _ => return Err(anyhow!("Invalid URL: {:?}", url)),
         },

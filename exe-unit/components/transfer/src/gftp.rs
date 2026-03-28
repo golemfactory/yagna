@@ -67,7 +67,6 @@ impl TransferProvider<TransferData, Error> for GftpTransferProvider {
                         },
                     ))
                     .await
-                    .map_err(Error::from)
             };
 
             abortable_stream(fut, abort_reg, txc).await

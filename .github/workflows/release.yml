@@ -19,7 +19,7 @@ on:
     - cron: '23 23 * * *'
 
 env:
-  rust_stable: 1.84.0
+  rust_stable: 1.90.0
 
 permissions:
   packages: write
@@ -375,7 +375,7 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - uses: golemfactory/build-deb-action@v7
+      - uses: golemfactory/build-deb-action@v10
         id: deb
         with:
           debVersion: ${{ steps.version.outputs.version-ext }}

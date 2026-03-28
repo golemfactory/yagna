@@ -121,7 +121,7 @@ impl RealPayment {
         bus::service(driver_bus_id(driver.gsb_name()))
             .call(Fund::new(
                 address.to_string(),
-                Some("holesky".to_string()),
+                Some("hoodi".to_string()),
                 None,
                 false,
             ))
@@ -157,6 +157,7 @@ impl RealPayment {
         let drivers = vec![Driver::Dummy, Driver::Erc20];
         let networks = vec![
             NetworkName::Holesky,
+            NetworkName::Hoodi,
             NetworkName::Amoy,
             NetworkName::Mumbai,
             NetworkName::Rinkeby,

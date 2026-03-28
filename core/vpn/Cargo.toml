@@ -31,13 +31,17 @@ mime.workspace = true
 rand = "0.7.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smoltcp = "0.10.0"
+smoltcp = { package = "ya-smoltcp", version = "0.1" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.6"
 uuid = { version = "0.8", features = ["v4"] }
 
 [features]
+# Add log for outgoing and incoming packets for VPN RAW
+# It includes transport bypassing smalltcp stack
+trace-raw-packets = []
+# Trace for VPN packets
 packet-trace-enable = ["ya-packet-trace/enable"]
 default = []
 

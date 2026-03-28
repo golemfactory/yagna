@@ -285,10 +285,7 @@ impl ExeUnitsRegistry {
             .descriptors
             .values()
             .map(|desc| desc.validate())
-            .filter_map(|result| match result {
-                Err(error) => Some(error),
-                Ok(_) => None,
-            })
+            .filter_map(|result| result.err())
             .collect::<Vec<ExeUnitValidation>>();
 
         if errors.is_empty() {

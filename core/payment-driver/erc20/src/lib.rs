@@ -25,6 +25,12 @@ pub const HOLESKY_PLATFORM: &str = "erc20-holesky-tglm";
 pub const HOLESKY_CURRENCY_SHORT: &str = "tETH";
 pub const HOLESKY_CURRENCY_LONG: &str = "Holesky Ether";
 
+pub const HOODI_NETWORK: &str = "hoodi";
+pub const HOODI_TOKEN: &str = "tGLM";
+pub const HOODI_PLATFORM: &str = "erc20-hoodi-tglm";
+pub const HOODI_CURRENCY_SHORT: &str = "tETH";
+pub const HOODI_CURRENCY_LONG: &str = "Hoodi Ether";
+
 pub const MUMBAI_NETWORK: &str = "mumbai";
 pub const MUMBAI_TOKEN: &str = "tGLM";
 pub const MUMBAI_PLATFORM: &str = "erc20-mumbai-tglm";
