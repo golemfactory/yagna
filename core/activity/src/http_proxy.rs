@@ -42,7 +42,16 @@ async fn proxy_http_request(
 ) -> crate::Result<impl Responder> {
     let path_activity_url = path.into_inner();
     let activity_id = path_activity_url.activity_id;
-    let path = path_activity_url.url;
+    let mut path = path_activity_url.url;
+    let query = request.query_string();
+    if !query.is_empty() {
+        if path.contains('?') {
+            path.push('&');
+        } else {
+            path.push('?');
+        }
+        path.push_str(query);
+    }
 
     let result =
         authorize_activity_initiator(&db, id.identity, &activity_id, Role::Requestor).await;
