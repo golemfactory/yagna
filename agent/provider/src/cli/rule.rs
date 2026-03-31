@@ -103,6 +103,13 @@ pub enum AuditedPayloadRuleWithCert {
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
+    /// Import and set rule for X509 certificate from URL.
+    ImportCertUrl {
+        /// URL to X509 certificate or X509 certificates chain.
+        url: String,
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
+        mode: Mode,
+    },
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -113,6 +120,13 @@ pub enum PartnerRuleWithCert {
     ImportCert {
         /// Path to Golem certificate.
         imported_cert: PathBuf,
+        #[structopt(short, long, possible_values = Mode::VARIANTS)]
+        mode: Mode,
+    },
+    /// Import and set rule for Golem certificate from URL.
+    ImportCertUrl {
+        /// URL to Golem certificate.
+        url: String,
         #[structopt(short, long, possible_values = Mode::VARIANTS)]
         mode: Mode,
     },
@@ -271,6 +285,36 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
 
                 Ok(())
             }
+            SetOutboundRule::AuditedPayload(AuditedPayloadRuleWithCert::ImportCertUrl {
+                url,
+                mode,
+            }) => {
+                // TODO change it to `rules.keystore.add` when AuditedPayload will support Golem certs.
+                let AddResponse {
+                    invalid,
+                    leaf_cert_ids,
+                    duplicated,
+                    ..
+                } = rules.keystore.add_x509_cert(&AddParams {
+                    certs: vec![PathBuf::from(url)],
+                })?;
+
+                for cert_path in invalid {
+                    log::error!("Failed to import X509 certificates from: {cert_path:?}.");
+                }
+
+                rules.keystore.reload()?;
+
+                if leaf_cert_ids.is_empty() && !duplicated.is_empty() {
+                    log::warn!("Certificate is already in keystore- please use `cert-id` instead of `import-cert`");
+                }
+
+                for cert_id in leaf_cert_ids {
+                    rules.set_audited_payload_mode(cert_id, mode.clone())?;
+                }
+
+                Ok(())
+            }
             SetOutboundRule::Partner(PartnerRuleWithCert::CertId(CertId { cert_id, mode })) => {
                 rules.set_partner_mode(cert_id, mode)
             }
@@ -279,6 +323,17 @@ fn set(set_rule: SetRule, config: ProviderConfig) -> Result<()> {
                 mode,
             }) => {
                 let leaf_cert_ids = rules.import_certs(&import_cert)?;
+                for cert_id in leaf_cert_ids {
+                    rules.set_partner_mode(cert_id, mode.clone())?;
+                }
+
+                Ok(())
+            }
+            SetOutboundRule::Partner(PartnerRuleWithCert::ImportCertUrl {
+                url,
+                mode,
+            }) => {
+                let leaf_cert_ids = rules.import_certs_from_url(&url)?;
                 for cert_id in leaf_cert_ids {
                     rules.set_partner_mode(cert_id, mode.clone())?;
                 }
