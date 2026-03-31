@@ -83,6 +83,7 @@ pub struct DbBatchOrderItem {
     pub amount: BigDecimalField,
     pub payment_id: Option<String>,
     pub paid: bool,
+    pub skipped: bool,
 }
 
 #[derive(Queryable, Debug, Serialize)]
@@ -98,6 +99,7 @@ pub struct DbBatchOrderItemFullInfo {
     pub amount: BigDecimalField,
     pub payment_id: Option<String>,
     pub paid: bool,
+    pub skipped: bool,
 }
 
 #[derive(Queryable, Debug, Serialize)]

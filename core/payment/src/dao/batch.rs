@@ -832,13 +832,15 @@ impl BatchDao<'_> {
                     oidsl::amount,
                     oidsl::payment_id,
                     oidsl::paid,
+                    oidsl::skipped,
                 ))
                 .filter(
                     oidsl::owner_id
                         .eq(owner_id)
                         .and(oidsl::order_id.eq(&order_id))
                         .and(oidsl::payment_id.is_null())
-                        .and(oidsl::paid.eq(false)),
+                        .and(oidsl::paid.eq(false))
+                        .and(oidsl::skipped.eq(false)),
                 )
                 .load::<DbBatchOrderItemFullInfo>(conn)?)
         })
@@ -927,6 +929,28 @@ impl BatchDao<'_> {
                         .and(oidsl::owner_id.eq(owner_id)),
                 )
                 .set(oidsl::payment_id.eq(payment_id))
+                .execute(conn)?)
+        })
+        .await
+    }
+
+    pub async fn batch_order_item_skip(
+        &self,
+        order_id: String,
+        owner_id: NodeId,
+        payee_addr: String,
+        allocation_id: String,
+    ) -> DbResult<usize> {
+        do_with_transaction(self.pool, "batch_order_item_skip", move |conn| {
+            Ok(diesel::update(oidsl::pay_batch_order_item)
+                .filter(
+                    oidsl::order_id
+                        .eq(order_id)
+                        .and(oidsl::payee_addr.eq(payee_addr))
+                        .and(oidsl::allocation_id.eq(allocation_id))
+                        .and(oidsl::owner_id.eq(owner_id)),
+                )
+                .set(oidsl::skipped.eq(true))
                 .execute(conn)?)
         })
         .await
