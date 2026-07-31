@@ -1,6 +1,7 @@
 use anyhow::anyhow;
 use metrics::counter;
-use self_update::backends::github::UpdateBuilder;
+use reqwest::blocking::Client;
+use serde::Deserialize;
 use std::convert::TryFrom;
 
 use ya_core_model::version::Release;
@@ -9,23 +10,64 @@ use ya_persistence::executor::DbExecutor;
 use crate::db::dao::ReleaseDAO;
 use crate::db::model::DBRelease;
 use crate::service::cli::ReleaseMessage;
+use crate::version_is_greater;
 
 const REPO_OWNER: &str = "golemfactory";
 const REPO_NAME: &str = "yagna";
 
+#[derive(Debug)]
+pub(crate) struct GitHubRelease {
+    pub version: String,
+    pub name: String,
+    pub date: String,
+}
+
+#[derive(Deserialize)]
+struct GitHubApiRelease {
+    tag_name: String,
+    name: Option<String>,
+    created_at: String,
+}
+
+fn release_url(tag: Option<&str>) -> anyhow::Result<reqwest::Url> {
+    let mut url = reqwest::Url::parse("https://api.github.com")?;
+    let mut path = url
+        .path_segments_mut()
+        .map_err(|_| anyhow!("GitHub API URL cannot be a base"))?;
+    path.extend(["repos", REPO_OWNER, REPO_NAME, "releases"]);
+    match tag {
+        Some(tag) => path.extend(["tags", tag]),
+        None => path.push("latest"),
+    };
+    drop(path);
+    Ok(url)
+}
+
+fn fetch_release(tag: Option<&str>) -> anyhow::Result<GitHubRelease> {
+    let release = Client::builder()
+        .user_agent(concat!("yagna/", env!("CARGO_PKG_VERSION")))
+        .build()?
+        .get(release_url(tag)?)
+        .send()?
+        .error_for_status()?
+        .json::<GitHubApiRelease>()?;
+    let GitHubApiRelease {
+        tag_name,
+        name,
+        created_at,
+    } = release;
+    let name = name.unwrap_or_else(|| tag_name.to_owned());
+
+    Ok(GitHubRelease {
+        version: tag_name.trim_start_matches('v').to_owned(),
+        name,
+        date: created_at,
+    })
+}
+
 pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
     log::debug!("Checking latest Yagna release");
-    let gh_rel = tokio::task::spawn_blocking(|| -> anyhow::Result<self_update::update::Release> {
-        Ok(UpdateBuilder::new()
-            .repo_owner(REPO_OWNER)
-            .repo_name(REPO_NAME)
-            .bin_name("") // seems required by builder but unused
-            .current_version("") // similar as above
-            .target_version_tag("latest")
-            .build()?
-            .get_latest_release()?)
-    })
-    .await??;
+    let gh_rel = tokio::task::spawn_blocking(|| fetch_release(None)).await??;
 
     log::trace!("Got latest Yagna release {:?}", gh_rel);
 
@@ -39,15 +81,13 @@ pub async fn check_latest_release(db: &DbExecutor) -> anyhow::Result<Release> {
         Ok(r) => r,
     };
 
-    if self_update::version::bump_is_greater(ya_compile_time_utils::semver_str!(), &rel.version)
-        .map_err(|e| {
-            anyhow!(
-                "Github release version `{}` parse error: {}",
-                rel.version,
-                e
-            )
-        })?
-    {
+    if version_is_greater(ya_compile_time_utils::semver_str!(), &rel.version).map_err(|e| {
+        anyhow!(
+            "Github release version `{}` parse error: {}",
+            rel.version,
+            e
+        )
+    })? {
         counter!("version.new", 1);
         log::warn!("{}", ReleaseMessage::Available(&rel));
     };
@@ -68,16 +108,7 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
         return Ok(DBRelease::current()?.into());
     }
 
-    let db_rel = match tokio::task::spawn_blocking(move || {
-        UpdateBuilder::new()
-            .repo_owner(REPO_OWNER)
-            .repo_name(REPO_NAME)
-            .bin_name("") // seems required by builder but unused
-            .current_version("") // similar as above
-            .build()?
-            .get_release_version(running_tag)
-    })
-    .await?
+    let db_rel = match tokio::task::spawn_blocking(move || fetch_release(Some(running_tag))).await?
     {
         Ok(gh_rel) => {
             log::trace!("Got currently running release: {:?}", gh_rel);
@@ -105,4 +136,21 @@ pub(crate) async fn check_running_release(db: &DbExecutor) -> anyhow::Result<Rel
         }
     };
     Ok(rel)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_url;
+
+    #[test]
+    fn builds_latest_and_tagged_release_urls() {
+        assert_eq!(
+            release_url(None).unwrap().as_str(),
+            "https://api.github.com/repos/golemfactory/yagna/releases/latest"
+        );
+        assert_eq!(
+            release_url(Some("release/v0.17.6")).unwrap().as_str(),
+            "https://api.github.com/repos/golemfactory/yagna/releases/tags/release%2Fv0.17.6"
+        );
+    }
 }

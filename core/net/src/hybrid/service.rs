@@ -27,7 +27,7 @@ use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::channels::{ForwardReceiver, ForwardSender, PrefixedStream};
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::model::{Payload, TransportType};
-use ya_relay_client::{Client, ClientBuilder, FailFast, GenericSender};
+use ya_relay_client::{Client, ClientBuilder, FailFast};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
@@ -283,7 +283,7 @@ async fn resolve_relay_addr(config: &Config) -> anyhow::Result<SocketAddr> {
         Some(val) => val.to_string(),
         None => {
             resolve_srv_record_with_retries(
-                "_net_relay._udp",
+                "_net_relay_2._udp",
                 RetryArgs {
                     max_retries: 5,
                     start_retry_timeout: 10,

@@ -15,6 +15,28 @@ use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{AbortTransfers, DeployImage, TransferService, TransferServiceContext};
+#[cfg(feature = "system-test")]
+use ya_transfer::{sandboxed_http::SandboxedHttpClient, HttpTransferProvider};
+
+#[cfg(feature = "system-test")]
+fn local_http_provider() -> HttpTransferProvider {
+    let client = SandboxedHttpClient::builder()
+        .allow_network("127.0.0.0/8".parse().unwrap())
+        .allow_network("::1/128".parse().unwrap())
+        .build();
+    HttpTransferProvider::with_client(client)
+}
+
+fn test_transfer_service(ctx: TransferServiceContext) -> TransferService {
+    let service = TransferService::new(ctx);
+    #[cfg(feature = "system-test")]
+    let service = {
+        let mut service = service;
+        service.register_provider(local_http_provider());
+        service
+    };
+    service
+}
 
 /// When re-deploying image, `TransferService` should uses partially downloaded image.
 /// Hash computations should be correct in both cases.
@@ -55,7 +77,7 @@ async fn test_deploy_image_restart(ctx: &mut DroppableTestContext) -> anyhow::Re
         cache_dir,
         ..TransferServiceContext::default()
     };
-    let addr = TransferService::new(exe_ctx).start();
+    let addr = test_transfer_service(exe_ctx).start();
     let addr_ = addr.clone();
 
     tokio::task::spawn_local(async move {
@@ -118,7 +140,7 @@ async fn test_deploy_progress(ctx: &mut DroppableTestContext) -> anyhow::Result<
         cache_dir,
         ..TransferServiceContext::default()
     };
-    let addr = TransferService::new(exe_ctx).start();
+    let addr = test_transfer_service(exe_ctx).start();
 
     log::info!("[>>] Deployment with hash verification");
     let (tx, mut rx) = mpsc::channel::<CommandProgress>(15);

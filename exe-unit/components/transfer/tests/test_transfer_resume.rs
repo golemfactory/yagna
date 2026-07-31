@@ -16,6 +16,7 @@ use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::error::{Error, HttpError};
+use ya_transfer::sandboxed_http::SandboxedHttpClient;
 use ya_transfer::transfer::{
     AddVolumes, TransferResource, TransferService, TransferServiceContext,
 };
@@ -31,7 +32,20 @@ struct UnreliableHttpProvider {
 impl UnreliableHttpProvider {
     pub fn new(interval: u64) -> Self {
         Self {
-            inner: Default::default(),
+            inner: {
+                #[cfg(feature = "system-test")]
+                {
+                    let client = SandboxedHttpClient::builder()
+                        .allow_network("127.0.0.0/8".parse().unwrap())
+                        .allow_network("::1/128".parse().unwrap())
+                        .build();
+                    HttpTransferProvider::with_client(client)
+                }
+                #[cfg(not(feature = "system-test"))]
+                {
+                    HttpTransferProvider::default()
+                }
+            },
             last_failure: Arc::new(Mutex::new(Instant::now())),
             interval: Duration::from_millis(interval),
             packets_slowdown: Duration::from_millis(10),

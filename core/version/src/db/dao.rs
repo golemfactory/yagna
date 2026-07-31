@@ -8,7 +8,7 @@ use ya_persistence::executor::{
 use crate::db::model::DBRelease;
 use crate::db::schema::version_release::dsl as release;
 use crate::db::schema::version_release::dsl::version_release;
-use self_update::version::bump_is_greater;
+use crate::version_is_greater;
 
 pub struct ReleaseDAO<'c> {
     pool: &'c PoolType,
@@ -111,7 +111,7 @@ fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Op
     match query.first::<DBRelease>(conn).optional()? {
         Some(db_rel) => {
             let running_ver = ya_compile_time_utils::semver_str!();
-            if !bump_is_greater(running_ver, &db_rel.version)
+            if !version_is_greater(running_ver, &db_rel.version)
                 .map_err(|e| {
                     log::error!(
                         "Failed to compare if version {} > {}: {}",

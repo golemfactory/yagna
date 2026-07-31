@@ -14,6 +14,28 @@ use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::transfer::{
     AddVolumes, DeployImage, TransferResource, TransferService, TransferServiceContext,
 };
+#[cfg(feature = "system-test")]
+use ya_transfer::{sandboxed_http::SandboxedHttpClient, HttpTransferProvider};
+
+#[cfg(feature = "system-test")]
+fn local_http_provider() -> HttpTransferProvider {
+    let client = SandboxedHttpClient::builder()
+        .allow_network("127.0.0.0/8".parse().unwrap())
+        .allow_network("::1/128".parse().unwrap())
+        .build();
+    HttpTransferProvider::with_client(client)
+}
+
+fn test_transfer_service(ctx: TransferServiceContext) -> TransferService {
+    let service = TransferService::new(ctx);
+    #[cfg(feature = "system-test")]
+    let service = {
+        let mut service = service;
+        service.register_provider(local_http_provider());
+        service
+    };
+    service
+}
 
 async fn transfer(addr: &Addr<TransferService>, from: &str, to: &str) -> Result<(), Error> {
     transfer_with_args(addr, from, to, TransferArgs::default()).await
@@ -90,7 +112,7 @@ async fn test_transfer_scenarios(ctx: &mut DroppableTestContext) -> anyhow::Resu
         cache_dir,
         ..TransferServiceContext::default()
     };
-    let addr = TransferService::new(exe_ctx).start();
+    let addr = test_transfer_service(exe_ctx).start();
 
     log::debug!("Adding volumes");
     addr.send(AddVolumes::new(volumes)).await??;
@@ -183,6 +205,10 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
         },
     ];
     let hash = generate_random_file_with_hash(temp_dir, "rnd", 4096_usize, 256_usize);
+    let input_volume = work_dir.join("vol-1");
+    std::fs::create_dir_all(&input_volume)?;
+    std::fs::copy(temp_dir.join("rnd"), input_volume.join("rnd-1"))?;
+    std::fs::copy(temp_dir.join("rnd"), input_volume.join("rnd-4"))?;
 
     log::debug!("Starting HTTP servers");
 
@@ -197,7 +223,7 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
         cache_dir,
         ..TransferServiceContext::default()
     };
-    let addr = TransferService::new(exe_ctx).start();
+    let addr = test_transfer_service(exe_ctx).start();
 
     log::debug!("Adding volumes");
     addr.send(AddVolumes::new(volumes)).await??;
@@ -304,6 +330,85 @@ async fn test_transfer_archived(ctx: &mut DroppableTestContext) -> anyhow::Resul
     )
     .await
     .expect("HTTPS transfer failed");
+
+    Ok(())
+}
+
+#[cfg_attr(not(feature = "system-test"), ignore)]
+#[test_context(DroppableTestContext)]
+#[serial_test::serial]
+async fn test_transfer_path_traversal(_ctx: &mut DroppableTestContext) -> anyhow::Result<()> {
+    enable_logs(false);
+
+    let dir = temp_dir!("transfer-path-traversal")?;
+    let temp_dir = dir.path();
+
+    log::debug!("Creating directories in: {}", temp_dir.display());
+    let work_dir = temp_dir.join("work_dir");
+    let cache_dir = temp_dir.join("cache_dir");
+    let sub_dir = temp_dir.join("sub_dir");
+
+    for dir in [work_dir.clone(), cache_dir.clone(), sub_dir.clone()] {
+        std::fs::create_dir_all(dir)?;
+    }
+
+    let volumes = vec![ContainerVolume {
+        name: "vol-1".into(),
+        path: "/input".into(),
+    }];
+
+    log::debug!("Starting TransferService");
+    let exe_ctx = TransferServiceContext {
+        work_dir: work_dir.clone(),
+        cache_dir,
+        ..TransferServiceContext::default()
+    };
+    let addr = test_transfer_service(exe_ctx).start();
+
+    log::debug!("Adding volumes");
+    addr.send(AddVolumes::new(volumes)).await??;
+
+    let volume_dir = work_dir.join("vol-1");
+    let source_path = work_dir.join("vol-1").join("source.txt");
+    let escaped_path = temp_dir.join("escaped.txt");
+    let sanitized_path = volume_dir.join("escaped.txt");
+    let payload = b"path-traversal-proof";
+
+    std::fs::create_dir_all(&volume_dir)?;
+    std::fs::write(&source_path, payload)?;
+
+    println!();
+    log::warn!("[>>] Transfer container -> container with encoded path traversal");
+    let result = transfer(
+        &addr,
+        "container:/input/source.txt",
+        "container:/input/..%2f..%2fescaped.txt",
+    )
+    .await;
+
+    assert!(result.is_err());
+    assert!(!escaped_path.exists());
+    assert!(!sanitized_path.exists());
+    assert!(source_path.is_file());
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let outside_dir = temp_dir.join("outside");
+        std::fs::create_dir_all(&outside_dir)?;
+        symlink(&outside_dir, volume_dir.join("linked-dir"))?;
+
+        let result = transfer(
+            &addr,
+            "container:/input/source.txt",
+            "container:/input/linked-dir/escaped-via-link.txt",
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(!outside_dir.join("escaped-via-link.txt").exists());
+    }
 
     Ok(())
 }

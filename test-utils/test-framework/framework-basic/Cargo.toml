@@ -56,7 +56,6 @@ test-binary = { version = "3.0", git = "https://github.com/golemfactory/test-bin
 test-context = "0.1.4"
 thiserror = "1.0.11"
 tokio = { version = "1", features = ["fs", "io-util"] }
-tokio-tar = "0.3"
 tokio-util = { version = "0.7", features = ["io"] }
 url = "2.1.1"
 walkdir = "2.3.1"
@@ -70,11 +69,5 @@ awc = { version = "3", features = ["openssl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 awc = { version = "3", features = ["rustls-0_21"] }
-
-[dependencies.zip]
-version = "0.5.6"
-features = ["tokio-1"]
-git = "https://github.com/golemfactory/zip-rs.git"
-branch = "feature/tokio-1"
 
 [dev-dependencies]

@@ -9,6 +9,7 @@ mod http;
 mod location;
 mod progress;
 mod retry;
+pub mod sandboxed_http;
 pub mod transfer;
 mod traverse;
 

@@ -12,9 +12,20 @@ use ya_framework_basic::temp_dir;
 use ya_transfer::transfer::{
     AbortTransfers, TransferResource, TransferService, TransferServiceContext,
 };
+#[cfg(feature = "system-test")]
+use ya_transfer::{sandboxed_http::SandboxedHttpClient, HttpTransferProvider};
 
 const CHUNK_SIZE: usize = 4096;
 const CHUNK_COUNT: usize = 1024 * 25;
+
+#[cfg(feature = "system-test")]
+fn local_http_provider() -> HttpTransferProvider {
+    let client = SandboxedHttpClient::builder()
+        .allow_network("127.0.0.0/8".parse().unwrap())
+        .allow_network("::1/128".parse().unwrap())
+        .build();
+    HttpTransferProvider::with_client(client)
+}
 
 async fn interrupted_transfer(
     src: &str,
@@ -23,7 +34,14 @@ async fn interrupted_transfer(
 ) -> anyhow::Result<()> {
     log::debug!("Starting TransferService");
 
-    let addr = TransferService::new(exe_ctx).start();
+    let service = TransferService::new(exe_ctx);
+    #[cfg(feature = "system-test")]
+    let service = {
+        let mut service = service;
+        service.register_provider(local_http_provider());
+        service
+    };
+    let addr = service.start();
     let addr_thread = addr.clone();
 
     tokio::task::spawn_local(async move {

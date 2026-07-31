@@ -6,6 +6,7 @@ use futures::channel::oneshot::Canceled;
 use futures::future::Aborted;
 use std::io;
 use std::io::ErrorKind;
+use std::net::IpAddr;
 
 #[derive(thiserror::Error, Debug)]
 pub enum HttpError {
@@ -21,6 +22,10 @@ pub enum HttpError {
     Payload(PayloadError),
     #[error("timeout: {0}")]
     Timeout(String),
+    #[error("blocked non-public HTTP address: {0}")]
+    NonPublicAddress(IpAddr),
+    #[error("DNS resolution error: {0}")]
+    Dns(String),
     #[error("{0}")]
     Other(String),
 }

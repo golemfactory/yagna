@@ -98,7 +98,7 @@ fn parse_hash(url: &str) -> Result<(Option<TransferHash>, &str), Error> {
 
 #[cfg(test)]
 mod test {
-    use super::TransferUrl;
+    use super::{TransferUrl, UrlExt};
 
     macro_rules! should_fail {
         ($str:expr) => {
@@ -169,6 +169,13 @@ mod test {
 
         should_succeed!("http://location.com");
         should_succeed!("http:location.com");
+    }
+
+    #[test]
+    fn path_decoded_decodes_percent_encoding() {
+        let url = url::Url::parse("container:/input/..%2f..%2fescaped.txt").unwrap();
+
+        assert_eq!(url.path_decoded(), "/input/../../escaped.txt");
     }
 
     #[test]

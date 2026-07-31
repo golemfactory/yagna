@@ -251,13 +251,10 @@ impl TransferService {
         _ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
         let fut = async move {
-            let resp = reqwest::get(src_url.url)
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?;
-            let bytes = resp
-                .bytes()
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?;
+            let mut resp = crate::sandboxed_http::SandboxedHttpClient::from_env()
+                .get(src_url.url)
+                .await?;
+            let bytes = resp.body().limit(usize::MAX).await.map_err(Error::from)?;
             std::fs::write(&path, bytes)?;
             Ok(Some(path))
         };
@@ -380,7 +377,7 @@ impl Handler<TransferResource> for TransferService {
         let src = actor_try!(self.provider(&src_url));
         let dst = actor_try!(self.provider(&dst_url));
 
-        let mut ctx = TransferContext::default();
+        let mut ctx = TransferContext::from(msg.args);
         ctx.state.retry_with(self.transfer_retry.clone());
         ctx.progress
             .register_reporter(msg.progress_config, 1, Some("Bytes".to_string()));
@@ -415,6 +412,7 @@ impl Handler<AddVolumes> for TransferService {
 
     fn handle(&mut self, msg: AddVolumes, _ctx: &mut Self::Context) -> Self::Result {
         log::info!("Adding volumes: {:?}", msg.0);
+        std::fs::create_dir_all(&self.work_dir)?;
         let container_transfer_provider =
             ContainerTransferProvider::new(self.work_dir.clone(), msg.0);
         self.providers

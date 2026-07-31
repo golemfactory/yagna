@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
 use crate::db::schema::version_release;
+use crate::github::GitHubRelease;
 use ya_compile_time_utils::tag2semver;
 
 pub(crate) const DEFAULT_RELEASE_TS: &str = "2015-10-13T15:43:00GMT+2";
@@ -52,9 +53,9 @@ impl From<DBRelease> for ya_core_model::version::Release {
     }
 }
 
-impl TryFrom<self_update::update::Release> for DBRelease {
+impl TryFrom<GitHubRelease> for DBRelease {
     type Error = anyhow::Error;
-    fn try_from(rel: self_update::update::Release) -> Result<Self, Self::Error> {
+    fn try_from(rel: GitHubRelease) -> Result<Self, Self::Error> {
         Ok(Self {
             version: tag2semver(&rel.version).into(),
             name: rel.name.clone(),

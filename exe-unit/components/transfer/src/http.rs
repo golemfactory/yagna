@@ -1,8 +1,5 @@
-use actix_http::encoding::Decoder;
 use actix_http::header;
-use actix_http::Payload;
-use awc::http::Method;
-use awc::SendClientRequest;
+use actix_http::Method;
 use bytes::Bytes;
 use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryStreamExt};
@@ -10,38 +7,26 @@ use std::str::FromStr;
 use tokio::task::spawn_local;
 use url::Url;
 
-use crate::error::{Error, HttpError};
+use crate::error::Error;
+use crate::sandboxed_http::{SandboxedHttpClient, SandboxedHttpResponse};
 use crate::{abortable_sink, abortable_stream, TransferState};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 
-enum HttpAuth<'s> {
-    None,
-    Basic {
-        username: &'s str,
-        password: Option<&'s str>,
-    },
-}
-
-impl<'s> From<&'s Url> for HttpAuth<'s> {
-    fn from(url: &'s Url) -> Self {
-        if url.username().is_empty() {
-            HttpAuth::None
-        } else {
-            HttpAuth::Basic {
-                username: url.username(),
-                password: url.password(),
-            }
-        }
-    }
-}
-
 pub struct HttpTransferProvider {
+    client: SandboxedHttpClient,
     upload_method: Method,
 }
 
 impl Default for HttpTransferProvider {
     fn default() -> Self {
-        HttpTransferProvider {
+        Self::with_client(SandboxedHttpClient::from_env())
+    }
+}
+
+impl HttpTransferProvider {
+    pub fn with_client(client: SandboxedHttpClient) -> Self {
+        Self {
+            client,
             upload_method: Method::PUT,
         }
     }
@@ -58,6 +43,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 
         let url = url.clone();
         let state = ctx.state.clone();
+        let client = self.client.clone();
 
         spawn_local(async move {
             let fut = async move {
@@ -66,7 +52,7 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                     let _ = tx.send(Ok(TransferData::Bytes(Bytes::new()))).await;
                     return Ok(());
                 }
-                DownloadRequest::get(url, &state)
+                DownloadRequest::get(url, &state, client)
                     .send()
                     .await?
                     .into_stream()
@@ -87,24 +73,17 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
     fn destination(&self, url: &Url, _: &TransferContext) -> TransferSink<TransferData, Error> {
         let method = self.upload_method.clone();
         let url = url.clone();
+        let client = self.client.clone();
 
         let (sink, rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
 
         spawn_local(async move {
             let fut = async move {
-                let builder = awc::ClientBuilder::new();
-                match HttpAuth::from(&url) {
-                    HttpAuth::Basic { username, password } => {
-                        builder.basic_auth(username, password)
-                    }
-                    HttpAuth::None => builder,
-                }
-                .finish()
-                .request(method, url.to_string())
-                .send_stream(rx.map(|res| res.map(Bytes::from)))
-                .http_err()?
-                .await
-                .map(|_| ())
+                client
+                    .request(method, url)
+                    .send_stream(rx.map(|res| res.map(Bytes::from)))
+                    .await
+                    .map(|_| ())
             };
 
             abortable_sink(fut, res_tx).await
@@ -120,9 +99,10 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
     ) -> LocalBoxFuture<'a, Result<(), Error>> {
         let url = url.clone();
         let state = ctx.state.clone();
+        let client = self.client.clone();
 
         async move {
-            let response = DownloadRequest::head(url).send().await?;
+            let response = DownloadRequest::head(url, client).send().await?;
             let ranges = response
                 .headers()
                 .get_all(header::ACCEPT_RANGES)
@@ -150,133 +130,42 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
 }
 
 struct DownloadRequest {
+    client: SandboxedHttpClient,
     method: Method,
     url: Url,
     offset: u64,
-    max_redirects: usize,
 }
 
 impl DownloadRequest {
-    pub fn get(url: Url, state: &TransferState) -> Self {
+    pub fn get(url: Url, state: &TransferState, client: SandboxedHttpClient) -> Self {
         Self {
+            client,
             method: Method::GET,
             url,
             offset: state.offset(),
-            max_redirects: 10,
         }
     }
 
-    pub fn head(url: Url) -> Self {
+    pub fn head(url: Url, client: SandboxedHttpClient) -> Self {
         Self {
+            client,
             method: Method::HEAD,
             url,
             offset: 0,
-            max_redirects: 10,
         }
     }
 
-    pub async fn send(
-        self,
-    ) -> Result<awc::ClientResponse<Decoder<Payload>>, awc::error::SendRequestError> {
-        let mut redirects = self.max_redirects;
-        let mut url = self.url.to_string();
-
+    pub async fn send(self) -> Result<SandboxedHttpResponse, Error> {
         let range = match self.offset {
             0 => None,
             off => Some(format!("bytes={}-", off)),
         };
 
-        loop {
-            let mut builder = {
-                let builder = awc::ClientBuilder::new();
-                match HttpAuth::from(&self.url) {
-                    HttpAuth::Basic { username, password } => {
-                        builder.basic_auth(username, password)
-                    }
-                    HttpAuth::None => builder,
-                }
-            };
-
-            if let Some(ref range) = range {
-                builder = builder.add_default_header((header::RANGE, range.clone()));
-            }
-
-            let resp = builder
-                .finish()
-                .request(self.method.clone(), url.clone())
-                .send()
-                .await?;
-
-            let is_redirect = resp.status().is_redirection();
-            if !is_redirect || redirects == 0 {
-                return Ok(resp);
-            }
-
-            match resp
-                .headers()
-                .get(header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-            {
-                Some(location) => {
-                    url = location.to_string();
-                    redirects -= 1;
-                    log::debug!("Following new HTTP download location: {}", url);
-                }
-                None => return Ok(resp),
-            }
+        let mut request = self.client.request(self.method, self.url);
+        if let Some(range) = range {
+            request = request.insert_header((header::RANGE, range))?;
         }
-    }
-}
 
-trait HttpErr<T>
-where
-    Self: Sized,
-{
-    fn http_err(self) -> Result<T, Error>;
-}
-
-impl<S> HttpErr<Self> for awc::ClientResponse<S> {
-    fn http_err(self) -> Result<Self, Error> {
-        let status = self.status();
-        if status.is_informational() || status.is_success() || status.is_redirection() {
-            Ok(self)
-        } else if status.is_client_error() {
-            Err(HttpError::Client(status.to_string()).into())
-        } else {
-            Err(HttpError::Server(status.to_string()).into())
-        }
-    }
-}
-
-impl HttpErr<awc::ConnectResponse> for awc::ConnectResponse {
-    fn http_err(self) -> Result<awc::ConnectResponse, Error> {
-        match self {
-            awc::ConnectResponse::Client(resp) => match resp.http_err() {
-                Ok(resp) => Ok(awc::ConnectResponse::Client(resp)),
-                Err(error) => Err(error),
-            },
-            awc::ConnectResponse::Tunnel(head, framed) => {
-                if head.status.is_success() {
-                    Ok(awc::ConnectResponse::Tunnel(head, framed))
-                } else if head.status.is_client_error() {
-                    Err(HttpError::Client(head.status.to_string()).into())
-                } else {
-                    Err(HttpError::Server(head.status.to_string()).into())
-                }
-            }
-        }
-    }
-}
-
-impl<'a> HttpErr<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>> for SendClientRequest {
-    fn http_err(self) -> Result<LocalBoxFuture<'a, Result<awc::ConnectResponse, Error>>, Error> {
-        match self {
-            SendClientRequest::Fut(fut, _, _) => {
-                Ok(async move { fut.await?.http_err() }.boxed_local())
-            }
-            SendClientRequest::Err(err) => Err(err
-                .map(|e| e.into())
-                .unwrap_or_else(|| HttpError::Other("unspecified".into()).into())),
-        }
+        request.send().await
     }
 }
