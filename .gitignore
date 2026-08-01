@@ -48,3 +48,6 @@ yagnadir
 providerdir
 
 *.bat
+
+# Generated release manifest
+/LATEST

@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "yagna"
 readme = "README.md"
 repository = "https://github.com/golemfactory/yagna"
-version = "0.17.8"
+version = "0.17.9"
 
 [features]
 default = ['erc20-driver', 'gftp/bin']
@@ -280,7 +280,7 @@ url = "2.3.1"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-exe-unit.path = "./exe-unit"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "d4a3775fbeb1ace419efc8e30eca0fef0d973279" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "7517adf898fc3af671e07597ccecd82eb77f79d7" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking", default-features = false }

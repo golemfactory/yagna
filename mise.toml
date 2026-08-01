@@ -1,0 +1,2 @@
+[tools]
+aws-cli = { version = "2", symlink_bins = "true" }

@@ -2,17 +2,18 @@ use std::time::Duration;
 
 use ya_persistence::executor::DbExecutor;
 
+use crate::cdn;
 use crate::db::dao::ReleaseDAO;
-use crate::github;
-use crate::github::check_running_release;
 use crate::service::cli::ReleaseMessage;
 
 pub async fn on_start(db: &DbExecutor) -> anyhow::Result<()> {
-    check_running_release(db).await?;
+    if let Err(error) = cdn::store_running_release(db).await {
+        log::error!("Failed to store running Yagna release: {error}");
+    }
 
-    if let Err(e) = github::check_latest_release(db).await {
-        log::error!("Failed to check for new Yagna release: {}", e);
-    };
+    if let Err(error) = cdn::check_latest_release(db).await {
+        log::error!("Failed to check for new Yagna release: {error}");
+    }
 
     let worker_db = db.clone();
     tokio::task::spawn_local(async move { crate::notifier::worker(worker_db).await });
@@ -27,9 +28,9 @@ pub(crate) async fn worker(db: DbExecutor) {
     let interval = Duration::from_secs(3600 * 24);
     loop {
         tokio::time::sleep(interval).await;
-        if let Err(e) = github::check_latest_release(&db).await {
-            log::error!("Failed to check for new Yagna release: {}", e);
-        };
+        if let Err(error) = cdn::check_latest_release(&db).await {
+            log::error!("Failed to check for new Yagna release: {error}");
+        }
     }
 }
 

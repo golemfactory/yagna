@@ -1,12 +1,9 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
+use crate::cdn::CdnRelease;
 use crate::db::schema::version_release;
-use crate::github::GitHubRelease;
-use ya_compile_time_utils::tag2semver;
-
-pub(crate) const DEFAULT_RELEASE_TS: &str = "2015-10-13T15:43:00GMT+2";
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
 #[primary_key(version)]
@@ -33,7 +30,10 @@ impl DBRelease {
                     .unwrap_or_else(|| "".into())
             ),
             seen: true,
-            release_ts: parse_release_ts(DEFAULT_RELEASE_TS)?,
+            release_ts: parse_release_ts(&format!(
+                "{}T00:00:00Z",
+                ya_compile_time_utils::build_date()
+            ))?,
             insertion_ts: None,
             update_ts: None,
         })
@@ -53,14 +53,14 @@ impl From<DBRelease> for ya_core_model::version::Release {
     }
 }
 
-impl TryFrom<GitHubRelease> for DBRelease {
+impl TryFrom<CdnRelease> for DBRelease {
     type Error = anyhow::Error;
-    fn try_from(rel: GitHubRelease) -> Result<Self, Self::Error> {
+    fn try_from(release: CdnRelease) -> Result<Self, Self::Error> {
         Ok(Self {
-            version: tag2semver(&rel.version).into(),
-            name: rel.name.clone(),
+            version: release.version,
+            name: release.name,
             seen: false,
-            release_ts: parse_release_ts(&rel.date)?,
+            release_ts: release.released_at.naive_utc(),
             insertion_ts: None,
             update_ts: None,
         })
@@ -68,7 +68,7 @@ impl TryFrom<GitHubRelease> for DBRelease {
 }
 
 fn parse_release_ts(ts: &str) -> anyhow::Result<NaiveDateTime> {
-    Ok(NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S%Z")?)
+    Ok(DateTime::parse_from_rfc3339(ts)?.naive_utc())
 }
 
 #[cfg(test)]
@@ -78,6 +78,9 @@ mod test {
     #[test]
     fn test_current() {
         let c = DBRelease::current().unwrap();
-        println!("{:?}", c)
+        assert_eq!(
+            c.release_ts.format("%Y-%m-%d").to_string(),
+            ya_compile_time_utils::build_date()
+        );
     }
 }
