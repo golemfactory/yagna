@@ -34,6 +34,7 @@ async fn server() -> anyhow::Result<()> {
         App::new()
             .wrap(middleware::Logger::default())
             .wrap(auth::Auth::new(cors.cache()))
+            .wrap(middleware::from_fn(auth::sanitize_query_auth))
             .service(web::resource("/").route(web::get().to(response)))
     })
     .bind(rest_api_addr())?

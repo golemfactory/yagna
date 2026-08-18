@@ -27,14 +27,15 @@ use ya_identity::service::Identity as IdentityService;
 use ya_market::MarketService;
 use ya_metrics::{MetricsPusherOpts, MetricsService};
 use ya_net::Net as NetService;
+use ya_ntp::ClockCheckOpts;
 use ya_payment::PaymentService;
 use ya_persistence::executor::{DbExecutor, DbMixedExecutor};
 use ya_persistence::service::Persistence as PersistenceService;
-use ya_sb_proto::{DEFAULT_GSB_URL, GSB_URL_ENV_VAR};
+use ya_sb_proto::GSB_URL_ENV_VAR;
 use ya_service_api::{CliCtx, CommandOutput, ResponseTable};
 use ya_service_api_interfaces::Provider;
 use ya_service_api_web::{
-    middleware::{auth, cors::CorsConfig, Identity},
+    middleware::{auth, cors::CorsConfig, Admin, Identity},
     rest_api_host_port, DEFAULT_YAGNA_API_URL, YAGNA_API_URL_ENV_VAR,
 };
 use ya_sgx::SgxService;
@@ -43,17 +44,21 @@ use ya_utils_process::lock::ProcLock;
 use ya_version::VersionService;
 use ya_vpn::VpnService;
 
-use ya_service_bus::typed as gsb;
+use ya_service_bus::{typed as gsb, RpcEndpoint};
 
+mod admin_token;
 mod autocomplete;
 mod extension;
+mod gsb_endpoint;
 mod model;
 
+use crate::admin_token::StartupAdminToken;
 use crate::extension::Extension;
 use autocomplete::CompleteCommand;
 
 use ya_activity::TrackerRef;
 use ya_payment::alloc_release_task::init_allocation_release_tasks;
+use ya_payment::api::PaymentApiState;
 use ya_service_api_web::middleware::cors::AppKeyCors;
 use ya_utils_consent::{
     consent_check_before_startup, set_consent_path_in_yagna_dir, ConsentService,
@@ -100,11 +105,10 @@ struct CliArgs {
         short,
         long,
         env = GSB_URL_ENV_VAR,
-        default_value = DEFAULT_GSB_URL,
         hide_env_values = true,
         set = clap::ArgSettings::Global,
     )]
-    gsb_url: Url,
+    gsb_url: Option<Url>,
 
     /// Return results in JSON format
     #[structopt(long, set = clap::ArgSettings::Global)]
@@ -123,11 +127,37 @@ impl CliArgs {
         self.data_dir.get_or_create()
     }
 
-    pub async fn run_command(self) -> Result<()> {
-        let ctx: CliCtx = (&self).try_into()?;
+    pub async fn run_command(self, admin_token: Option<StartupAdminToken>) -> Result<()> {
+        let (ctx, gsb_endpoint) = self.resolve_context()?;
+        env::set_var(GSB_URL_ENV_VAR, gsb_endpoint.url().as_str());
 
-        ctx.output(self.command.run_command(&ctx).await?)?;
+        ctx.output(
+            self.command
+                .run_command(&ctx, admin_token, &gsb_endpoint)
+                .await?,
+        )?;
         Ok(())
+    }
+
+    fn resolve_context(&self) -> Result<(CliCtx, gsb_endpoint::ResolvedGsbEndpoint)> {
+        let is_default_data_dir = self.data_dir == DataDir::new(clap::crate_name!());
+        let data_dir = self.get_data_dir()?;
+        let gsb_endpoint =
+            gsb_endpoint::resolve(self.gsb_url.clone(), &data_dir, is_default_data_dir)?;
+
+        let ctx = CliCtx {
+            data_dir,
+            gsb_url: Some(gsb_endpoint.url().clone()),
+            json_output: self.json,
+            quiet: self.quiet,
+            accept_terms: if cfg!(feature = "tos") {
+                self.accept_terms
+            } else {
+                true
+            },
+            ..CliCtx::default()
+        };
+        Ok((ctx, gsb_endpoint))
     }
 }
 
@@ -135,20 +165,7 @@ impl TryFrom<&CliArgs> for CliCtx {
     type Error = anyhow::Error;
 
     fn try_from(args: &CliArgs) -> Result<Self, Self::Error> {
-        let data_dir = args.get_data_dir()?;
-
-        Ok(CliCtx {
-            data_dir,
-            gsb_url: Some(args.gsb_url.clone()),
-            json_output: args.json,
-            quiet: args.quiet,
-            accept_terms: if cfg!(feature = "tos") {
-                args.accept_terms
-            } else {
-                true
-            },
-            ..CliCtx::default()
-        })
+        args.resolve_context().map(|(ctx, _)| ctx)
     }
 }
 
@@ -160,6 +177,7 @@ struct ServiceContext {
     default_db: DbExecutor,
     default_mixed: DbMixedExecutor,
     activity_tracker: ya_activity::TrackerRef,
+    payment_api_state: PaymentApiState,
 }
 
 impl<S: 'static> Provider<S, DbExecutor> for ServiceContext {
@@ -183,6 +201,12 @@ impl<S: 'static> Provider<S, DbMixedExecutor> for ServiceContext {
 impl<S: 'static> Provider<S, ya_activity::TrackerRef> for ServiceContext {
     fn component(&self) -> ya_activity::TrackerRef {
         self.activity_tracker.clone()
+    }
+}
+
+impl Provider<PaymentService, PaymentApiState> for ServiceContext {
+    fn component(&self) -> PaymentApiState {
+        self.payment_api_state.clone()
     }
 }
 
@@ -238,6 +262,7 @@ impl TryFrom<CliCtx> for ServiceContext {
             default_db,
             default_mixed: market_db.1,
             activity_tracker,
+            payment_api_state: PaymentApiState::default(),
         })
     }
 }
@@ -321,14 +346,21 @@ enum CliCommand {
 }
 
 impl CliCommand {
-    pub async fn run_command(self, ctx: &CliCtx) -> Result<CommandOutput> {
+    pub async fn run_command(
+        self,
+        ctx: &CliCtx,
+        admin_token: Option<StartupAdminToken>,
+        gsb_endpoint: &gsb_endpoint::ResolvedGsbEndpoint,
+    ) -> Result<CommandOutput> {
         match self {
             CliCommand::Commands(command) => {
                 start_logger("warn", None, &[], false)?;
                 command.run_command(ctx).await
             }
             CliCommand::Complete(complete) => complete.run_command(ctx),
-            CliCommand::Service(service) => service.run_command(ctx).await,
+            CliCommand::Service(service) => {
+                service.run_command(ctx, admin_token, gsb_endpoint).await
+            }
             CliCommand::Extension(ext) => ext.run_command(ctx).await,
             CliCommand::Other(args) => extension::run::<CliArgs>(ctx, args).await,
         }
@@ -417,6 +449,8 @@ enum ServiceCommand {
     /// Runs server in foreground
     Run(ServiceCommandOpts),
     Shutdown(ShutdownOpts),
+    /// Compares the local clock against public NTP servers
+    CheckClock(ClockCheckOpts),
 }
 
 #[derive(StructOpt, Debug)]
@@ -449,6 +483,9 @@ struct ServiceCommandOpts {
 
     #[structopt(flatten)]
     cors: CorsConfig,
+
+    #[structopt(flatten)]
+    clock_check: ClockCheckOpts,
 }
 
 #[cfg(unix)]
@@ -480,8 +517,15 @@ async fn sd_notify(_unset_environment: bool, _state: &str) -> std::io::Result<()
 }
 
 impl ServiceCommand {
-    async fn run_command(&self, ctx: &CliCtx) -> Result<CommandOutput> {
-        if !ctx.accept_terms {
+    async fn run_command(
+        &self,
+        ctx: &CliCtx,
+        admin_token: Option<StartupAdminToken>,
+        gsb_endpoint: &gsb_endpoint::ResolvedGsbEndpoint,
+    ) -> Result<CommandOutput> {
+        // The clock check reads no state and starts nothing, so it stays usable as a
+        // diagnostic without stopping on the terms prompt.
+        if !ctx.accept_terms && !matches!(self, Self::CheckClock(_)) {
             prompt_terms()?;
         }
 
@@ -493,6 +537,7 @@ impl ServiceCommand {
                 log_dir,
                 debug,
                 cors,
+                clock_check,
             }) => {
                 let is_rust_log_default =
                     env::var("RUST_LOG").map(|s| s.is_empty()).unwrap_or(true);
@@ -561,13 +606,23 @@ impl ServiceCommand {
                 //before running yagna check consents
                 consent_check_before_startup(false)?;
 
+                gsb_endpoint::prepare_private_default_parent(gsb_endpoint)
+                    .context("preparing private service bus endpoint")?;
                 ya_sb_router::bind_gsb_router(ctx.gsb_url.clone())
                     .await
                     .context("binding service bus router")?;
+                gsb_endpoint::finalize_private_default_socket(gsb_endpoint)
+                    .context("securing private service bus endpoint")?;
 
                 let mut context: ServiceContext = ctx.clone().try_into()?;
                 context.set_metrics_ctx(metrics_opts);
                 Services::gsb(&context).await?;
+
+                // Only now, with the net service connected to the relay, is outbound
+                // UDP known to work; before this a blocked check says nothing about the
+                // clock. Bounded by the per-server timeout, as all servers are asked at
+                // once, and never fatal - it only reports.
+                ya_ntp::check_clock_on_startup(clock_check).await;
 
                 ya_compile_time_utils::report_version_to_metrics();
 
@@ -575,7 +630,21 @@ impl ServiceCommand {
 
                 let api_host_port = rest_api_host_port(api_url.clone());
                 let rest_address = api_host_port.clone();
-                let cors = AppKeyCors::new(cors).await?;
+                let admin = match admin_token {
+                    Some(token) => {
+                        let default_identity = gsb::service(ya_core_model::identity::BUS_ID)
+                            .send(ya_core_model::identity::Get::ByDefault)
+                            .await
+                            .context("querying the default identity for administrator bootstrap")??
+                            .context("Default identity not found for administrator bootstrap")?;
+                        Some(auth::AdminCredential::new(
+                            token.into_inner(),
+                            default_identity.node_id,
+                        )?)
+                    }
+                    None => None,
+                };
+                let cors = AppKeyCors::new_with_admin(cors, admin).await?;
 
                 let number_of_workers = env::var("YAGNA_HTTP_WORKERS")
                     .ok()
@@ -588,6 +657,7 @@ impl ServiceCommand {
                         .wrap(middleware::Logger::default())
                         .wrap(auth::Auth::new(cors.cache()))
                         .wrap(cors.cors())
+                        .wrap(middleware::from_fn(auth::sanitize_query_auth))
                         .route("/dashboard", web::get().to(redirect_to_dashboard))
                         .route("/dashboard/{_:.*}", web::get().to(dashboard_serve))
                         .route("/me", web::get().to(me))
@@ -667,8 +737,72 @@ impl ServiceCommand {
                     .await?;
                 CommandOutput::object(result)
             }
+            Self::CheckClock(opts) => {
+                start_logger("warn", None, &[], false)?;
+                clock_check_output(opts, ctx.json_output).await
+            }
         }
     }
+}
+
+/// Runs the NTP check on demand and renders it for the CLI.
+async fn clock_check_output(opts: &ClockCheckOpts, json_output: bool) -> Result<CommandOutput> {
+    let check = ya_ntp::check_clock(opts).await;
+
+    if json_output {
+        return CommandOutput::object(serde_json::json!({
+            "offsetMs": check.offset_micros().map(|micros| micros as f64 / 1000.),
+            "localTime": ya_ntp::local_time_description(),
+            "maxOffsetMs": opts.max_offset().as_millis(),
+            "verdict": format!("{:?}", check.verdict(opts)).to_lowercase(),
+            "withinTolerance": !check.exceeds(opts.max_offset()),
+            "servers": check
+                .samples
+                .iter()
+                .map(|sample| serde_json::json!({
+                    "server": sample.server,
+                    "address": sample.addr.to_string(),
+                    "stratum": sample.stratum,
+                    "offsetMs": sample.offset_micros() as f64 / 1000.,
+                    "roundTripMs": sample.delay.as_micros() as f64 / 1000.,
+                }))
+                .collect::<Vec<_>>(),
+            "failures": check
+                .failures
+                .iter()
+                .map(|(server, error)| serde_json::json!({ "server": server, "error": error }))
+                .collect::<Vec<_>>(),
+        }));
+    }
+
+    println!("Local time: {}", ya_ntp::local_time_description());
+    println!("{check}");
+    Ok(ResponseTable {
+        columns: vec![
+            "server".into(),
+            "address".into(),
+            "stratum".into(),
+            "offset".into(),
+            "round trip".into(),
+        ],
+        values: check
+            .samples
+            .iter()
+            .map(|sample| {
+                serde_json::json! {[
+                    sample.server,
+                    sample.addr.to_string(),
+                    sample.stratum,
+                    ya_ntp::format_offset(sample.offset_micros()),
+                    format!("{:.1}ms", sample.delay.as_micros() as f64 / 1000.),
+                ]}
+            })
+            .chain(check.failures.iter().map(|(server, error)| {
+                serde_json::json! {[server, "", "", "failed", error]}
+            }))
+            .collect(),
+    }
+    .into())
 }
 
 fn prompt_terms() -> Result<()> {
@@ -707,25 +841,28 @@ async fn me(id: Identity) -> impl Responder {
 
 #[actix_web::post("/_gsb/{service:.*}")]
 async fn forward_gsb(
-    id: Identity,
+    admin: Admin,
     service: web::Path<String>,
     data: web::Json<serde_json::Value>,
 ) -> impl Responder {
     use ya_service_bus::untyped as bus;
-    let service = service.into_inner();
+    let principal = admin.into_principal();
+    let service = format!("/{}", service.into_inner().trim_start_matches('/'));
+    let source = format!("/local/{}", principal.identity);
 
-    log::debug!(target: "gsb-bridge", "called: {}", service);
+    log::debug!(
+        target: "gsb-bridge",
+        "subject={} called: {}",
+        principal.subject,
+        service
+    );
 
     let inner_data = data.into_inner();
     let data = ya_service_bus::serialization::to_vec(&inner_data)
         .map_err(actix_web::error::ErrorBadRequest)?;
-    let r = bus::send(
-        &format!("/{}", service),
-        &format!("/local/{}", id.identity),
-        &data,
-    )
-    .await
-    .map_err(actix_web::error::ErrorInternalServerError)?;
+    let r = bus::send(&service, &source, &data)
+        .await
+        .map_err(actix_web::error::ErrorInternalServerError)?;
 
     let json_resp: serde_json::Value = ya_service_bus::serialization::from_slice(&r)
         .map_err(actix_web::error::ErrorInternalServerError)?;
@@ -774,7 +911,10 @@ pub async fn dashboard_serve(path: web::Path<String>) -> impl Responder {
 
 #[actix_rt::main]
 async fn main() -> Result<()> {
+    let admin_token = admin_token::take_from_environment()?;
+    let had_inherited_admin_token = admin_token.is_some();
     dotenv::dotenv().ok();
+    admin_token::clear_after_dotenv(had_inherited_admin_token)?;
     init_allocation_release_tasks();
 
     #[cfg(feature = "static-openssl")]
@@ -783,10 +923,8 @@ async fn main() -> Result<()> {
     }
     let args = CliArgs::from_args();
 
-    std::env::set_var(GSB_URL_ENV_VAR, args.gsb_url.as_str()); // FIXME
-
     set_consent_path_in_yagna_dir()?;
-    match args.run_command().await {
+    match args.run_command(admin_token).await {
         Ok(()) => Ok(()),
         Err(err) => {
             //this way runtime/command error is at least possibly visible in yagna logs

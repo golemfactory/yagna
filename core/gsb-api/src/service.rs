@@ -18,8 +18,6 @@ use std::{
 use ya_service_bus::RpcRawCall;
 
 pub(crate) struct Service {
-    /// Service prefix
-    addr_prefix: String,
     /// Service addresses with same prefix but different RpcMessage types.
     addresses: HashSet<String>,
     msg_handler: Box<dyn MessagesHandler>,
@@ -56,7 +54,6 @@ impl From<Bind> for Service {
             addresses.insert(format!("{addr_prefix}/{component}"));
         }
         Service {
-            addr_prefix,
             addresses,
             msg_handler,
         }
@@ -65,9 +62,17 @@ impl From<Bind> for Service {
 
 impl Actor for Service {
     type Context = Context<Self>;
+}
 
-    fn started(&mut self, ctx: &mut Self::Context) {
-        _ = ya_service_bus::actix_rpc::bind_raw(&self.addr_prefix, ctx.address().recipient());
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub(crate) struct StopService;
+
+impl Handler<StopService> for Service {
+    type Result = ();
+
+    fn handle(&mut self, _msg: StopService, ctx: &mut Self::Context) {
+        ctx.stop();
     }
 }
 

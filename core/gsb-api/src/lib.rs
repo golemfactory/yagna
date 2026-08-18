@@ -10,6 +10,7 @@ use actix::{Actor, Addr, Handler, StreamHandler};
 use actix_http::ws::CloseCode;
 use actix_http::ws::{CloseReason, ProtocolError};
 use actix_web_actors::ws::{self, WebsocketContext};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64, Engine as _};
 
 use flexbuffers::{BuilderOptions, Reader};
 use futures::FutureExt;
@@ -18,6 +19,28 @@ use service::Service;
 use services::Services;
 
 pub const GSB_API_PATH: &str = "gsb-api/v1";
+const MANAGER_GSB_NAMESPACE: &str = "/local/gsb-api";
+
+/// Returns the GSB namespace reserved for one non-secret application-key subject.
+///
+/// Encoding the subject into a single path segment prevents it from escaping into
+/// another manager's namespace.
+pub fn manager_service_namespace(subject: &str) -> String {
+    format!("{MANAGER_GSB_NAMESPACE}/{}", BASE64.encode(subject))
+}
+
+pub(crate) fn is_manager_service_address(subject: &str, address: &str) -> bool {
+    if subject.is_empty() {
+        return false;
+    }
+
+    let namespace = manager_service_namespace(subject);
+    address
+        .strip_prefix(&namespace)
+        .and_then(|suffix| suffix.strip_prefix('/'))
+        .map(|descendant| !descendant.is_empty())
+        .unwrap_or(false)
+}
 
 pub struct GsbApiService;
 
@@ -221,18 +244,50 @@ impl Handler<WsRequest> for WsMessagesHandler {
             request.id,
             request.component
         );
-        let mut request_builder = flexbuffers::Builder::new(BuilderOptions::empty());
-        let mut request_map_builder = request_builder.start_map();
-        request_map_builder.push("id", &*request.id);
-        request_map_builder.push("component", &*request.component);
-        let payload_map_builder = request_map_builder.start_map("payload");
-
-        let payload = Reader::get_root(&*request.payload).unwrap(); //TODO handle error
-        let payload_map = payload.as_map(); //TODO check type before as_map
-        flexbuffer_util::clone_map(payload_map_builder, &payload_map).unwrap(); //TODO handle error
-        request_map_builder.end_map();
-        ctx.binary(request_builder.view().to_vec());
+        match encode_ws_request(&request) {
+            Ok(message) => ctx.binary(message),
+            Err(error) => self.service.do_send(WsResponse {
+                id: request.id,
+                response: WsResponseMsg::Error(GsbError::GsbBadRequest(error.to_string())),
+            }),
+        }
         Ok(())
+    }
+}
+
+fn encode_ws_request(request: &WsRequest) -> anyhow::Result<Vec<u8>> {
+    let payload = Reader::get_root(&*request.payload)
+        .map_err(|error| anyhow::anyhow!("Failed to read request payload: {error}"))?;
+    let payload_map = flexbuffer_util::as_map(&payload, true)
+        .map_err(|error| anyhow::anyhow!("Invalid request payload: {error}"))?;
+
+    let mut request_builder = flexbuffers::Builder::new(BuilderOptions::empty());
+    let mut request_map_builder = request_builder.start_map();
+    request_map_builder.push("id", &*request.id);
+    request_map_builder.push("component", &*request.component);
+    let payload_map_builder = request_map_builder.start_map("payload");
+    flexbuffer_util::clone_map(payload_map_builder, &payload_map)
+        .map_err(|error| anyhow::anyhow!("Failed to copy request payload: {error}"))?;
+    request_map_builder.end_map();
+
+    Ok(request_builder.view().to_vec())
+}
+
+#[cfg(test)]
+mod ws_request_tests {
+    use super::*;
+
+    #[test]
+    fn malformed_payload_returns_error() {
+        let request = WsRequest {
+            id: "request-id".to_string(),
+            component: "component".to_string(),
+            payload: Vec::new(),
+        };
+
+        let error = encode_ws_request(&request).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to read request payload"));
     }
 }
 

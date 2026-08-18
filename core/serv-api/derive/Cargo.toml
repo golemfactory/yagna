@@ -25,3 +25,6 @@ actix-web.workspace = true
 anyhow = "1.0"
 log = "0.4"
 structopt = "0.3"
+
+[lints]
+workspace = true

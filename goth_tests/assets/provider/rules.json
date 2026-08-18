@@ -3,6 +3,10 @@
     "enabled": true,
     "everyone": "none",
     "audited-payload": {
+      "dbc5848d0ee9fd52bf659945dad95ff9251f5e5f79dd1b6c0fd31b31b3d832af32af21d42c00556d8cabc8c4c4865134a1c2e6d6a67f6a6427a616df1f4ceede": {
+        "mode": "all",
+        "description": "Yagna Goth X509 outbound test CA"
+      },
       "55e451bd1a2f43570a25052b863af1d527fe6fd4bfd1482fdb241596432477f20eb2b2f3801fb5c6cd785f1a03c43ccf71fd8cdf0a974d1296be2326b0824673": {
         "mode": "all",
         "description": "Foo intermediate allowed all"

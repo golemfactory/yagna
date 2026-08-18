@@ -172,17 +172,6 @@ pub fn resolve_invoices_agreement_part(
                 });
             }
         }
-        log::debug!(
-            "increase_amount_scheduled agreement_id={} by {}",
-            agreement_id,
-            amount_to_pay
-        );
-        super::agreement::increase_amount_scheduled(
-            &agreement_id,
-            &owner_id,
-            &amount_to_pay,
-            conn,
-        )?;
     }
     Ok((payments, total_amount))
 }
@@ -252,9 +241,12 @@ pub fn resolve_invoices_activity_part(
                     a.total_amount_accepted.0.clone());
                 continue;
             }
+            if amount_to_pay == zero {
+                // Nothing left to schedule for this activity. Same rule as the invoice part,
+                // where amounts equal to zero are skipped as well.
+                continue;
+            }
             total_amount += &amount_to_pay;
-            super::activity::increase_amount_scheduled(&a.id, &owner_id, &amount_to_pay, conn)?;
-
             let obligation = BatchPaymentObligation::DebitNote {
                 debit_note_id: a.debit_note_id,
                 amount: amount_to_pay.clone(),
@@ -413,6 +405,9 @@ fn use_expenditures_on_payments(
                 };
                 let mut amount_covered = BigDecimal::from(0u32);
                 for expenditure in matching_expenditures {
+                    if amount_covered >= *amount_to_be_covered {
+                        break;
+                    }
                     let max_amount_to_get = expenditure.accepted_amount.0.clone()
                         - expenditure.scheduled_amount.0.clone();
 
@@ -512,6 +507,50 @@ fn use_expenditures_on_payments(
     Ok(payments_allocations)
 }
 
+fn schedule_covered_payments(
+    conn: &ConnType,
+    owner_id: &NodeId,
+    payments: &HashMap<AllocationPayeeKey, BatchPaymentAllocation>,
+) -> DbResult<BigDecimal> {
+    let mut total_amount = BigDecimal::from(0u32);
+
+    for payment in payments.values() {
+        total_amount += &payment.amount;
+        for obligations in payment.peer_obligation.values() {
+            for obligation in obligations {
+                match obligation {
+                    BatchPaymentObligationAllocation::Invoice {
+                        amount,
+                        agreement_id,
+                        ..
+                    } => {
+                        super::agreement::increase_amount_scheduled(
+                            agreement_id,
+                            owner_id,
+                            amount,
+                            conn,
+                        )?;
+                    }
+                    BatchPaymentObligationAllocation::DebitNote {
+                        amount,
+                        activity_id,
+                        ..
+                    } => {
+                        super::activity::increase_amount_scheduled(
+                            activity_id,
+                            owner_id,
+                            amount,
+                            conn,
+                        )?;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(total_amount)
+}
+
 pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
     let conn = args.conn;
     let owner_id = args.owner_id;
@@ -535,7 +574,8 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
         return Ok(None);
     }
 
-    //get allocation expenditures
+    // Get allocation expenditures. The resolver window applies to the obligation queries above,
+    // not to allocations: a still-valid allocation may legitimately be older than `since`.
 
     use crate::schema::pay_allocation::dsl as pa_dsl;
     use crate::schema::pay_allocation_expenditure::dsl as pae_dsl;
@@ -546,7 +586,6 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 .eq(pa_dsl::id)
                 .and(pae_dsl::owner_id.eq(pa_dsl::owner_id))
                 .and(pa_dsl::payment_platform.eq(args.platform))
-                .and(pa_dsl::updated_ts.gt(args.since.naive_utc()))
                 .and(pa_dsl::owner_id.eq(args.owner_id))),
         )
         .filter(pae_dsl::accepted_amount.ne(pae_dsl::scheduled_amount))
@@ -562,6 +601,11 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             log::error!("Error using expenditures on payments: {:?}", e);
             e
         })?;
+
+    let total_amount = schedule_covered_payments(conn, &owner_id, &payments_allocations)?;
+    if total_amount == zero {
+        return Ok(None);
+    }
 
     // upload the updated expenditures to database (if changed)
     for (expenditure_new, expenditure_old) in zip(expenditures.iter(), expenditures_orig.iter()) {
@@ -989,5 +1033,481 @@ impl BatchDao<'_> {
             Ok(true)
         })
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+    use ya_persistence::executor::DbExecutor;
+
+    const AGREEMENT_ID: &str = "agreement-1";
+    const ALLOCATION_ID: &str = "allocation-1";
+    const INVOICE_ID: &str = "invoice-1";
+    const ACTIVITY_ID: &str = "activity-1";
+    const PLATFORM: &str = "erc20-test-tglm";
+    const REQUESTOR: &str = "0x1000000000000000000000000000000000000000";
+    const PROVIDER: &str = "0x2000000000000000000000000000000000000000";
+
+    fn requestor_id() -> NodeId {
+        REQUESTOR.parse().unwrap()
+    }
+
+    async fn test_db(name: &str) -> DbExecutor {
+        let db = DbExecutor::in_memory(&format!("{name}-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(crate::migrations::run_with_output)
+            .unwrap();
+        db
+    }
+
+    async fn insert_agreement(db: &DbExecutor, accepted: &'static str, updated_ts: NaiveDateTime) {
+        do_with_transaction(&db.pool, "insert_test_agreement", move |conn| {
+            use crate::schema::pay_agreement::dsl as agreement;
+
+            diesel::insert_into(agreement::pay_agreement)
+                .values((
+                    agreement::id.eq(AGREEMENT_ID),
+                    agreement::owner_id.eq(requestor_id()),
+                    agreement::role.eq("R"),
+                    agreement::peer_id.eq(PROVIDER),
+                    agreement::payee_addr.eq(PROVIDER),
+                    agreement::payer_addr.eq(REQUESTOR),
+                    agreement::payment_platform.eq(PLATFORM),
+                    agreement::total_amount_due.eq(accepted),
+                    agreement::total_amount_accepted.eq(accepted),
+                    agreement::total_amount_scheduled.eq("0"),
+                    agreement::total_amount_paid.eq("0"),
+                    agreement::app_session_id.eq(None::<String>),
+                    agreement::created_ts.eq(Some(updated_ts)),
+                    agreement::updated_ts.eq(Some(updated_ts)),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn insert_allocation_and_expenditure(
+        db: &DbExecutor,
+        updated_ts: NaiveDateTime,
+        activity_id: Option<&'static str>,
+        accepted: &'static str,
+    ) {
+        do_with_transaction(&db.pool, "insert_test_allocation", move |conn| {
+            use crate::schema::pay_allocation::dsl as allocation;
+            use crate::schema::pay_allocation_expenditure::dsl as expenditure;
+
+            diesel::insert_into(allocation::pay_allocation)
+                .values((
+                    allocation::id.eq(ALLOCATION_ID),
+                    allocation::owner_id.eq(requestor_id()),
+                    allocation::payment_platform.eq(PLATFORM),
+                    allocation::address.eq(REQUESTOR),
+                    allocation::avail_amount.eq("0"),
+                    allocation::spent_amount.eq(accepted),
+                    allocation::created_ts.eq(updated_ts),
+                    allocation::updated_ts.eq(updated_ts),
+                    allocation::timeout.eq(updated_ts + Duration::days(365)),
+                    allocation::released.eq(false),
+                    allocation::deposit.eq(None::<String>),
+                    allocation::deposit_status.eq(None::<String>),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(expenditure::pay_allocation_expenditure)
+                .values((
+                    expenditure::owner_id.eq(requestor_id()),
+                    expenditure::allocation_id.eq(ALLOCATION_ID),
+                    expenditure::agreement_id.eq(AGREEMENT_ID),
+                    expenditure::activity_id.eq(activity_id),
+                    expenditure::accepted_amount.eq(accepted),
+                    expenditure::scheduled_amount.eq("0"),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn insert_invoice(db: &DbExecutor, timestamp: NaiveDateTime) {
+        do_with_transaction(&db.pool, "insert_test_invoice", move |conn| {
+            use crate::schema::pay_invoice::dsl as invoice;
+
+            diesel::insert_into(invoice::pay_invoice)
+                .values((
+                    invoice::id.eq(INVOICE_ID),
+                    invoice::owner_id.eq(requestor_id()),
+                    invoice::role.eq("R"),
+                    invoice::agreement_id.eq(AGREEMENT_ID),
+                    invoice::status.eq("ACCEPTED"),
+                    invoice::timestamp.eq(timestamp),
+                    invoice::amount.eq("10"),
+                    invoice::payment_due_date.eq(timestamp + Duration::days(1)),
+                    invoice::send_accept.eq(false),
+                    invoice::send_reject.eq(false),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    fn received_invoice(
+        amount: BigDecimal,
+        timestamp: DateTime<Utc>,
+    ) -> ya_client_model::payment::Invoice {
+        ya_client_model::payment::Invoice {
+            invoice_id: INVOICE_ID.to_string(),
+            issuer_id: PROVIDER.parse().unwrap(),
+            recipient_id: requestor_id(),
+            payee_addr: PROVIDER.to_string(),
+            payer_addr: REQUESTOR.to_string(),
+            payment_platform: PLATFORM.to_string(),
+            timestamp,
+            agreement_id: AGREEMENT_ID.to_string(),
+            activity_ids: vec![],
+            amount,
+            payment_due_date: timestamp + Duration::days(1),
+            status: ya_client_model::payment::DocumentStatus::Received,
+        }
+    }
+
+    async fn invoice_status(db: &DbExecutor) -> String {
+        do_with_transaction(&db.pool, "read_test_invoice_status", move |conn| {
+            use crate::schema::pay_invoice::dsl as invoice;
+
+            Ok::<_, DbError>(
+                invoice::pay_invoice
+                    .find((INVOICE_ID, requestor_id()))
+                    .select(invoice::status)
+                    .first::<String>(conn)?,
+            )
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn scheduled_amounts(db: &DbExecutor) -> (BigDecimalField, BigDecimalField) {
+        do_with_transaction(&db.pool, "read_test_scheduled_amounts", move |conn| {
+            use crate::schema::pay_agreement::dsl as agreement;
+            use crate::schema::pay_allocation_expenditure::dsl as expenditure;
+
+            let agreement_amount = agreement::pay_agreement
+                .find((AGREEMENT_ID, requestor_id()))
+                .select(agreement::total_amount_scheduled)
+                .first(conn)?;
+            let expenditure_amount = expenditure::pay_allocation_expenditure
+                .filter(expenditure::owner_id.eq(requestor_id()))
+                .filter(expenditure::allocation_id.eq(ALLOCATION_ID))
+                .filter(expenditure::agreement_id.eq(AGREEMENT_ID))
+                .select(expenditure::scheduled_amount)
+                .first(conn)?;
+            Ok::<_, DbError>((agreement_amount, expenditure_amount))
+        })
+        .await
+        .unwrap()
+    }
+
+    #[actix_rt::test]
+    async fn fresh_invoice_uses_allocation_older_than_resolver_window() {
+        let db = test_db("batch-old-allocation").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "10", now.naive_utc()).await;
+        insert_allocation_and_expenditure(&db, (now - Duration::days(31)).naive_utc(), None, "10")
+            .await;
+        insert_invoice(&db, now.naive_utc()).await;
+
+        let dao = db.as_dao::<BatchDao>();
+        let order_id = dao
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap()
+            .expect("fresh invoice should produce a batch order");
+        let order = dao
+            .get_batch_order(order_id.clone(), requestor_id())
+            .await
+            .unwrap()
+            .unwrap();
+        let items = dao
+            .get_batch_order_items(order_id, requestor_id())
+            .await
+            .unwrap();
+
+        assert_eq!(order.total_amount.0, BigDecimal::from(10));
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].allocation_id, ALLOCATION_ID);
+        assert_eq!(items[0].amount.0, BigDecimal::from(10));
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(10));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(10));
+    }
+
+    #[actix_rt::test]
+    async fn invoice_older_than_resolver_window_is_not_scheduled() {
+        let db = test_db("batch-old-invoice").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "10", now.naive_utc()).await;
+        insert_allocation_and_expenditure(&db, now.naive_utc(), None, "10").await;
+        insert_invoice(&db, (now - Duration::days(31)).naive_utc()).await;
+
+        let order_id = db
+            .as_dao::<BatchDao>()
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap();
+
+        assert!(order_id.is_none());
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+    }
+
+    #[actix_rt::test]
+    async fn activity_with_nothing_left_to_schedule_is_skipped() {
+        let db = test_db("batch-zero-delta-activity").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "10", now.naive_utc()).await;
+
+        // `0.0` and `0` are numerically equal but differ as text, so this row passes the
+        // string comparisons in the activity query and yields a zero amount to pay.
+        do_with_transaction(&db.pool, "insert_test_activity", move |conn| {
+            use crate::schema::pay_activity::dsl as activity;
+
+            diesel::insert_into(activity::pay_activity)
+                .values((
+                    activity::id.eq(ACTIVITY_ID),
+                    activity::owner_id.eq(requestor_id()),
+                    activity::role.eq("R"),
+                    activity::agreement_id.eq(AGREEMENT_ID),
+                    activity::total_amount_due.eq("0.0"),
+                    activity::total_amount_accepted.eq("0.0"),
+                    activity::total_amount_scheduled.eq("0"),
+                    activity::total_amount_paid.eq("0"),
+                    activity::created_ts.eq(Some(now.naive_utc())),
+                    activity::updated_ts.eq(Some(now.naive_utc())),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+        insert_allocation_and_expenditure(&db, now.naive_utc(), Some(ACTIVITY_ID), "10").await;
+
+        let order_id = db
+            .as_dao::<BatchDao>()
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap();
+
+        assert!(order_id.is_none());
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+    }
+
+    #[actix_rt::test]
+    async fn activity_on_agreement_older_than_resolver_window_is_not_scheduled() {
+        let db = test_db("batch-old-activity").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "10", (now - Duration::days(31)).naive_utc()).await;
+
+        do_with_transaction(&db.pool, "insert_test_activity", move |conn| {
+            use crate::schema::pay_activity::dsl as activity;
+
+            diesel::insert_into(activity::pay_activity)
+                .values((
+                    activity::id.eq(ACTIVITY_ID),
+                    activity::owner_id.eq(requestor_id()),
+                    activity::role.eq("R"),
+                    activity::agreement_id.eq(AGREEMENT_ID),
+                    activity::total_amount_due.eq("10"),
+                    activity::total_amount_accepted.eq("10"),
+                    activity::total_amount_scheduled.eq("0"),
+                    activity::total_amount_paid.eq("0"),
+                    activity::created_ts.eq(Some(now.naive_utc())),
+                    activity::updated_ts.eq(Some(now.naive_utc())),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+        insert_allocation_and_expenditure(&db, now.naive_utc(), Some(ACTIVITY_ID), "10").await;
+
+        let order_id = db
+            .as_dao::<BatchDao>()
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap();
+
+        assert!(order_id.is_none());
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+    }
+
+    #[actix_rt::test]
+    async fn only_the_amount_covered_by_an_expenditure_is_scheduled() {
+        let db = test_db("batch-partial-coverage").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "10", now.naive_utc()).await;
+        insert_allocation_and_expenditure(&db, now.naive_utc(), None, "4").await;
+        insert_invoice(&db, now.naive_utc()).await;
+
+        let dao = db.as_dao::<BatchDao>();
+        let order_id = dao
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap()
+            .expect("covered invoice amount should produce a batch order");
+        let order = dao
+            .get_batch_order(order_id.clone(), requestor_id())
+            .await
+            .unwrap()
+            .unwrap();
+        let items = dao
+            .get_batch_order_items(order_id, requestor_id())
+            .await
+            .unwrap();
+
+        assert_eq!(order.total_amount.0, BigDecimal::from(4));
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].amount.0, BigDecimal::from(4));
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(4));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(4));
+    }
+
+    #[actix_rt::test]
+    async fn zero_amount_invoice_is_accepted_and_settled_without_a_batch_order() {
+        let db = test_db("batch-zero-invoice").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "0", now.naive_utc()).await;
+        insert_allocation_and_expenditure(&db, now.naive_utc(), None, "0").await;
+
+        let invoice_dao = db.as_dao::<crate::dao::InvoiceDao>();
+        invoice_dao
+            .insert_received(received_invoice(BigDecimal::from(0), now))
+            .await
+            .expect("zero-amount invoice must be accepted on receipt");
+        invoice_dao
+            .accept(INVOICE_ID.to_string(), requestor_id())
+            .await
+            .expect("zero-amount invoice must be acceptable");
+
+        assert_eq!(invoice_status(&db).await, "SETTLED");
+
+        let order_id = db
+            .as_dao::<BatchDao>()
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap();
+        assert!(order_id.is_none(), "nothing to pay for a zero invoice");
+    }
+
+    #[actix_rt::test]
+    async fn negative_amount_invoice_is_rejected_on_receipt() {
+        let db = test_db("batch-negative-invoice").await;
+        let now = Utc::now();
+        insert_agreement(&db, "0", now.naive_utc()).await;
+
+        let err = db
+            .as_dao::<crate::dao::InvoiceDao>()
+            .insert_received(received_invoice(BigDecimal::from(-5), now))
+            .await
+            .expect_err("negative invoice must be rejected");
+        assert!(
+            matches!(&err, DbError::Query(msg) if msg.contains("cannot be negative")),
+            "expected a bad-request-mapped rejection, got: {}",
+            err
+        );
+    }
+
+    #[actix_rt::test]
+    async fn negative_amount_debit_note_is_rejected_on_receipt() {
+        let db = test_db("batch-negative-debit-note").await;
+        let now = Utc::now();
+        insert_agreement(&db, "0", now.naive_utc()).await;
+
+        let debit_note = ya_client_model::payment::DebitNote {
+            debit_note_id: "debit-note-1".to_string(),
+            issuer_id: PROVIDER.parse().unwrap(),
+            recipient_id: requestor_id(),
+            payee_addr: PROVIDER.to_string(),
+            payer_addr: REQUESTOR.to_string(),
+            payment_platform: PLATFORM.to_string(),
+            previous_debit_note_id: None,
+            timestamp: now,
+            agreement_id: AGREEMENT_ID.to_string(),
+            activity_id: ACTIVITY_ID.to_string(),
+            total_amount_due: BigDecimal::from(-5),
+            usage_counter_vector: None,
+            payment_due_date: Some(now + Duration::days(1)),
+            status: ya_client_model::payment::DocumentStatus::Received,
+        };
+
+        let err = db
+            .as_dao::<crate::dao::DebitNoteDao>()
+            .insert_received(debit_note)
+            .await
+            .expect_err("negative debit note must be rejected");
+        assert!(
+            matches!(&err, DbError::Query(msg) if msg.contains("cannot be negative")),
+            "expected a bad-request-mapped rejection, got: {}",
+            err
+        );
+    }
+
+    #[actix_rt::test]
+    async fn negative_amount_invoice_cannot_be_accepted() {
+        let db = test_db("batch-negative-invoice-accept").await;
+        let now = Utc::now();
+        let since = now - Duration::days(30);
+        insert_agreement(&db, "0", now.naive_utc()).await;
+        insert_allocation_and_expenditure(&db, now.naive_utc(), None, "0").await;
+
+        // Force a negative invoice into the DB, bypassing the receipt-time guard,
+        // to check what the resolver would do with it.
+        do_with_transaction(&db.pool, "insert_negative_invoice", move |conn| {
+            use crate::schema::pay_invoice::dsl as invoice;
+
+            diesel::insert_into(invoice::pay_invoice)
+                .values((
+                    invoice::id.eq(INVOICE_ID),
+                    invoice::owner_id.eq(requestor_id()),
+                    invoice::role.eq("R"),
+                    invoice::agreement_id.eq(AGREEMENT_ID),
+                    invoice::status.eq("ACCEPTED"),
+                    invoice::timestamp.eq(now.naive_utc()),
+                    invoice::amount.eq("-5"),
+                    invoice::payment_due_date.eq(now.naive_utc() + Duration::days(1)),
+                    invoice::send_accept.eq(false),
+                    invoice::send_reject.eq(false),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+
+        let order_id = db
+            .as_dao::<BatchDao>()
+            .resolve(requestor_id(), REQUESTOR.into(), PLATFORM.into(), since)
+            .await
+            .unwrap();
+        assert!(order_id.is_none(), "negative invoice must not be paid");
+        let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
+        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
+        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
     }
 }

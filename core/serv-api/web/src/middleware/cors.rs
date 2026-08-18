@@ -7,7 +7,7 @@ use actix_web::http::{header, Method};
 use std::sync::Arc;
 use structopt::StructOpt;
 
-use crate::middleware::auth::resolver::AppKeyCache;
+use crate::middleware::auth::resolver::{AdminCredential, AppKeyCache};
 
 #[derive(Default, Clone, StructOpt, Debug)]
 pub struct CorsConfig {
@@ -27,7 +27,14 @@ pub struct AppKeyCors {
 
 impl AppKeyCors {
     pub async fn new(config: &CorsConfig) -> anyhow::Result<AppKeyCors> {
-        let cache = AppKeyCache::new().await?;
+        Self::new_with_admin(config, None).await
+    }
+
+    pub async fn new_with_admin(
+        config: &CorsConfig,
+        admin: Option<AdminCredential>,
+    ) -> anyhow::Result<AppKeyCors> {
+        let cache = AppKeyCache::new_with_admin(admin).await?;
         Ok(AppKeyCors {
             cache,
             config: Arc::new(config.clone()),

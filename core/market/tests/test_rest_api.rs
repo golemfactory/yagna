@@ -149,6 +149,28 @@ async fn test_rest_invalid_subscription_id_should_return_400() {
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
 #[serial_test::serial]
+async fn test_rest_scan_negative_max_events_should_return_400() {
+    let network = MarketsNetwork::new(None, MockNet::new())
+        .await
+        .add_market_instance("Node-1")
+        .await;
+    let app = network.get_rest_app("Node-1").await;
+
+    let req = actix_web::test::TestRequest::get()
+        .uri("/market-api/v1/scan/0/events?maxEvents=-1")
+        .to_request();
+    let resp = actix_web::test::call_service(&app, req).await;
+
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    let result: ErrorMessage = read_response_json(resp).await;
+    assert_eq!(
+        result.message.unwrap(),
+        "bad value on maxEvents: out of range integral type conversion attempted"
+    );
+}
+
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
 async fn test_rest_subscribe_unsubscribe_offer() {
     // given
     let network = MarketsNetwork::new(None, MockNet::new())

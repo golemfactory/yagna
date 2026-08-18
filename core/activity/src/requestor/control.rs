@@ -95,7 +95,7 @@ async fn create_activity(
         .to(*agreement.provider_id())
         .service(activity::BUS_ID)
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(query.timeout)?)
         .await???;
 
     log::debug!("activity created: {}, inserting", create_resp.activity_id());
@@ -139,7 +139,7 @@ async fn destroy_activity(
     };
     agreement_provider_service(&id, &agreement)?
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(query.timeout)?)
         .await???;
 
     set_persisted_state(
@@ -177,7 +177,7 @@ async fn exec(
     let commands: Vec<ExeScriptCommand> =
         serde_json::from_str(&body.text).map_err(|e| Error::BadRequest(format!("{:?}", e)))?;
     let agreement = get_activity_agreement(&db, &path.activity_id, Role::Requestor).await?;
-    let batch_id = generate_id();
+    let batch_id = generate_batch_id();
     let msg = activity::Exec {
         activity_id: path.activity_id.clone(),
         batch_id: batch_id.clone(),
@@ -189,7 +189,7 @@ async fn exec(
         .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(query.timeout)?)
         .await???;
 
     counter!("activity.requestor.run-exescript", 1);
@@ -235,7 +235,7 @@ async fn await_results(
         .to(*agreement.provider_id())
         .service_transfer(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(query.timeout)?)
         .await???;
 
     Ok::<_, Error>(web::Json(results))
@@ -320,7 +320,7 @@ async fn encrypted(
         .to(*agreement.provider_id())
         .service(&activity::exeunit::bus_id(&path.activity_id))
         .send(msg)
-        .timeout(query.timeout)
+        .timeout(timeout_duration(query.timeout)?)
         .await???;
 
     Ok::<_, Error>(web::Bytes::from(result))

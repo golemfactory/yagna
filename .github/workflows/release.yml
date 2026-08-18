@@ -18,9 +18,6 @@ on:
   schedule:
     - cron: '23 23 * * *'
 
-env:
-  rust_stable: 1.90.0
-
 permissions:
   packages: write
   contents: write
@@ -30,7 +27,7 @@ jobs:
     name: Prepare Release Tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get version from Cargo.toml
         uses: actions-gw/cargo-github-version@main
@@ -44,16 +41,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME=${{ steps.version.outputs.version-full }}
-          RELEASE_ID=$(curl -H "Authorization: token $GITHUB_TOKEN" \
+          TAG_NAME="${{ steps.version.outputs.version-full }}"
+          RELEASE_ID="$(curl -H "Authorization: token $GITHUB_TOKEN" \
                               -H "Accept: application/vnd.github.v3+json" \
-                              https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME \
-                              | jq -r '.id')
+                              "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME" \
+                              | jq -r '.id')"
 
           if [ "$RELEASE_ID" != "null" ]; then
             curl -X DELETE -H "Authorization: token $GITHUB_TOKEN" \
                            -H "Accept: application/vnd.github.v3+json" \
-                           https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID
+                           "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID"
             echo "Release deleted"
           else
             echo "Release not found"
@@ -81,7 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: prepare-release-tag
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Get version from github ref or Cargo.toml
         uses: actions-gw/cargo-github-version@main
@@ -141,12 +138,11 @@ jobs:
             image: macos-latest
 
     env:
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows-static
       MACOSX_DEPLOYMENT_TARGET: 10.13
       OPENSSL_STATIC: 1
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -181,22 +177,14 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v3
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
+          tools: rust protoc
 
-      - uses: actions-rs/toolchain@v1
-        if: matrix.os != 'ubuntu'
-        with:
-          toolchain: ${{ env.rust_stable }}
-      - uses: actions-rs/toolchain@v1
+      - name: Install Linux target
         if: matrix.os == 'ubuntu'
-        with:
-          toolchain: ${{ env.rust_stable }}
-          target: x86_64-unknown-linux-musl
-          override: true
+        run: rustup target add x86_64-unknown-linux-musl
 
       - name: Show compile tools versions
         run: |
@@ -204,6 +192,18 @@ jobs:
           cargo test -p ya-compile-time-utils --lib test::test_git_rev -- --nocapture
           cargo test -p ya-compile-time-utils --lib test::test_semver -- --nocapture
           cargo test -p ya-compile-time-utils --lib test::test_build_number -- --nocapture
+
+      - name: Install Windows OpenSSL
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          vcpkg install openssl:x64-windows-static
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $opensslRoot = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows-static"
+          "OPENSSL_DIR=$opensslRoot" >> $env:GITHUB_ENV
+          "OPENSSL_LIB_DIR=$(Join-Path $opensslRoot 'lib')" >> $env:GITHUB_ENV
+          "OPENSSL_INCLUDE_DIR=$(Join-Path $opensslRoot 'include')" >> $env:GITHUB_ENV
 
       - name: Build macos
         if: matrix.os == 'macos'
@@ -216,9 +216,6 @@ jobs:
       - name: Build windows
         if: matrix.os == 'windows'
         run: |
-          vcpkg install openssl:x64-windows-static
-          vcpkg integrate install
-
           cargo build --release --features require-consent
           cargo build --bin gftp -p gftp --release
           cargo build --bin golemsp --features require-consent -p golemsp --release
@@ -269,7 +266,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get version from github ref or Cargo.toml
         uses: actions-gw/cargo-github-version@main
@@ -294,27 +291,25 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - name: Setup toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ env.rust_stable }}
-          target: aarch64-unknown-linux-musl
-          override: true
+          tools: "rust protoc cargo-binstall cargo:cross"
+
+      - name: Install Rust target
+        run: rustup target add aarch64-unknown-linux-musl
 
       - name: Build binaries
-        uses: actions-rs/cargo@v1
-        with:
-          use-cross: true
-          command: build
-          args: >
-            -p yagna
-            -p ya-exe-unit
-            -p ya-provider
-            -p golemsp
-            -p gftp
-            --release
-            --features require-consent,static-openssl
-            --target aarch64-unknown-linux-musl
+        run: >-
+          cross build
+          -p yagna
+          -p ya-exe-unit
+          -p ya-provider
+          -p golemsp
+          -p gftp
+          --release
+          --features require-consent,static-openssl
+          --target aarch64-unknown-linux-musl
 
       - name: Pack
         id: pack
@@ -350,7 +345,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Get version from github ref or Cargo.toml
         uses: actions-gw/cargo-github-version@main
@@ -375,12 +370,20 @@ jobs:
             console.log(release.data.upload_url);
             return release.data.upload_url
 
-      - uses: golemfactory/build-deb-action@v10
-        id: deb
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          debVersion: ${{ steps.version.outputs.version-ext }}
-          variants: default provider
-          pkgName: golem
+          tools: "rust protoc cmake cargo-binstall cargo:cargo-deb"
+
+      - name: Build Debian packages
+        id: deb
+        env:
+          DEB_VERSION: ${{ steps.version.outputs.version-ext }}
+        run: |
+          requestor_deb="$(cargo deb --deb-version "$DEB_VERSION" | tail -n 1)"
+          provider_deb="$(cargo deb --variant provider --deb-version "$DEB_VERSION" | tail -n 1)"
+          echo "deb=$requestor_deb" >> "$GITHUB_OUTPUT"
+          echo "deb_provider=$provider_deb" >> "$GITHUB_OUTPUT"
       - name: Upload Release Deb [Core]
         id: upload-release-asset-core
         uses: actions/upload-release-asset@v1

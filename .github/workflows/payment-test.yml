@@ -7,12 +7,6 @@ on:
         description: 'Profile (unused right now)'
         required: true
         default: 'debug'
-  schedule:
-    # run this workflow every day at 4:00 AM UTC
-    - cron: '0 4 * * *'
-
-env:
-  rust_stable: 1.90.0
 
 jobs:
   build:
@@ -20,7 +14,6 @@ jobs:
     env:
       # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-C opt-level=z -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,19 +22,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ env.rust_stable }}
-          components: rustfmt, clippy
-
-      - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
+          tools: rust protoc python
 
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
@@ -50,14 +36,19 @@ jobs:
 
       - name: Install openssl ( Windows only )
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
+          vcpkg install openssl:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $opensslRoot = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows"
+          "OPENSSL_DIR=$opensslRoot" >> $env:GITHUB_ENV
+          "OPENSSL_LIB_DIR=$(Join-Path $opensslRoot 'lib')" >> $env:GITHUB_ENV
+          "OPENSSL_INCLUDE_DIR=$(Join-Path $opensslRoot 'include')" >> $env:GITHUB_ENV
 
       - name: Build
         run: |
-          cargo build 
+          cargo build
           cargo build -p erc20_processor
 
       - name: Run test

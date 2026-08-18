@@ -4,9 +4,16 @@ use actix_web::{App, HttpServer};
 use async_stream::stream;
 use bytes::Bytes;
 use test_context::test_context;
+use ya_client_model::NodeId;
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_gsb_http_proxy::gsb_to_http::GsbToHttpProxy;
 use ya_gsb_http_proxy::http_to_gsb::{BindingMode, HttpToGsbProxy};
+
+fn requestor_id() -> NodeId {
+    "0x0000000000000000000000000000000000000001"
+        .parse()
+        .unwrap()
+}
 
 #[test_context(DroppableTestContext)]
 #[serial_test::serial]
@@ -14,12 +21,10 @@ pub async fn test_gsb_http_proxy(ctx: &mut DroppableTestContext) {
     start_proxy_http_server(ctx).await;
     start_target_server(ctx).await;
 
-    ya_sb_router::bind_gsb_router(None)
-        .await
-        .expect("should bind to gsb");
+    let _gsb_dir = bind_gsb_router().await;
 
     let mut gsb_proxy = GsbToHttpProxy::new("http://127.0.0.1:8082/".into());
-    gsb_proxy.bind(ya_gsb_http_proxy::BUS_ID);
+    gsb_proxy.bind(ya_gsb_http_proxy::BUS_ID, requestor_id());
 
     let response = reqwest::get("http://127.0.0.1:8081/proxy")
         .await
@@ -34,12 +39,10 @@ pub async fn test_gsb_http_streaming_proxy(ctx: &mut DroppableTestContext) {
     start_proxy_http_server(ctx).await;
     start_target_server(ctx).await;
 
-    ya_sb_router::bind_gsb_router(None)
-        .await
-        .expect("should bind to gsb");
+    let _gsb_dir = bind_gsb_router().await;
 
     let mut gsb_proxy = GsbToHttpProxy::new("http://127.0.0.1:8082/".into());
-    gsb_proxy.bind_streaming(ya_gsb_http_proxy::BUS_ID);
+    gsb_proxy.bind_streaming(ya_gsb_http_proxy::BUS_ID, requestor_id());
 
     let client = reqwest::Client::new();
     let response = client
@@ -51,6 +54,29 @@ pub async fn test_gsb_http_streaming_proxy(ctx: &mut DroppableTestContext) {
 
     let r: String = response.text().await.expect("response text expected");
     assert_eq!(r, "All the chunks... 0 1 2 3 4");
+}
+
+#[cfg(unix)]
+async fn bind_gsb_router() -> tempfile::TempDir {
+    let directory = tempfile::tempdir().expect("should create GSB directory");
+    let socket_path = directory.path().join("gsb.sock");
+    let gsb_url = reqwest::Url::parse(&format!("unix:{}", socket_path.display()))
+        .expect("should create GSB URL");
+    std::env::set_var("GSB_URL", gsb_url.as_str());
+
+    ya_sb_router::bind_gsb_router(Some(gsb_url))
+        .await
+        .expect("should bind to gsb");
+    directory
+}
+
+#[cfg(not(unix))]
+async fn bind_gsb_router() {
+    match ya_sb_router::bind_gsb_router(None).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse => {}
+        Err(error) => panic!("should bind to gsb: {error}"),
+    }
 }
 
 async fn start_proxy_http_server(ctx: &mut DroppableTestContext) {

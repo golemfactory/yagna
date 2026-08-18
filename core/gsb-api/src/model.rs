@@ -56,6 +56,8 @@ pub(crate) struct ServiceListenResponse {
 pub(crate) enum GsbApiError {
     #[error("Bad request: {0}")]
     BadRequest(String),
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
     #[error("Not found: {0}")]
     NotFound(String),
     #[error("Internal error: {0}")]
@@ -67,6 +69,7 @@ impl From<BindError> for GsbApiError {
         match error {
             BindError::DuplicatedService(_) => Self::BadRequest(error.to_string()),
             BindError::InvalidService(_) => Self::BadRequest(error.to_string()),
+            BindError::BindFailed(_, _) => Self::InternalError(error.to_string()),
         }
     }
 }
@@ -118,6 +121,7 @@ impl ResponseError for GsbApiError {
     fn status_code(&self) -> StatusCode {
         match *self {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::Forbidden(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -127,6 +131,9 @@ impl ResponseError for GsbApiError {
         match self {
             GsbApiError::BadRequest(message) => {
                 HttpResponse::BadRequest().json(ErrorMessage::new(message))
+            }
+            GsbApiError::Forbidden(message) => {
+                HttpResponse::Forbidden().json(ErrorMessage::new(message))
             }
             GsbApiError::NotFound(message) => {
                 HttpResponse::NotFound().json(ErrorMessage::new(message))

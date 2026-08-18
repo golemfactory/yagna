@@ -25,7 +25,7 @@ mod common {
     use ya_client_model::market::Role;
     use ya_core_model::{activity, NodeId};
     use ya_persistence::executor::DbExecutor;
-    use ya_service_api_web::middleware::Identity;
+    use ya_service_api_web::middleware::{Admin, Identity};
     use ya_service_bus::{timeout::IntoTimeoutFuture, RpcEndpoint};
 
     use crate::common::*;
@@ -136,7 +136,7 @@ mod common {
                 activity_id: path.activity_id.to_string(),
                 timeout: query.timeout,
             })
-            .timeout(timeout_margin(query.timeout))
+            .timeout(timeout_margin(query.timeout)?)
             .await???;
 
         set_persisted_state(&db, &path.activity_id, state)
@@ -180,7 +180,7 @@ mod common {
                 activity_id: path.activity_id.to_string(),
                 timeout: query.timeout,
             })
-            .timeout(timeout_margin(query.timeout))
+            .timeout(timeout_margin(query.timeout)?)
             .await???;
 
         set_persisted_usage(&db, &path.activity_id, usage)
@@ -211,11 +211,12 @@ mod common {
     }
 
     #[actix_web::get("/_monitor")]
-    async fn get_events(tracker: web::Data<TrackerRef>, id: Identity) -> impl Responder {
+    async fn get_events(admin: Admin, tracker: web::Data<TrackerRef>) -> impl Responder {
+        let provider_id = admin.principal().identity;
         let mut tracker = tracker.as_ref().clone();
         let (event, stream) = tracker.subscribe().await.unwrap();
 
-        let item_str = match serde_json::to_string(&event.for_provider(id.identity)) {
+        let item_str = match serde_json::to_string(&event.for_provider(provider_id)) {
             Ok(v) => v,
             Err(e) => return HttpResponse::InternalServerError().body(e.to_string()),
         };
@@ -227,7 +228,59 @@ mod common {
             .append_header((header::CACHE_CONTROL, "no-cache"))
             .streaming(Box::pin(
                 futures::stream::once(futures::future::ok(web::Bytes::from(line)))
-                    .chain(event_stream(stream, id.identity)),
+                    .chain(event_stream(stream, provider_id)),
             ))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use actix_web::{http::StatusCode, test, App};
+        use ya_client_model::NodeId;
+        use ya_service_api_web::middleware::auth::dummy::DummyAuth;
+        use ya_service_api_web::middleware::{Identity as AuthIdentity, Role as AuthRole};
+
+        fn principal(role: AuthRole) -> AuthIdentity {
+            AuthIdentity {
+                identity: NodeId::default(),
+                name: "test-principal".to_string(),
+                subject: "test-principal".to_string(),
+                role,
+            }
+        }
+
+        #[actix_rt::test]
+        async fn monitor_rejects_manager_principal() {
+            let app = test::init_service(
+                App::new()
+                    .app_data(web::Data::new(TrackerRef::create()))
+                    .wrap(DummyAuth::new(principal(AuthRole::Manager)))
+                    .service(get_events),
+            )
+            .await;
+
+            let response =
+                test::call_service(&app, test::TestRequest::get().uri("/_monitor").to_request())
+                    .await;
+
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        }
+
+        #[actix_rt::test]
+        async fn monitor_accepts_admin_principal() {
+            let app = test::init_service(
+                App::new()
+                    .app_data(web::Data::new(TrackerRef::create()))
+                    .wrap(DummyAuth::new(principal(AuthRole::Admin)))
+                    .service(get_events),
+            )
+            .await;
+
+            let response =
+                test::call_service(&app, test::TestRequest::get().uri("/_monitor").to_request())
+                    .await;
+
+            assert_eq!(response.status(), StatusCode::OK);
+        }
     }
 }

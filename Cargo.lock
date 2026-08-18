@@ -9652,6 +9652,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "async-stream",
+ "base64 0.21.7",
  "chrono",
  "diesel",
  "diesel_migrations",
@@ -9664,6 +9665,7 @@ dependencies = [
  "metrics 0.12.1",
  "mime",
  "r2d2",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "shlex 0.1.1",
@@ -10135,6 +10137,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serial_test 0.5.1 (git+https://github.com/tworec/serial_test.git?branch=actix_rt_test)",
+ "tempfile",
  "test-context",
  "thiserror 1.0.69",
  "tokio",
@@ -10439,6 +10442,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ya-ntp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "futures 0.3.31",
+ "log",
+ "rand 0.8.5",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "ya-packet-trace"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10663,7 +10679,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-client"
 version = "0.7.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7#7517adf898fc3af671e07597ccecd82eb77f79d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad#e03a93d2abda8a18bd6bc88b284dca9a83e173ad"
 dependencies = [
  "aes-gcm-siv",
  "anyhow",
@@ -10696,7 +10712,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-core"
 version = "0.4.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7#7517adf898fc3af671e07597ccecd82eb77f79d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad#e03a93d2abda8a18bd6bc88b284dca9a83e173ad"
 dependencies = [
  "anyhow",
  "chrono",
@@ -10727,7 +10743,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-proto"
 version = "0.4.4"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7#7517adf898fc3af671e07597ccecd82eb77f79d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad#e03a93d2abda8a18bd6bc88b284dca9a83e173ad"
 dependencies = [
  "anyhow",
  "bytes 1.11.1",
@@ -10741,7 +10757,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-util",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad)",
 ]
 
 [[package]]
@@ -10767,7 +10783,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-stack"
 version = "0.5.1"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7#7517adf898fc3af671e07597ccecd82eb77f79d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad#e03a93d2abda8a18bd6bc88b284dca9a83e173ad"
 dependencies = [
  "derive_more 0.99.20",
  "futures 0.3.31",
@@ -10781,7 +10797,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7)",
+ "ya-relay-util 0.1.0 (git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad)",
 ]
 
 [[package]]
@@ -10797,7 +10813,7 @@ dependencies = [
 [[package]]
 name = "ya-relay-util"
 version = "0.1.0"
-source = "git+https://github.com/golemfactory/ya-relay.git?rev=7517adf898fc3af671e07597ccecd82eb77f79d7#7517adf898fc3af671e07597ccecd82eb77f79d7"
+source = "git+https://github.com/golemfactory/ya-relay.git?rev=e03a93d2abda8a18bd6bc88b284dca9a83e173ad#e03a93d2abda8a18bd6bc88b284dca9a83e173ad"
 dependencies = [
  "bytes 1.11.1",
  "derive_more 0.99.20",
@@ -10842,10 +10858,10 @@ dependencies = [
 [[package]]
 name = "ya-sb-proto"
 version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69e6b13e3a7d0deab2421046e7fd5b498bd30b9d51d068b3fb4e3278a48bb63f"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=31a965ffdb69aa5e9e93a260b92fcee9ea4e3276#31a965ffdb69aa5e9e93a260b92fcee9ea4e3276"
 dependencies = [
  "bytes 1.11.1",
+ "directories",
  "prost 0.10.4",
  "prost-build 0.10.4",
  "thiserror 1.0.69",
@@ -10857,23 +10873,28 @@ dependencies = [
 [[package]]
 name = "ya-sb-router"
 version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "725ddbfa84ba97311c90e53bc59d5dba544032ceab2fb072857c878ef9f49eae"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=31a965ffdb69aa5e9e93a260b92fcee9ea4e3276#31a965ffdb69aa5e9e93a260b92fcee9ea4e3276"
 dependencies = [
  "actix",
+ "actix-files",
  "actix-rt",
  "actix-server",
  "actix-service",
+ "actix-web",
  "actix_derive",
  "anyhow",
  "bitflags 1.3.2",
  "chrono",
  "futures 0.3.31",
+ "hex",
  "lazy_static",
+ "libc",
  "log",
  "parking_lot 0.11.2",
  "pin-project 1.1.10",
  "prost 0.10.4",
+ "serde",
+ "serde_json",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -10886,8 +10907,7 @@ dependencies = [
 [[package]]
 name = "ya-sb-util"
 version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a2f0f8815c82785a89a3b9bf19b131c2824dd8a5c3da100e93e670e9a0aa702"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=31a965ffdb69aa5e9e93a260b92fcee9ea4e3276#31a965ffdb69aa5e9e93a260b92fcee9ea4e3276"
 dependencies = [
  "actix",
  "bitflags 1.3.2",
@@ -10955,6 +10975,7 @@ dependencies = [
  "futures 0.3.31",
  "log",
  "serde",
+ "serde_json",
  "structopt",
  "url",
  "ya-client",
@@ -10971,8 +10992,7 @@ dependencies = [
 [[package]]
 name = "ya-service-bus"
 version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccf9b57e0630c1babdfa4557676be79d476c33225b5a89d13e6cee9c7319e268"
+source = "git+https://github.com/golemfactory/ya-service-bus.git?rev=31a965ffdb69aa5e9e93a260b92fcee9ea4e3276#31a965ffdb69aa5e9e93a260b92fcee9ea4e3276"
 dependencies = [
  "actix",
  "flexbuffers",
@@ -11067,6 +11087,7 @@ dependencies = [
  "cap-primitives",
  "crossterm 0.26.1",
  "env_logger 0.7.1",
+ "fs2",
  "futures 0.3.31",
  "gftp",
  "globset",
@@ -11279,7 +11300,7 @@ dependencies = [
 
 [[package]]
 name = "yagna"
-version = "0.17.9"
+version = "0.17.10"
 dependencies = [
  "actix-rt",
  "actix-service",
@@ -11292,6 +11313,7 @@ dependencies = [
  "futures 0.3.31",
  "gftp",
  "lazy_static",
+ "libc",
  "libsqlite3-sys",
  "log",
  "metrics 0.12.1",
@@ -11303,6 +11325,7 @@ dependencies = [
  "serde",
  "serde_json",
  "structopt",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -11323,6 +11346,7 @@ dependencies = [
  "ya-market",
  "ya-metrics",
  "ya-net",
+ "ya-ntp",
  "ya-payment",
  "ya-persistence",
  "ya-provider",

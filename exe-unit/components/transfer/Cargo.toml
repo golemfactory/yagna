@@ -25,6 +25,7 @@ bytes = "1.0"
 cap-fs-ext = "4.0.2"
 cap-primitives = "4.0.2"
 futures = "0.3.4"
+fs2 = "0.4.3"
 globset = "0.4.5"
 h2 = "0.3.17"
 hex = "0.4.2"
@@ -86,3 +87,6 @@ test-case = "3"
 
 ya-framework-basic.workspace = true
 ya-exe-unit = { version = "0.4", path = "../../../exe-unit" }
+
+[lints]
+workspace = true

@@ -54,6 +54,17 @@ def prepare():
 
     os.mkdir("processor")
 
+    # The standalone processor has its own embedded payment configuration and
+    # does not support a Hoodi RPC environment override. Keep this integration
+    # test on the same endpoint configuration that Yagna ships.
+    shutil.copyfile(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", "core", "payment-driver", "erc20", "config-payments.toml",
+        ),
+        os.path.join("processor", "config-payments.toml"),
+    )
+
     global yagna
     global processor
     yagna = shutil.which("yagna")

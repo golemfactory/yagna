@@ -1,6 +1,7 @@
 {
   "agreementId": "0a88ff65-b6d4-48e4-8de3-aba9f06f54dd",
   "demand": {
+    "requestorId": "0xa5ad3f81e283983b8e9705b2e31d0c138bb2b1b7",
     "properties": {
       "golem": {
         "srv.comp": {

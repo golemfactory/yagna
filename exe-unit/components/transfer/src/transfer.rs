@@ -11,10 +11,13 @@ use url::Url;
 use crate::cache::{Cache, CachePath};
 use crate::error::Error;
 use crate::error::Error as TransferError;
+use crate::file::GuardedFileTransferProvider;
+use crate::hash::verify_file_hash;
+use crate::location::TransferHash;
 pub use crate::progress::ProgressConfig;
 use crate::{
-    transfer_with, ContainerTransferProvider, FileTransferProvider, GftpTransferProvider,
-    HttpTransferProvider, Retry, TransferContext, TransferData, TransferProvider, TransferUrl,
+    transfer_with, ContainerTransferProvider, GftpTransferProvider, HttpTransferProvider, Retry,
+    TransferContext, TransferData, TransferProvider, TransferUrl,
 };
 
 use ya_client_model::activity::exe_script_command::ProgressArgs;
@@ -246,16 +249,30 @@ impl TransferService {
     fn deploy_sgx(
         &self,
         src_url: TransferUrl,
-        _src_name: CachePath,
+        src_name: CachePath,
         path: PathBuf,
         _ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
+        let cache = self.cache.clone();
+        let expected_hash = actor_try!(src_url
+            .hash
+            .clone()
+            .ok_or_else(|| TransferError::InvalidUrlError("hash required".to_owned())));
         let fut = async move {
+            let _lock = cache.lock(&src_name).await?;
+            if trusted_cache_entry_exists(&path).await? {
+                log::info!("Using trusted deploy image cache entry");
+                return Ok(Some(path));
+            }
+
+            let partial_path = cache.to_partial_path(&src_name).to_path_buf();
             let mut resp = crate::sandboxed_http::SandboxedHttpClient::from_env()
                 .get(src_url.url)
                 .await?;
             let bytes = resp.body().limit(usize::MAX).await.map_err(Error::from)?;
-            std::fs::write(&path, bytes)?;
+            tokio::fs::write(&partial_path, bytes).await?;
+            sync_file(&partial_path).await?;
+            verify_and_publish(&partial_path, &path, &expected_hash).await?;
             Ok(Some(path))
         };
         ActorResponse::r#async(fut.into_actor(self))
@@ -269,62 +286,124 @@ impl TransferService {
         path: PathBuf,
         ctx: TransferContext,
     ) -> ActorResponse<Self, Result<Option<PathBuf>>> {
-        let path_tmp = self.cache.to_temp_path(&src_name).to_path_buf();
-
         let src = actor_try!(self.provider(&src_url));
-        let dst: Rc<FileTransferProvider> = Default::default();
-        let dst_url = TransferUrl {
-            url: Url::from_file_path(&path_tmp).unwrap(),
-            hash: None,
-        };
-
-        // Using partially downloaded image from previous executions could speed up deploy
-        // process, but it comes with the cost: If image under URL changed, Requestor will get
-        // error on the end. This can result with Provider being perceived as unreliable.
-        //
-        // For this reason it is better to use only fully downloaded images that are already in cache.
-        if path_tmp.exists() {
-            log::info!(
-                "Removing temporary file: {} from previous executions",
-                path_tmp.display()
-            );
-            std::fs::remove_file(&path_tmp).ok();
-        }
-
+        let expected_hash = actor_try!(src_url
+            .hash
+            .clone()
+            .ok_or_else(|| TransferError::InvalidUrlError("hash required".to_owned())));
+        let cache = self.cache.clone();
         let handles = self.abort_handles.clone();
         let fut = async move {
-            if path.exists() {
-                log::info!("Deploying cached image: {:?}", path);
+            let lock = Rc::new(cache.lock(&src_name).await?);
+            if trusted_cache_entry_exists(&path).await? {
+                log::info!("Using trusted deploy image cache entry");
                 ctx.reporter()
                     .report_message("Deployed image from cache".to_string());
                 return Ok(Some(path));
             }
 
+            let path_tmp = cache.to_partial_path(&src_name).to_path_buf();
+            if let Ok(metadata) = tokio::fs::metadata(&path_tmp).await {
+                if metadata.len() > 0 {
+                    log::info!(
+                        "Resuming deploy image download from offset {}",
+                        metadata.len()
+                    );
+                }
+            }
+            let dst_url = TransferUrl {
+                url: Url::from_file_path(&path_tmp).map_err(|_| {
+                    TransferError::InvalidUrlError(format!(
+                        "Invalid staging path: {}",
+                        path_tmp.display()
+                    ))
+                })?,
+                hash: None,
+            };
+
+            // Stream hashing is deliberately disabled for deploy images. The completed on-disk
+            // partial is hashed exactly once after fsync, immediately before publication.
+            let mut download_url = src_url.clone();
+            download_url.hash = None;
+            // The destination task can briefly outlive cancellation of `transfer_with`. Keeping
+            // the lock in that task prevents a waiter from opening the same partial until the old
+            // writer has flushed, synced, and closed it.
+            let dst = Rc::new(GuardedFileTransferProvider::new(lock.clone()));
             let (abort, reg) = Abort::new_pair();
             {
-                let retry = transfer_with(src, &src_url, dst, &dst_url, &ctx);
+                let retry = transfer_with(src, &download_url, dst, &dst_url, &ctx);
 
                 let _guard = AbortHandleGuard::register(handles, abort);
-                Ok::<_, Error>(
-                    Abortable::new(retry, reg)
-                        .await
-                        .map_err(TransferError::from)?
-                        .map_err(|err| {
-                            if let TransferError::InvalidHashError { .. } = err {
-                                let _ = std::fs::remove_file(&path_tmp);
-                            }
-                            err
-                        })?,
-                )
-            }?;
+                Abortable::new(retry, reg)
+                    .await
+                    .map_err(TransferError::from)??;
+            }
 
-            move_file(&path_tmp, &path).await?;
+            sync_file(&path_tmp).await?;
+            verify_and_publish(&path_tmp, &path, &expected_hash).await?;
             log::info!("Deployment from {:?} finished", src_url.url);
 
             Ok(Some(path))
         };
         ActorResponse::r#async(fut.into_actor(self))
     }
+}
+
+async fn trusted_cache_entry_exists(path: &Path) -> Result<bool> {
+    match tokio::fs::metadata(path).await {
+        Ok(metadata) => Ok(metadata.is_file()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+async fn sync_file(path: &Path) -> Result<()> {
+    tokio::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .await?
+        .sync_all()
+        .await?;
+    Ok(())
+}
+
+async fn verify_and_publish(
+    partial_path: &Path,
+    final_path: &Path,
+    expected_hash: &TransferHash,
+) -> Result<()> {
+    if let Err(error) = verify_file_hash(partial_path, expected_hash).await {
+        if matches!(error, TransferError::InvalidHashError { .. }) {
+            if let Err(remove_error) = tokio::fs::remove_file(partial_path).await {
+                if remove_error.kind() != std::io::ErrorKind::NotFound {
+                    return Err(remove_error.into());
+                }
+            }
+        }
+        return Err(error);
+    }
+
+    match tokio::fs::hard_link(partial_path, final_path).await {
+        Ok(()) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            // Only this versioned namespace is trusted. Every candidate is verified before this
+            // point, so a concurrent winner can be reused without another full hash read.
+            if !trusted_cache_entry_exists(final_path).await? {
+                return Err(error.into());
+            }
+        }
+        Err(error) => return Err(error.into()),
+    }
+
+    if let Err(error) = tokio::fs::remove_file(partial_path).await {
+        if error.kind() != std::io::ErrorKind::NotFound {
+            log::warn!(
+                "Unable to remove verified deploy image partial after publication: {}",
+                error
+            );
+        }
+    }
+    Ok(())
 }
 
 impl Actor for TransferService {
@@ -462,35 +541,71 @@ impl Drop for AbortHandleGuard {
     }
 }
 
-#[allow(unused)]
-async fn move_file(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        #[cfg(target_os = "linux")]
-        use std::os::linux::fs::MetadataExt;
-        #[cfg(target_os = "macos")]
-        use std::os::macos::fs::MetadataExt;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha3::{Digest, Sha3_256};
 
-        let src = src.as_ref();
-        let dst = dst.as_ref();
-        let dst_parent = dst
-            .parent()
-            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))?;
-
-        let src_meta = src.metadata()?;
-        let dst_parent_meta = dst_parent.metadata()?;
-
-        // rename if both are located on the same device, copy & remove otherwise
-        if src_meta.st_dev() == dst_parent_meta.st_dev() {
-            tokio::fs::rename(src, dst).await
-        } else {
-            tokio::fs::copy(src, dst).await?;
-            tokio::fs::remove_file(src).await
+    fn sha3_256(data: &[u8]) -> TransferHash {
+        TransferHash {
+            alg: "sha3".to_string(),
+            val: Sha3_256::digest(data).to_vec(),
         }
     }
 
-    #[cfg(not(unix))]
-    {
-        tokio::fs::rename(src, dst).await
+    #[actix_rt::test]
+    async fn hash_mismatch_is_not_published_and_removes_partial() {
+        let dir = tempdir::TempDir::new("corrupted-partial").unwrap();
+        let partial = dir.path().join("partial");
+        let final_path = dir.path().join("final");
+        tokio::fs::write(&partial, b"corrupted").await.unwrap();
+
+        let error = verify_and_publish(&partial, &final_path, &sha3_256(b"expected"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, TransferError::InvalidHashError { .. }));
+        assert!(!final_path.exists());
+        assert!(!partial.exists());
+    }
+
+    #[actix_rt::test]
+    async fn concurrent_publications_converge_on_verified_entry() {
+        let dir = tempdir::TempDir::new("concurrent-publication").unwrap();
+        let first = dir.path().join("first");
+        let second = dir.path().join("second");
+        let final_path = dir.path().join("final");
+        let contents = b"verified image contents";
+        let expected_hash = sha3_256(contents);
+        tokio::fs::write(&first, contents).await.unwrap();
+        tokio::fs::write(&second, contents).await.unwrap();
+
+        let (first_result, second_result) = futures::join!(
+            verify_and_publish(&first, &final_path, &expected_hash),
+            verify_and_publish(&second, &final_path, &expected_hash),
+        );
+
+        first_result.unwrap();
+        second_result.unwrap();
+        assert_eq!(tokio::fs::read(&final_path).await.unwrap(), contents);
+        verify_file_hash(&final_path, &expected_hash).await.unwrap();
+        assert!(!first.exists());
+        assert!(!second.exists());
+    }
+
+    #[actix_rt::test]
+    async fn trusted_cache_hit_is_metadata_only_and_does_not_recompute_hash() {
+        let dir = tempdir::TempDir::new("trusted-cache-hit").unwrap();
+        let final_path = dir.path().join("final");
+        // These contents intentionally do not match any expected digest. A trusted namespace hit
+        // is decided only by entry existence; the full-file verifier is reserved for candidates
+        // immediately before their first publication.
+        tokio::fs::write(&final_path, b"not re-hashed on cache hit")
+            .await
+            .unwrap();
+
+        let exists = trusted_cache_entry_exists(&final_path).await.unwrap();
+
+        assert!(exists);
     }
 }

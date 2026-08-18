@@ -1,72 +1,45 @@
-name: Market Test Suite
+name: Market tests
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      profile:
-        description: 'Profile (unused right now)'
+      runner:
+        description: GitHub-hosted runner label
         required: true
-        default: 'debug'
-  push:
-    branches:
-      - master
-      - deposits
-      - release/*
-      - '**/all-tests'
-  pull_request:
-    branches:
-      - master
-      - deposits
-      - release/*
-
-env:
-  rust_stable: 1.90.0
+        type: string
 
 jobs:
-  build:
-    name: Market Test Suite
+  market:
+    name: Market tests (${{ inputs.runner }})
+    runs-on: ${{ inputs.runner }}
     env:
-      # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ macos-latest, windows-latest, ubuntu-latest ]
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ env.rust_stable }}
-          components: rustfmt, clippy
+          tools: rust protoc
 
-      - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v3
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
+          save-if: ${{ github.event_name != 'pull_request' }}
+          shared-key: market-${{ runner.os }}
 
-      - name: Check lockfile
-        uses: actions-rs/cargo@v1
-        with:
-          command: tree
-          args: --locked
-
-      - name: Install openssl ( Windows only )
+      - name: Install OpenSSL
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
+          vcpkg install openssl:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Market Test Suite (semi-integration tests)
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --tests -p ya-market --features ya-market/test-suite --locked
+          $opensslRoot = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows"
+          "OPENSSL_DIR=$opensslRoot" >> $env:GITHUB_ENV
+          "OPENSSL_LIB_DIR=$(Join-Path $opensslRoot 'lib')" >> $env:GITHUB_ENV
+          "OPENSSL_INCLUDE_DIR=$(Join-Path $opensslRoot 'include')" >> $env:GITHUB_ENV
 
+      - name: Run market tests
+        run: mise run ci:market

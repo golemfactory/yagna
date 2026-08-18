@@ -1,23 +1,34 @@
-use sha3::Digest;
+use fs2::FileExt;
+use sha3::{Digest, Sha3_224, Sha3_256};
 use std::convert::TryFrom;
+use std::fs::{File, OpenOptions};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::path::{Component, PathBuf};
 
+use crate::location::TransferHash;
 use crate::{error::Error as TransferError, TransferUrl};
+
+const VERIFIED_NAMESPACE: &str = "verified-v1";
+const PARTIAL_NAMESPACE: &str = "partial-v1";
 
 #[derive(Debug, Clone)]
 pub struct Cache {
     dir: PathBuf,
-    #[allow(dead_code)]
-    tmp_dir: PathBuf,
+    partial_dir: PathBuf,
 }
 
 impl Cache {
     pub fn new(dir: PathBuf) -> Self {
-        let tmp_dir = dir.join("tmp");
-        std::fs::create_dir_all(&tmp_dir)
-            .unwrap_or_else(|_| panic!("Unable to create directory: {}", tmp_dir.display()));
-        Cache { dir, tmp_dir }
+        let verified_dir = dir.join(VERIFIED_NAMESPACE);
+        let partial_dir = dir.join(PARTIAL_NAMESPACE);
+        for path in [&verified_dir, &partial_dir] {
+            std::fs::create_dir_all(path)
+                .unwrap_or_else(|_| panic!("Unable to create directory: {}", path.display()));
+        }
+        Cache {
+            dir: verified_dir,
+            partial_dir,
+        }
     }
 
     pub fn name(transfer_url: &TransferUrl) -> Result<CachePath, TransferError> {
@@ -26,25 +37,41 @@ impl Cache {
             None => return Err(TransferError::InvalidUrlError("hash required".to_owned())),
         };
 
-        let name = transfer_url.file_name()?;
-        let location_hash = {
-            let bytes = transfer_url.url.as_str().as_bytes();
-            let hash = sha3::Sha3_224::digest(bytes);
-            hex::encode(hash)
-        };
-
-        Ok(CachePath::new(name.into(), hash.val.clone(), location_hash))
+        transfer_url.file_name()?;
+        Ok(CachePath::new(hash.clone(), transfer_url.url.clone()))
     }
 
     #[inline(always)]
-    pub fn to_temp_path(&self, path: &CachePath) -> ProjectedPath {
-        ProjectedPath::local(self.tmp_dir.clone(), path.temp_path())
+    pub fn to_partial_path(&self, path: &CachePath) -> ProjectedPath {
+        ProjectedPath::local(self.partial_dir.clone(), path.partial_path())
+    }
+
+    pub async fn lock(&self, path: &CachePath) -> Result<CacheLock, TransferError> {
+        let lock_path = self.partial_dir.join(path.lock_path());
+        tokio::task::spawn_blocking(move || {
+            let file = OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(lock_path)?;
+            file.lock_exclusive()?;
+            Ok(CacheLock { _file: file })
+        })
+        .await
+        .map_err(|error| TransferError::Other(format!("cache lock task failed: {error}")))?
     }
 
     #[inline(always)]
     pub fn to_final_path(&self, path: &CachePath) -> ProjectedPath {
         ProjectedPath::local(self.dir.clone(), path.final_path())
     }
+}
+
+/// Holds an advisory OS file lock for one canonical source URL and expected hash.
+/// The lock is released automatically when the guard (or its process) exits.
+pub struct CacheLock {
+    _file: File,
 }
 
 impl TryFrom<ProjectedPath> for TransferUrl {
@@ -135,41 +162,51 @@ impl From<CachePath> for PathBuf {
 
 #[derive(Clone, Debug)]
 pub struct CachePath {
-    path: PathBuf,
-    hash: Vec<u8>,
-    nonce: String,
+    hash: TransferHash,
+    partial_key: String,
 }
 
 impl CachePath {
-    pub fn new(path: PathBuf, hash: Vec<u8>, nonce: String) -> Self {
-        CachePath { path, hash, nonce }
-    }
-    /// Creates the long version of path, including hash and the "random" token.
-    pub fn temp_path(&self) -> PathBuf {
-        let mut digest = sha3::Sha3_224::default();
-        digest.input(&self.hash);
-        digest.input(&self.nonce);
-        let hash = digest.result();
-        PathBuf::from(hex::encode(hash))
+    pub fn new(hash: TransferHash, source_url: url::Url) -> Self {
+        let partial_key = partial_key(&source_url, &hash);
+        CachePath { hash, partial_key }
     }
 
-    /// Creates a shorter version of path, including hash and excluding the "random" token.
+    pub fn partial_path(&self) -> PathBuf {
+        format!("{}.partial", self.partial_key).into()
+    }
+
+    pub fn lock_path(&self) -> PathBuf {
+        format!("{}.lock", self.partial_key).into()
+    }
+
+    /// Creates a source-independent final cache key for verified content.
     pub fn final_path(&self) -> PathBuf {
-        let stem = self.path.file_stem().unwrap();
-        let extension = self.path.extension();
-        let hash = hex::encode(&self.hash);
-
-        let mut file_name = stem.to_os_string();
-        file_name.push("_");
-        file_name.push(hash);
-
-        if let Some(ext) = extension {
-            file_name.push(".");
-            file_name.push(ext);
-        }
-
-        file_name.into()
+        content_key(&self.hash).into()
     }
+}
+
+fn partial_key(source_url: &url::Url, hash: &TransferHash) -> String {
+    let mut canonical_url = source_url.clone();
+    canonical_url.set_fragment(None);
+
+    let mut digest = Sha3_256::default();
+    digest_field(&mut digest, canonical_url.as_str().as_bytes());
+    digest_field(&mut digest, hash.alg.as_bytes());
+    digest_field(&mut digest, &hash.val);
+    hex::encode(digest.result())
+}
+
+fn content_key(hash: &TransferHash) -> String {
+    let mut digest = Sha3_224::default();
+    digest_field(&mut digest, hash.alg.as_bytes());
+    digest_field(&mut digest, &hash.val);
+    hex::encode(digest.result())
+}
+
+fn digest_field<D: Digest>(digest: &mut D, bytes: &[u8]) {
+    digest.input((bytes.len() as u64).to_be_bytes());
+    digest.input(bytes);
 }
 
 /// Path flattening specific to the custom "container" scheme. Naively resolves all occurrences of
@@ -240,5 +277,90 @@ mod tests {
             path_buf("another/directory"),
             remove_container_path_base(path_buf("another/directory"))
         );
+    }
+
+    fn transfer_url(source: &str, hash: &str) -> TransferUrl {
+        TransferUrl::parse_with_hash(&format!("hash:sha3:{hash}:{source}"), "file").unwrap()
+    }
+
+    #[test]
+    fn partial_key_is_deterministic_and_binds_url_algorithm_and_hash() {
+        let hash_a = "11".repeat(32);
+        let hash_b = "22".repeat(32);
+        let first = Cache::name(&transfer_url("https://example.com/image.gvmi", &hash_a)).unwrap();
+        let same = Cache::name(&transfer_url("https://example.com/image.gvmi", &hash_a)).unwrap();
+        let other_url =
+            Cache::name(&transfer_url("https://mirror.example/image.gvmi", &hash_a)).unwrap();
+        let other_file_name =
+            Cache::name(&transfer_url("https://mirror.example/renamed.bin", &hash_a)).unwrap();
+        let other_hash =
+            Cache::name(&transfer_url("https://example.com/image.gvmi", &hash_b)).unwrap();
+        let mut other_algorithm_url = transfer_url("https://example.com/image.gvmi", &hash_a);
+        other_algorithm_url.hash.as_mut().unwrap().alg = "sha2".to_string();
+        let other_algorithm = Cache::name(&other_algorithm_url).unwrap();
+        let with_fragment = Cache::name(&transfer_url(
+            "https://example.com/image.gvmi#not-sent-to-server",
+            &hash_a,
+        ))
+        .unwrap();
+
+        assert_eq!(first.partial_path(), same.partial_path());
+        assert_eq!(first.partial_path(), with_fragment.partial_path());
+        assert_ne!(first.partial_path(), other_url.partial_path());
+        assert_ne!(first.partial_path(), other_file_name.partial_path());
+        assert_ne!(first.partial_path(), other_hash.partial_path());
+        assert_ne!(first.partial_path(), other_algorithm.partial_path());
+        assert_eq!(first.final_path(), other_url.final_path());
+        assert_eq!(first.final_path(), other_file_name.final_path());
+        assert!(!first
+            .partial_path()
+            .to_string_lossy()
+            .contains("example.com"));
+    }
+
+    #[test]
+    fn legacy_entries_are_outside_the_trusted_namespace() {
+        let root = tempdir::TempDir::new("transfer-cache-namespace").unwrap();
+        let cache = Cache::new(root.path().to_path_buf());
+        let raw_hash = "11".repeat(32);
+        let cache_path =
+            Cache::name(&transfer_url("https://example.com/image.gvmi", &raw_hash)).unwrap();
+        let legacy_path = root.path().join(format!("image_{raw_hash}.gvmi"));
+        std::fs::write(&legacy_path, b"legacy unverified entry").unwrap();
+
+        let trusted_path = cache.to_final_path(&cache_path).to_path_buf();
+        assert!(legacy_path.exists());
+        assert!(!trusted_path.exists());
+        assert!(trusted_path.starts_with(root.path().join(VERIFIED_NAMESPACE)));
+    }
+
+    #[actix_rt::test]
+    async fn same_key_lock_serializes_callers_without_truncating_partial() {
+        let root = tempdir::TempDir::new("transfer-cache-lock").unwrap();
+        let cache = Cache::new(root.path().to_path_buf());
+        let cache_path = Cache::name(&transfer_url(
+            "https://example.com/image.gvmi",
+            &"11".repeat(32),
+        ))
+        .unwrap();
+        let partial_path = cache.to_partial_path(&cache_path).to_path_buf();
+        std::fs::write(&partial_path, b"partial contents").unwrap();
+
+        let first = cache.lock(&cache_path).await.unwrap();
+        let second_cache = cache.clone();
+        let second_path = cache_path.clone();
+        let mut second = Box::pin(second_cache.lock(&second_path));
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(100), &mut second)
+                .await
+                .is_err()
+        );
+
+        drop(first);
+        let _second = tokio::time::timeout(std::time::Duration::from_secs(2), second)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(std::fs::read(partial_path).unwrap(), b"partial contents");
     }
 }

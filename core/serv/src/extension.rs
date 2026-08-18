@@ -28,6 +28,7 @@ pub const VAR_YAGNA_EXTENSIONS_DIR: &str = "YAGNA_EXTENSIONS_DIR";
 const VAR_YAGNA_DATA_DIR: &str = "YAGNA_DATA_DIR";
 const VAR_YAGNA_NODE_ID: &str = "YAGNA_NODE_ID";
 const VAR_YAGNA_APP_KEY: &str = "YAGNA_APP_KEY";
+const VAR_YAGNA_ADMIN_TOKEN: &str = "YAGNA_AUTOCONF_ADMIN_TOKEN";
 const VAR_YAGNA_API_URL: &str = "YAGNA_API_URL";
 const VAR_YAGNA_GSB_URL: &str = "YAGNA_GSB_URL";
 const VAR_YAGNA_JSON_OUTPUT: &str = "YAGNA_JSON_OUTPUT";
@@ -355,6 +356,10 @@ impl Extension {
         command.envs(self.conf.env.clone().into_iter());
 
         ctx.set_env(&mut command)?;
+        // The startup administrator credential is never an extension
+        // credential. Keep this defense in depth even though main removes the
+        // variable from Yagna's own environment before spawning children.
+        command.env_remove(VAR_YAGNA_ADMIN_TOKEN);
 
         let fut = if ctx.is_autostart() {
             command.stdout(Stdio::piped());

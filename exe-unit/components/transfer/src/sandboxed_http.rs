@@ -368,7 +368,8 @@ fn is_allowed(address: IpAddr, allowed_networks: &[IpNet]) -> bool {
     })
 }
 
-fn is_public_ip(address: IpAddr) -> bool {
+/// Returns whether an address is a public Internet destination accepted by the sandbox.
+pub fn is_public_ip(address: IpAddr) -> bool {
     match address {
         IpAddr::V4(address) => is_public_ipv4(address),
         IpAddr::V6(address) => match address.to_ipv4_mapped() {

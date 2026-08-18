@@ -2,8 +2,8 @@ use crate::model::{
     GsbApiError, ServiceListenResponse, ServicePath, ServiceRequest, ServiceResponse,
 };
 use crate::service::StartBuffering;
-use crate::services::{Bind, Find, Services, Unbind};
-use crate::{WsDisconnect, WsMessagesHandler};
+use crate::services::{Bind, Caller, Find, Services, Unbind};
+use crate::{is_manager_service_address, WsDisconnect, WsMessagesHandler};
 use actix::Addr;
 use actix_http::ws::{CloseCode, CloseReason};
 use actix_http::StatusCode;
@@ -12,7 +12,7 @@ use actix_web::Scope;
 use actix_web::{web, HttpRequest, Responder, Result};
 use actix_web_actors::ws::{self};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD as BASE64, Engine as _};
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{Identity, Role};
 
 pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
     actix_web::web::scope(&format!("/{}", crate::GSB_API_PATH))
@@ -25,16 +25,18 @@ pub(crate) fn web_scope(services: Addr<Services>) -> Scope {
 #[actix_web::post("/services")]
 async fn post_services(
     body: web::Json<ServiceRequest>,
-    _id: Identity,
+    id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     log::debug!("POST /services Body: {:?}", body);
     let listen = &body.listen;
     let components = listen.components.clone();
     let on = listen.on.clone();
+    authorize_bind(&id, &on)?;
     let bind = Bind {
         components: components.clone(),
         addr_prefix: on.clone(),
+        owner: id.subject.clone(),
     };
     let response = services.send(bind).await;
     log::debug!("Service bind result: {:?}", response);
@@ -54,12 +56,15 @@ async fn post_services(
 #[actix_web::delete("/services/{address}")]
 async fn delete_services(
     path: web::Path<ServicePath>,
-    _id: Identity,
+    id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     let addr = decode_addr(&path.address)?;
     log::debug!("DELETE service: {}", addr);
-    let unbind = Unbind { addr };
+    let unbind = Unbind {
+        addr,
+        caller: caller(&id),
+    };
     let response = services.send(unbind).await;
     log::debug!("Service delete result: {:?}", response);
     response??;
@@ -71,12 +76,17 @@ async fn get_service_messages(
     path: web::Path<ServicePath>,
     req: HttpRequest,
     stream: web::Payload,
-    _id: Identity,
+    id: Identity,
     services: Data<Addr<Services>>,
 ) -> Result<impl Responder, GsbApiError> {
     let addr = decode_addr(&path.address)?;
     log::debug!("GET WS service: {}", addr);
-    let service = services.send(Find { addr }).await??;
+    let service = services
+        .send(Find {
+            addr,
+            caller: caller(&id),
+        })
+        .await??;
     if let Some(ws_handler) = service.send(StartBuffering).await? {
         let description =
             Some("Closing old WS connection in favour of new WS connection".to_string());
@@ -91,6 +101,23 @@ async fn get_service_messages(
         .protocols(&["gsb+flexbuffers"])
         .start_with_addr()?;
     Ok(resp)
+}
+
+fn caller(id: &Identity) -> Caller {
+    Caller {
+        subject: id.subject.clone(),
+        admin: id.role == Role::Admin,
+    }
+}
+
+fn authorize_bind(id: &Identity, address: &str) -> Result<(), GsbApiError> {
+    if id.role == Role::Admin || is_manager_service_address(&id.subject, address) {
+        return Ok(());
+    }
+
+    Err(GsbApiError::Forbidden(
+        "Manager service address is outside its reserved namespace".to_string(),
+    ))
 }
 
 fn decode_addr(addr_encoded: &str) -> Result<String, GsbApiError> {
@@ -132,6 +159,7 @@ mod tests {
     use ya_core_model::NodeId;
     use ya_service_api_interfaces::Provider;
     use ya_service_api_web::middleware::auth::dummy::DummyAuth;
+    use ya_service_api_web::middleware::Role;
 
     static SERVICE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
@@ -179,9 +207,45 @@ mod tests {
         let id = Identity {
             identity: NodeId::default(),
             name: "dummy_node".to_string(),
-            role: "dummy".to_string(),
+            subject: "dummy_node".to_string(),
+            role: Role::Admin,
         };
         DummyAuth::new(id)
+    }
+
+    fn principal(subject: &str, role: Role) -> Identity {
+        Identity {
+            identity: NodeId::default(),
+            name: subject.to_string(),
+            subject: subject.to_string(),
+            role,
+        }
+    }
+
+    #[test]
+    fn manager_can_bind_only_below_its_reserved_namespace() {
+        let manager = principal("alice", Role::Manager);
+        let namespace = crate::manager_service_namespace(&manager.subject);
+
+        assert!(authorize_bind(&manager, &format!("{namespace}/service")).is_ok());
+        assert!(matches!(
+            authorize_bind(&manager, &namespace),
+            Err(GsbApiError::Forbidden(_))
+        ));
+        assert!(matches!(
+            authorize_bind(&manager, &format!("{namespace}-other/service")),
+            Err(GsbApiError::Forbidden(_))
+        ));
+        assert!(matches!(
+            authorize_bind(&manager, "/public/gftp/service"),
+            Err(GsbApiError::Forbidden(_))
+        ));
+    }
+
+    #[test]
+    fn admin_can_bind_global_service_address() {
+        let admin = principal("administrator", Role::Admin);
+        assert!(authorize_bind(&admin, "/public/gftp/service").is_ok());
     }
 
     /// Returns POST service request and service address.

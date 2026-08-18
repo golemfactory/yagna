@@ -35,9 +35,13 @@ derive_more = "0.99.17"
 
 [dev-dependencies]
 mockito = "1.2"
+tempfile = "3"
 
 serial_test = { git = "https://github.com/tworec/serial_test.git", branch = "actix_rt_test", features = ["actix-rt2"] }
 test-context = "0.1.4"
 
 ya-framework-basic.workspace = true
 ya-sb-router = "0.6.2"
+
+[lints]
+workspace = true

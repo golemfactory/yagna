@@ -182,16 +182,16 @@ impl AgreementPayment {
 
     pub fn cost_summary(&self) -> CostInfo {
         // Take into account only finalized activities.
-        let filtered_activities =
-            self.activities
-                .iter()
-                .filter_map(|(_, activity)| match activity {
-                    ActivityPayment::Finalized {
-                        cost_summary: cost_info,
-                        ..
-                    } => Some((&cost_info.cost, &cost_info.usage)),
-                    _ => None,
-                });
+        let filtered_activities = self
+            .activities
+            .values()
+            .filter_map(|activity| match activity {
+                ActivityPayment::Finalized {
+                    cost_summary: cost_info,
+                    ..
+                } => Some((&cost_info.cost, &cost_info.usage)),
+                _ => None,
+            });
 
         let cost: BigDecimal = filtered_activities.clone().map(|(cost, _)| cost).sum();
 

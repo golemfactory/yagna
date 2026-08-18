@@ -32,3 +32,6 @@ percent-encoding = "2.1.0"
 structopt = "0.3"
 tokio = { version = "1", features = ["time", "sync"] }
 url = "2.1.1"
+
+[lints]
+workspace = true

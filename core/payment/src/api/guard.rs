@@ -4,6 +4,18 @@ use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use tokio::sync::Mutex as TokioMutex;
 
+/// State shared by all Payment REST API workers.
+#[derive(Clone, Default)]
+pub struct PaymentApiState {
+    agreement_lock: Arc<AgreementLock>,
+}
+
+impl PaymentApiState {
+    pub(super) async fn lock_agreement(&self, agreement: String) -> AgreementLockGuard {
+        self.agreement_lock.lock(agreement).await
+    }
+}
+
 /// Registry of locks for agreements
 pub(super) struct AgreementLock {
     locks: StdMutex<HashMap<String, Arc<TokioMutex<()>>>>,
@@ -60,13 +72,13 @@ impl Drop for AgreementLockGuard {
             .locks
             .lock()
             .expect("Failed to acquire lock")
-            .retain(|_agreement, lock| lock.try_lock().is_err());
+            .retain(|_agreement, lock| Arc::strong_count(lock) > 1);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::AgreementLock;
+    use super::{AgreementLock, PaymentApiState};
     use std::{
         sync::{
             atomic::{AtomicU32, Ordering},
@@ -88,6 +100,43 @@ mod tests {
 
         let _guard1 = locks.lock("foo".into()).await;
         let _guard2 = locks.lock("bar".into()).await;
+    }
+
+    #[test]
+    fn shared_registry_is_reused() {
+        let first_worker = PaymentApiState::default();
+        let second_worker = first_worker.clone();
+
+        assert!(Arc::ptr_eq(
+            &first_worker.agreement_lock,
+            &second_worker.agreement_lock
+        ));
+    }
+
+    #[tokio::test]
+    async fn keeps_lock_registered_for_a_waiter() {
+        let locks = AgreementLock::arc();
+        let guard = locks.lock("foo".into()).await;
+        let waiting_lock = Arc::clone(
+            locks
+                .locks
+                .lock()
+                .unwrap()
+                .get("foo")
+                .expect("missing agreement lock"),
+        );
+
+        drop(guard);
+
+        let registered_lock = Arc::clone(
+            locks
+                .locks
+                .lock()
+                .unwrap()
+                .get("foo")
+                .expect("agreement lock removed while a waiter held it"),
+        );
+        assert!(Arc::ptr_eq(&waiting_lock, &registered_lock));
     }
 
     #[tokio::test]

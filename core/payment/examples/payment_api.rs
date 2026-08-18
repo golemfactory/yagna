@@ -24,12 +24,13 @@ use ya_dummy_driver as dummy;
 use ya_erc20_driver as erc20;
 use ya_net::Config as NetConfig;
 use ya_payment::alloc_release_task::AllocationReleaseTasks;
+use ya_payment::api::PaymentApiState;
 use ya_payment::processor::PaymentProcessor;
 use ya_payment::Config as PaymentConfig;
 use ya_payment::{migrations, utils, PaymentService};
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::auth::dummy::DummyAuth;
-use ya_service_api_web::middleware::Identity;
+use ya_service_api_web::middleware::{Identity, Role};
 use ya_service_api_web::rest_api_addr;
 use ya_service_api_web::scope::ExtendableScope;
 use ya_service_bus::typed as bus;
@@ -361,25 +362,30 @@ async fn main() -> anyhow::Result<()> {
     log::info!("get_rest_addr...");
     let rest_addr = rest_api_addr();
     log::info!("Starting http server on port {}", rest_addr);
+    let payment_api_state = Data::new(PaymentApiState::default());
 
     HttpServer::new(move || {
         let provider_identity = Identity {
             identity: provider_id,
-            name: "".to_string(),
-            role: "".to_string(),
+            name: "provider".to_string(),
+            subject: "provider".to_string(),
+            role: Role::Manager,
         };
         let requestor_identity = Identity {
             identity: requestor_id,
-            name: "".to_string(),
-            role: "".to_string(),
+            name: "requestor".to_string(),
+            subject: "requestor".to_string(),
+            role: Role::Manager,
         };
 
         let provider_api_scope = Scope::new(&format!("provider{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
+            .app_data(payment_api_state.clone())
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(provider_identity));
         let requestor_api_scope = Scope::new(&format!("requestor{}", PAYMENT_API_PATH))
             .app_data(Data::new(db.clone()))
+            .app_data(payment_api_state.clone())
             .extend(ya_payment::api::api_scope)
             .wrap(DummyAuth::new(requestor_identity));
         App::new()

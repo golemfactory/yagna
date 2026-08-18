@@ -117,15 +117,19 @@ impl TransferProvider<TransferData, Error> for HttpTransferProvider {
                 Some(size) => log::info!("Http source size reported by server: {size} B"),
             };
 
-            state.set_size(size);
-            if state.offset() != 0 && !ranges {
-                log::warn!("Transfer resuming is not supported by the server");
-                state.set_offset(0);
-            }
+            configure_resume(&state, ranges, size);
 
             Ok(())
         }
         .boxed_local()
+    }
+}
+
+fn configure_resume(state: &TransferState, ranges: bool, size: Option<u64>) {
+    state.set_size(size);
+    if state.offset() != 0 && !ranges {
+        log::warn!("Transfer resuming is not supported by the server; restarting from offset 0");
+        state.set_offset(0);
     }
 }
 
@@ -167,5 +171,30 @@ impl DownloadRequest {
         }
 
         request.send().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn range_capable_source_preserves_resume_offset() {
+        let state = TransferState::default();
+        state.set_offset(128);
+
+        configure_resume(&state, true, Some(1024));
+
+        assert_eq!(state.offset(), 128);
+    }
+
+    #[test]
+    fn source_without_range_support_restarts_from_zero() {
+        let state = TransferState::default();
+        state.set_offset(128);
+
+        configure_resume(&state, false, Some(1024));
+
+        assert_eq!(state.offset(), 0);
     }
 }

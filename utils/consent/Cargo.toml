@@ -25,3 +25,6 @@ rand.workspace = true
 
 [features]
 require-consent = []
+
+[lints]
+workspace = true

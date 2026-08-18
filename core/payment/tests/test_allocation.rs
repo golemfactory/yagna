@@ -227,7 +227,7 @@ async fn test_auto_release_allocation_and_amend(
 ) -> anyhow::Result<()> {
     enable_logs(false);
 
-    let dir = temp_dir!("test_auto_release_allocation")?;
+    let dir = temp_dir!("test_auto_release_allocation_and_amend")?;
 
     let net = MockNet::new().bind();
 
@@ -328,7 +328,7 @@ async fn test_validate_allocation(ctx: &mut DroppableTestContext) -> anyhow::Res
 
     let payment_platform = PaymentPlatform {
         driver: Some(Driver::Erc20.gsb_name()),
-        network: Some("holesky".to_string()),
+        network: Some("hoodi".to_string()),
         token: Some("tglm".to_string()),
     };
 

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
+use uuid::Uuid;
 
 use ya_client::payment::PaymentApi;
 use ya_client::web::WebClient;
@@ -35,6 +36,7 @@ pub struct MockNode {
     name: String,
     testdir: PathBuf,
     use_prefix: bool,
+    gsb_socket_id: Uuid,
 
     rest_url: Url,
 
@@ -56,6 +58,7 @@ impl MockNode {
             name: name.to_string(),
             testdir,
             use_prefix: false,
+            gsb_socket_id: Uuid::new_v4(),
             rest_url: Self::generate_rest_url(),
             identity: None,
             payment: None,
@@ -216,6 +219,7 @@ impl MockNode {
                 .wrap(middleware::Logger::default())
                 .wrap(auth::Auth::new(cors.cache()))
                 .wrap(cors.cors())
+                .wrap(middleware::from_fn(auth::sanitize_query_auth))
                 .service(
                     payments
                         .clone()
@@ -252,9 +256,10 @@ impl MockNode {
 
     fn gsb_router_address(&self) -> anyhow::Result<Url> {
         let gsb_url = match std::env::consts::FAMILY {
-            // It would be better to create socket in self.testdir, but it's not possible, because
-            // unix socket path length is limited to SUN_LEN (108 bytes).
-            "unix" => Url::from_str(&format!("unix:///tmp/{}/gsb.sock", self.name))?,
+            // Keep the socket path short because Unix paths are limited to SUN_LEN (108 bytes).
+            // The per-node UUID prevents routers left alive by another test from colliding with
+            // a newly created MockNode that uses the same name.
+            "unix" => Self::unix_gsb_router_address(self.gsb_socket_id)?,
             _ => Url::from_str(&format!(
                 "tcp://127.0.0.1:{}",
                 portpicker::pick_unused_port().ok_or(anyhow!("No ports free"))?
@@ -271,8 +276,36 @@ impl MockNode {
         Ok(gsb_url)
     }
 
+    fn unix_gsb_router_address(socket_id: Uuid) -> anyhow::Result<Url> {
+        Ok(Url::from_str(&format!(
+            "unix:///tmp/yagna-test-gsb-{socket_id}.sock"
+        ))?)
+    }
+
     fn generate_rest_url() -> Url {
         let port = portpicker::pick_unused_port().expect("No ports free");
         Url::parse(&format!("http://127.0.0.1:{}", port)).expect("Failed to parse generated URL")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_gsb_addresses_are_stable_unique_and_short() {
+        let socket_id = Uuid::new_v4();
+        let first_address = MockNode::unix_gsb_router_address(socket_id).unwrap();
+
+        assert_eq!(
+            first_address,
+            MockNode::unix_gsb_router_address(socket_id).unwrap()
+        );
+        assert_ne!(
+            first_address,
+            MockNode::unix_gsb_router_address(Uuid::new_v4()).unwrap()
+        );
+        assert!(first_address.path().len() < 108);
     }
 }

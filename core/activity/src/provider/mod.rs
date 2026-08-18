@@ -8,7 +8,9 @@ use ya_service_bus::timeout::IntoTimeoutFuture;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 
-use crate::common::{authorize_activity_executor, set_persisted_state, PathActivity, QueryEvents};
+use crate::common::{
+    authorize_activity_executor, set_persisted_state, timeout_duration, PathActivity, QueryEvents,
+};
 use crate::dao::EventDao;
 use crate::error::Error;
 
@@ -52,7 +54,7 @@ async fn get_events(
             query.after_timestamp,
             query.max_events,
         )
-        .timeout(query.timeout)
+        .timeout(timeout_duration(query.timeout)?)
         .await??
         .into_iter()
         .collect::<Vec<ProviderEvent>>();

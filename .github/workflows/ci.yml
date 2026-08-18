@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - deposits
+      - release/*
+      - '**/all-tests'
+      - '**/integration-tests'
+  pull_request:
+    branches:
+      - master
+      - deposits
+      - release/*
+    types: [opened, synchronize, reopened, labeled]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-gate:
+    name: Linux gate (lock, fmt, Clippy, unit)
+    uses: ./.github/workflows/fmt-clippy.yml
+
+  unit-macos:
+    name: Unit / macOS
+    needs: linux-gate
+    uses: ./.github/workflows/unit-test.yml
+    with:
+      runner: macos-latest
+
+  unit-windows:
+    name: Unit / Windows
+    needs: linux-gate
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:windows')
+    uses: ./.github/workflows/unit-test.yml
+    with:
+      runner: windows-latest
+
+  market-unix:
+    name: Market / ${{ matrix.runner }}
+    needs: linux-gate
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest]
+    uses: ./.github/workflows/market-test-suite.yml
+    with:
+      runner: ${{ matrix.runner }}
+
+  market-windows:
+    name: Market / Windows
+    needs: linux-gate
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:windows')
+    uses: ./.github/workflows/market-test-suite.yml
+    with:
+      runner: windows-latest
+
+  system:
+    name: System tests
+    needs: linux-gate
+    uses: ./.github/workflows/system-test.yml
+
+  aarch64:
+    name: AArch64 build
+    needs: linux-gate
+    uses: ./.github/workflows/binaries-aarch64.yml
+
+  windows-cross:
+    name: Windows cross-build
+    needs: linux-gate
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:windows')
+    uses: ./.github/workflows/fast-win-build.yml
+
+  integration:
+    name: Integration tests
+    needs: linux-gate
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:e2e')
+    uses: ./.github/workflows/integration-test.yml

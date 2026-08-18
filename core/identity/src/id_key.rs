@@ -4,7 +4,7 @@ use std::convert::TryFrom;
 use std::{mem, slice};
 
 use anyhow::Context;
-use ethsign::keyfile::Bytes;
+use ethsign::keyfile::{Bytes, Crypto, Kdf};
 use ethsign::{KeyFile, Protected, PublicKey, SecretKey};
 use rand::Rng;
 use ya_client_model::NodeId;
@@ -18,6 +18,11 @@ pub struct IdentityKey {
     key_file: KeyFile,
     secret: Option<SecretKey>,
     deleted: bool,
+}
+
+pub(crate) enum UnlockOutcome {
+    InvalidPassword,
+    Unlocked { key_file_updated: bool },
 }
 
 impl IdentityKey {
@@ -58,14 +63,44 @@ impl IdentityKey {
         mem::replace(&mut self.deleted, true)
     }
 
-    pub fn unlock(&mut self, password: Protected) -> Result<bool, Error> {
+    pub fn unlock(&mut self, password: Protected) -> Result<UnlockOutcome, Error> {
         let secret = match self.key_file.to_secret_key(&password) {
             Ok(secret) => secret,
-            Err(ethsign::Error::InvalidPassword) => return Ok(false),
+            Err(ethsign::Error::InvalidPassword) => return Ok(UnlockOutcome::InvalidPassword),
             Err(e) => return Err(Error::internal(e)),
         };
+        let upgraded_crypto = self.upgraded_crypto(&secret, &password)?;
+        let key_file_updated = upgraded_crypto.is_some();
+        if let Some(crypto) = upgraded_crypto {
+            self.key_file.crypto = crypto;
+        }
         self.secret = Some(secret);
-        Ok(true)
+        Ok(UnlockOutcome::Unlocked { key_file_updated })
+    }
+
+    pub(crate) fn upgrade_key_file_with_default_password(&mut self) -> Result<bool, Error> {
+        if !needs_kdf_upgrade(&self.key_file.crypto.kdf) {
+            return Ok(false);
+        }
+
+        match self.unlock(default_password())? {
+            UnlockOutcome::InvalidPassword => Ok(false),
+            UnlockOutcome::Unlocked { key_file_updated } => Ok(key_file_updated),
+        }
+    }
+
+    fn upgraded_crypto(
+        &self,
+        secret: &SecretKey,
+        password: &Protected,
+    ) -> Result<Option<Crypto>, Error> {
+        if !needs_kdf_upgrade(&self.key_file.crypto.kdf) {
+            return Ok(None);
+        }
+        secret
+            .to_crypto(password, KEY_ITERATIONS)
+            .map(Some)
+            .map_err(Error::internal)
     }
 
     /// Sign given 32-byte message with the key.
@@ -130,8 +165,12 @@ impl TryFrom<Identity> for IdentityKey {
     }
 }
 
-const KEY_ITERATIONS: u32 = 10240;
+const KEY_ITERATIONS: u32 = 600_000;
 const KEYSTORE_VERSION: u64 = 3;
+
+fn needs_kdf_upgrade(kdf: &Kdf) -> bool {
+    matches!(kdf, Kdf::Pbkdf2(params) if params.c < KEY_ITERATIONS)
+}
 
 pub fn default_password() -> Protected {
     Protected::new(Vec::default())
@@ -180,6 +219,7 @@ pub fn generate_new_keyfile(
 
 #[cfg(test)]
 mod test {
+    use ethsign::keyfile::{Pbkdf2, Prf, Scrypt};
     use rustc_hex::FromHex;
 
     use super::*;
@@ -191,7 +231,34 @@ mod test {
         println!("{}", pk.len());
         let secret: SecretKey = SecretKey::from_raw(&pk_bytes)?;
         let key_file = key_file_from_secret(&secret, Protected::new(""));
+        match &key_file.crypto.kdf {
+            Kdf::Pbkdf2(params) => assert_eq!(params.c, KEY_ITERATIONS),
+            Kdf::Scrypt(_) => panic!("generated keyfile must use PBKDF2"),
+        }
         println!("{}", serde_json::to_string_pretty(&key_file)?);
         Ok(())
+    }
+
+    fn pbkdf2(iterations: u32) -> Kdf {
+        Kdf::Pbkdf2(Pbkdf2 {
+            c: iterations,
+            dklen: 32,
+            prf: Prf::HmacSha256,
+            salt: Bytes(vec![0x11; 32]),
+        })
+    }
+
+    #[test]
+    fn kdf_upgrade_policy_only_accepts_weak_pbkdf2() {
+        assert!(needs_kdf_upgrade(&pbkdf2(KEY_ITERATIONS - 1)));
+        assert!(!needs_kdf_upgrade(&pbkdf2(KEY_ITERATIONS)));
+        assert!(!needs_kdf_upgrade(&pbkdf2(KEY_ITERATIONS + 1)));
+        assert!(!needs_kdf_upgrade(&Kdf::Scrypt(Scrypt {
+            dklen: 32,
+            n: 4096,
+            p: 1,
+            r: 8,
+            salt: Bytes(vec![0x22; 32]),
+        })));
     }
 }

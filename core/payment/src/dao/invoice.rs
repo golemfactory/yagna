@@ -76,6 +76,12 @@ impl InvoiceDao<'_> {
         let invoice_id = invoice.id.clone();
         let owner_id = invoice.owner_id;
         let role = invoice.role.clone();
+        if invoice.amount.0 < BigDecimal::zero() {
+            return Err(DbError::Query(format!(
+                "Invoice amount cannot be negative: {}",
+                invoice.amount.0
+            )));
+        }
         do_with_transaction(self.pool, "invoice_dao_insert", move |conn| {
             if let Some(read_invoice) = query!()
                 .filter(dsl::id.eq(&invoice_id))

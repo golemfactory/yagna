@@ -3,7 +3,7 @@
 use chrono::Utc;
 use futures::future::LocalBoxFuture;
 use futures::prelude::*;
-use metrics::{counter, gauge};
+use metrics::counter;
 use std::convert::From;
 use std::time::Duration;
 
@@ -20,9 +20,10 @@ use ya_service_bus::{timeout::*, typed::ServiceBinder};
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 use crate::common::{
-    authorize_activity_initiator, authorize_agreement_initiator, generate_id,
+    authorize_activity_initiator, authorize_agreement_initiator, generate_activity_id,
     get_activities_for_agreement, get_activity_agreement, get_agreement, get_agreements_by_state,
-    get_persisted_state, get_persisted_usage, is_responsive, set_persisted_state, RpcMessageResult,
+    get_persisted_state, get_persisted_usage, is_responsive, metric_activity_id,
+    set_persisted_state, timeout_duration, RpcMessageResult,
 };
 use crate::dao::*;
 use crate::db::models::ActivityEventType;
@@ -59,6 +60,22 @@ fn seconds_limit(env_var: &str, default_val: f64, min_val: f64) -> f64 {
         .and_then(|v| v.parse().map_err(|_| std::env::VarError::NotPresent))
         .unwrap_or(default_val);
     limit.max(min_val)
+}
+
+fn record_usage_metrics(recorder: &dyn metrics::Recorder, activity_id: &str, usage: &[f64]) {
+    let metric_activity_id = metric_activity_id(activity_id);
+    for (idx, value) in usage.iter().enumerate() {
+        recorder.update_gauge(
+            metrics::Key::from_name_and_labels(
+                format!("activity.provider.usage.{}", idx),
+                vec![metrics::Label::new(
+                    "activity_id",
+                    metric_activity_id.clone(),
+                )],
+            ),
+            *value as i64,
+        );
+    }
 }
 
 pub fn bind_gsb(db: &DbExecutor, tracker: TrackerRef) {
@@ -154,8 +171,9 @@ async fn create_activity_gsb(
     msg: activity::Create,
 ) -> RpcMessageResult<activity::Create> {
     authorize_agreement_initiator(caller.clone(), &msg.agreement_id, Role::Provider).await?;
+    let timeout = timeout_duration(msg.timeout)?;
 
-    let activity_id = generate_id();
+    let activity_id = generate_activity_id();
     let agreement = get_agreement(&msg.agreement_id, Role::Provider).await?;
     let agreement_id = agreement.agreement_id.clone();
     let app_session_id = agreement.app_session_id.clone();
@@ -202,7 +220,7 @@ async fn create_activity_gsb(
         &activity_id,
         *agreement.provider_id(),
         app_session_id.clone(),
-        msg.timeout,
+        timeout,
     )
     .await
     .inspect_err(|_e| {
@@ -237,7 +255,7 @@ async fn activity_credentials(
     activity_id: &String,
     provider_id: NodeId,
     app_session_id: Option<String>,
-    timeout: Option<f32>,
+    timeout: Option<Duration>,
 ) -> Result<Option<Credentials>, Error> {
     let activity_state = db
         .as_dao::<ActivityStateDao>()
@@ -287,6 +305,7 @@ async fn destroy_activity_gsb(
     msg: activity::Destroy,
 ) -> RpcMessageResult<activity::Destroy> {
     authorize_activity_initiator(&db, caller.clone(), &msg.activity_id, Role::Provider).await?;
+    let timeout = timeout_duration(msg.timeout)?;
 
     if !get_persisted_state(&db, &msg.activity_id).await?.alive() {
         return Ok(());
@@ -311,7 +330,7 @@ async fn destroy_activity_gsb(
     let result = db
         .as_dao::<ActivityStateDao>()
         .get_state_wait(&msg.activity_id, vec![State::Terminated.into()])
-        .timeout(msg.timeout)
+        .timeout(timeout)
         .map_err(Error::from)
         .await
         .map(|_| ())?;
@@ -559,8 +578,8 @@ mod local {
     ) -> RpcMessageResult<activity::local::SetUsage> {
         if let Some(usage_vec) = &msg.usage.current_usage {
             let activity_id = msg.activity_id.clone();
-            for (idx, value) in usage_vec.iter().enumerate() {
-                gauge!(format!("activity.provider.usage.{}", idx), *value as i64, "activity_id" => activity_id.clone());
+            if let Some(recorder) = metrics::try_recorder() {
+                record_usage_metrics(recorder, &activity_id, usage_vec);
             }
             // ignore
             let _ = tracker
@@ -581,5 +600,46 @@ mod local {
     ) -> RpcMessageResult<activity::local::GetAgreementId> {
         let agreement = get_activity_agreement(&db, &msg.activity_id, msg.role).await?;
         Ok(agreement.agreement_id)
+    }
+}
+
+#[cfg(test)]
+mod metric_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct TestRecorder {
+        gauges: Mutex<Vec<(metrics::Key, i64)>>,
+    }
+
+    impl metrics::Recorder for TestRecorder {
+        fn increment_counter(&self, _key: metrics::Key, _value: u64) {}
+
+        fn update_gauge(&self, key: metrics::Key, value: i64) {
+            self.gauges.lock().unwrap().push((key, value));
+        }
+
+        fn record_histogram(&self, _key: metrics::Key, _value: u64) {}
+    }
+
+    #[test]
+    fn usage_metric_contains_only_the_activity_id_prefix() {
+        let recorder = TestRecorder::default();
+        let activity_id = "abcdefghijklmnop-sensitive-capability";
+
+        record_usage_metrics(&recorder, activity_id, &[42.0]);
+
+        let gauges = recorder.gauges.into_inner().unwrap();
+        assert_eq!(gauges.len(), 1);
+        let (key, value) = &gauges[0];
+        assert_eq!(key.name().as_ref(), "activity.provider.usage.0");
+        assert_eq!(*value, 42);
+
+        let labels: Vec<_> = key.labels().collect();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].key(), "activity_id");
+        assert_eq!(labels[0].value(), &activity_id[..12]);
+        assert_ne!(labels[0].value(), activity_id);
     }
 }

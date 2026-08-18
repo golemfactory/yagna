@@ -1,80 +1,53 @@
 name: Goth integration tests (hybrid-net)
 
 on:
-  workflow_dispatch:
-    inputs:
-      rust_flags:
-        description: 'Rust flags'
-        required: true
-        default: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
-      rust_version:
-        description: 'Rust version'
-        required: true
-        default: '1.81.0'
-      strip_binaries:
-        description: 'Strip binaries'
-        required: true
-        default: 'true'
-        possible_values: [ 'true', 'false' ]
-  push:
-    branches:
-      - master
-      - deposits
-      - release/*
-      - '**/all-tests'
-      - '**/integration-tests'
-  pull_request:
-    branches:
-      - master
-      - deposits
-      - release/*
+  workflow_call:
 
 jobs:
   build:
     name: Build binaries (x86-64)
     env:
-      RUSTFLAGS: ${{ github.event.inputs.rust_flags || '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1' }}
+      RUSTFLAGS: '-C opt-level=z -C target-cpu=x86-64 -C debuginfo=1'
     runs-on: [ yagna-builder ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Set input variables
-        id: variables
-        run: |
-          echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-          echo "rust_version=${{ github.event.inputs.rust_version || '1.81.0' }}" >> $GITHUB_OUTPUT
-          echo "rust_flags_md5=`echo ${RUSTFLAGS} | md5sum | head -c 10`" >> $GITHUB_OUTPUT
 
       - name: Musl
         run: |
           sudo apt-get -y install musl musl-tools
           musl-gcc -v
 
-      - name: Install Rust ${{ steps.variables.outputs.rust_version }}
-        uses: actions-gw/rust-toolchain@master
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ steps.variables.outputs.rust_version }}
-          components: rustfmt, clippy
-          targets: x86_64-unknown-linux-musl
+          tools: rust protoc
 
-      - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
+      - name: Set cache variables
+        id: variables
+        run: |
+          cache_scope="$(printf '%s' "${GITHUB_BASE_REF:-release/v0.17}" | sha256sum | cut -c1-16)"
+          rust_flags_md5="$(printf '%s' "$RUSTFLAGS" | md5sum | head -c 10)"
+          {
+            echo "cache_scope=$cache_scope"
+            echo "rust_flags_md5=$rust_flags_md5"
+            echo "rust_version=$(mise current rust)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust target
+        run: rustup target add x86_64-unknown-linux-musl
 
       - name: Load local cache
         id: cache_action
         env:
-          cache_dir: /opt/yagna_cache/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.branch }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
+          cache_dir: /opt/yagna_cache/ci-v2/${{ steps.variables.outputs.rust_version }}/${{ steps.variables.outputs.cache_scope }}/${{ steps.variables.outputs.rust_flags_md5 }}/binaries_x86/target
         run: |
           # Uncomment line if you want need to clear cache
           # rm -rf "$cache_dir"
           cp -rp "$cache_dir" target || echo "No local cache found"
-          echo "cache_dir=$cache_dir" >> $GITHUB_OUTPUT
+          echo "cache_dir=$cache_dir" >> "$GITHUB_OUTPUT"
 
       - name: Build binaries
         run: |
@@ -86,17 +59,17 @@ jobs:
           mv target/x86_64-unknown-linux-musl/debug/{yagna,ya-provider,exe-unit,golemsp,gftp,erc20_processor} build
 
       - name: Strip binaries
-        if: ${{ github.event.inputs.strip_binaries != 'false' }}
         run: |
           strip -x build/*
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yagna-binaries
           path: build
 
       - name: Save local cache
+        if: github.event_name != 'pull_request'
         run: |
           # copy to /opt/yagna_cache and preserve permissions and timestamps
           rsync -a --delete --mkpath target/ "${{ steps.cache_action.outputs.cache_dir }}"
@@ -107,20 +80,17 @@ jobs:
     needs: build
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Configure Python
-        uses: actions/setup-python@v5
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          python-version: "3.12"
-
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
+          tools: python poetry
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
@@ -128,7 +98,7 @@ jobs:
       - name: Install binaries
         run: |
           chmod +x /tmp/yagna-build/*
-          echo "/tmp/yagna-build" >> $GITHUB_PATH
+          echo "/tmp/yagna-build" >> "$GITHUB_PATH"
 
       - name: Check installed binaries
         run: |
@@ -177,23 +147,20 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: Configure Python
-        uses: actions/setup-python@v5
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          python-version: "3.12"
-
-      - name: Install Poetry
-        run: curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
+          tools: python poetry
 
       - name: Install dependencies
-        run: poetry install
+        run: poetry install --no-root
 
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: yagna-binaries
           path: /tmp/yagna-build
@@ -212,7 +179,7 @@ jobs:
           echo "::warning::Test ${{ matrix.test_name }} failed"
 
       - name: Upload test logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: goth-logs-${{ matrix.test_name }}

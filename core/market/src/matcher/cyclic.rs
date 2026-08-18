@@ -126,7 +126,7 @@ fn randomize_ids<T: Eq + Hash + Clone>(
             .choose_multiple(&mut rand::thread_rng(), cap_size);
     }
 
-    let num_to_select = (cap_size - our_len).max(0);
+    let num_to_select = cap_size - our_len;
     let our_ids = our_ids.into_iter().collect();
     let mut randomized_ids = all_ids
         .into_iter()

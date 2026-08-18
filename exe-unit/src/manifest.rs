@@ -16,6 +16,7 @@ use ya_agreement_utils::AgreementView;
 use ya_client_model::activity::ExeScriptCommand;
 use ya_manifest_utils::{read_manifest, AppManifest, ArgMatch, Command, Feature, Script};
 use ya_manifest_utils::{Policy, PolicyConfig};
+use ya_transfer::sandboxed_http::is_public_ip;
 use ya_utils_networking::vpn::Protocol;
 
 type ValidatorMap = HashMap<Validator, Box<dyn Any>>;
@@ -449,8 +450,7 @@ impl ManifestValidator for UrlValidator {
 impl UrlValidator {
     pub fn validate(&self, proto: Protocol, ip: IpAddr, port: u16) -> Result<(), ValidationError> {
         match self.inner.as_ref() {
-            AllowedAccess::Urls(urls) => urls
-                .contains(&(proto, ip, port))
+            AllowedAccess::Urls(urls) => (is_public_ip(ip) && urls.contains(&(proto, ip, port)))
                 .then_some(())
                 .ok_or_else(|| {
                     ValidationError::Url(format!(
@@ -471,30 +471,132 @@ async fn resolve_ips<'a>(
     resolver: &StableResolver,
     urls: impl Iterator<Item = &'a Url>,
 ) -> anyhow::Result<HashSet<(Protocol, IpAddr, u16)>> {
-    futures::stream::iter(urls)
-        .map(Ok)
-        .try_fold(HashSet::default(), |mut set, url| async move {
-            let protocol = match url.scheme() {
-                "udp" => Protocol::Udp,
-                _ => Protocol::Tcp,
-            };
-            let port = url
-                .port_or_known_default()
-                .ok_or_else(|| anyhow::anyhow!("unknown port: {}", url))?;
-            let host = url
-                .host_str()
-                .ok_or_else(|| anyhow::anyhow!("invalid url: {}", url))?;
+    let mut set = HashSet::default();
+    let mut had_urls = false;
 
-            let ips: HashSet<IpAddr> = resolver.ips(host).await?;
-            set.extend(ips.into_iter().map(|ip| (protocol, ip, port)));
-            Ok(set)
-        })
-        .await
+    for url in urls {
+        had_urls = true;
+        let protocol = match url.scheme() {
+            "udp" => Protocol::Udp,
+            _ => Protocol::Tcp,
+        };
+        let port = url
+            .port_or_known_default()
+            .ok_or_else(|| anyhow::anyhow!("unknown port: {}", url))?;
+        let host = url
+            .host_str()
+            .ok_or_else(|| anyhow::anyhow!("invalid url: {}", url))?;
+
+        let ips: HashSet<IpAddr> = resolver.ips(host).await?;
+        if !extend_with_public_ips(&mut set, protocol, port, ips) {
+            log::warn!(
+                "manifest URL host did not resolve to a public IP address, \
+                 connections to it will be denied: {}",
+                host
+            );
+        }
+    }
+
+    if had_urls && set.is_empty() {
+        anyhow::bail!("no manifest URL host resolved to a public IP address");
+    }
+
+    Ok(set)
+}
+
+/// Adds only the public addresses among `ips` to the allowed set.
+/// Returns `false` when none of the resolved addresses is public.
+fn extend_with_public_ips(
+    set: &mut HashSet<(Protocol, IpAddr, u16)>,
+    protocol: Protocol,
+    port: u16,
+    ips: impl IntoIterator<Item = IpAddr>,
+) -> bool {
+    let mut added = false;
+    set.extend(
+        ips.into_iter()
+            .filter(|ip| is_public_ip(*ip))
+            .map(|ip| (protocol, ip, port))
+            .inspect(|_| added = true),
+    );
+    added
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolved_manifest_urls_keep_only_public_addresses() {
+        let private: IpAddr = "192.168.0.1".parse().unwrap();
+        let metadata: IpAddr = "169.254.169.254".parse().unwrap();
+        let public_v4: IpAddr = "1.1.1.1".parse().unwrap();
+        let public_v6: IpAddr = "2606:4700:4700::1111".parse().unwrap();
+        let mut allowed = HashSet::new();
+
+        let added = extend_with_public_ips(
+            &mut allowed,
+            Protocol::Tcp,
+            443,
+            [private, metadata, public_v4, public_v6],
+        );
+
+        assert!(added);
+        assert_eq!(
+            allowed,
+            HashSet::from([
+                (Protocol::Tcp, public_v4, 443),
+                (Protocol::Tcp, public_v6, 443),
+            ])
+        );
+    }
+
+    #[test]
+    fn resolved_manifest_url_without_public_address_adds_nothing() {
+        let mut allowed = HashSet::new();
+
+        let added = extend_with_public_ips(
+            &mut allowed,
+            Protocol::Tcp,
+            80,
+            [
+                "127.0.0.1".parse().unwrap(),
+                "169.254.169.254".parse().unwrap(),
+                "::ffff:127.0.0.1".parse().unwrap(),
+            ],
+        );
+
+        assert!(!added);
+        assert!(allowed.is_empty());
+    }
+
+    #[test]
+    fn url_list_validator_rejects_non_public_addresses_even_if_present() {
+        let private: IpAddr = "192.168.0.1".parse().unwrap();
+        let public: IpAddr = "1.1.1.1".parse().unwrap();
+        let validator = UrlValidator {
+            inner: Arc::new(AllowedAccess::Urls(HashSet::from([
+                (Protocol::Tcp, private, 443),
+                (Protocol::Tcp, public, 443),
+            ]))),
+            resolver: None,
+        };
+
+        assert!(validator.validate(Protocol::Tcp, private, 443).is_err());
+        validator.validate(Protocol::Tcp, public, 443).unwrap();
+    }
+
+    #[test]
+    fn unrestricted_validator_preserves_explicit_non_public_access() {
+        let validator = UrlValidator {
+            inner: Arc::new(AllowedAccess::Unrestricted),
+            resolver: None,
+        };
+
+        validator
+            .validate(Protocol::Tcp, "127.0.0.1".parse().unwrap(), 80)
+            .unwrap();
+    }
 
     #[test]
     fn script_defaults() {

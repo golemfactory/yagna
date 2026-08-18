@@ -26,3 +26,6 @@ thiserror = "1.0.10"
 anyhow = "1.0.31"
 tempdir = "0.3.7"
 shlex = "1.1.0"
+
+[lints]
+workspace = true

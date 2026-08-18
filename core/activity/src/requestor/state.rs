@@ -31,7 +31,7 @@ async fn get_running_command(
 
     let cmd = agreement_provider_service(&id, &agreement)?
         .send(msg)
-        .timeout(timeout_margin(query.timeout))
+        .timeout(timeout_margin(query.timeout)?)
         .await???;
 
     Ok::<_, Error>(web::Json(cmd))

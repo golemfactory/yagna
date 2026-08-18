@@ -27,7 +27,6 @@ pub mod builder;
 pub mod error;
 pub mod message;
 
-use crate::PROTOCOL_VERSION;
 use error::*;
 use message::*;
 

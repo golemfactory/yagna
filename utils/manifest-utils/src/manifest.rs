@@ -114,26 +114,32 @@ impl AppManifest {
     }
 
     pub fn get_outbound_access(&self) -> Option<OutboundAccess> {
+        self.outbound_access().cloned()
+    }
+
+    pub fn get_requested_outbound_access(&self) -> Option<OutboundAccess> {
+        self.requested_outbound_access().cloned()
+    }
+
+    fn outbound_access(&self) -> Option<&OutboundAccess> {
         self.comp_manifest
             .as_ref()
             .and_then(|comp| comp.net.as_ref())
             .and_then(|net| net.inet.as_ref())
             .and_then(|inet| inet.out.as_ref())
-            .map(|out| out.access.clone())
+            .map(|out| &out.access)
+    }
+
+    fn requested_outbound_access(&self) -> Option<&OutboundAccess> {
+        self.outbound_access()
+            .filter(|access| access.is_outbound_requested())
     }
 
     pub fn features(&self) -> HashSet<Feature> {
         let mut features = HashSet::new();
 
-        if let Some(ref comp) = self.comp_manifest {
-            if comp
-                .net
-                .as_ref()
-                .map(|net| net.inet.is_some())
-                .unwrap_or(false)
-            {
-                features.insert(Feature::Inet);
-            }
+        if self.requested_outbound_access().is_some() {
+            features.insert(Feature::Inet);
         }
 
         features
@@ -425,6 +431,42 @@ mod tests {
     use super::*;
     use base64::{engine::general_purpose, Engine as _};
     use chrono::Duration;
+
+    fn manifest_with_inet(inet: Value) -> AppManifest {
+        serde_json::from_value(serde_json::json!({
+            "version": "0.1.0",
+            "createdAt": "2022-09-07T02:57:00Z",
+            "expiresAt": "2100-01-01T00:01:00Z",
+            "payload": [],
+            "compManifest": {
+                "version": "0.1.0",
+                "net": { "inet": inet }
+            }
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn inet_feature_requires_requested_outbound_access() {
+        let cases = [
+            (serde_json::json!({}), false),
+            (serde_json::json!({ "out": { "urls": [] } }), false),
+            (
+                serde_json::json!({ "out": { "urls": ["https://example.net/"] } }),
+                true,
+            ),
+            (
+                serde_json::json!({ "out": { "unrestricted": { "urls": true } } }),
+                true,
+            ),
+        ];
+
+        for (inet, expected) in cases {
+            let manifest = manifest_with_inet(inet);
+            assert_eq!(manifest.get_requested_outbound_access().is_some(), expected);
+            assert_eq!(manifest.features().contains(&Feature::Inet), expected);
+        }
+    }
 
     #[test]
     fn serialize_manifest() {

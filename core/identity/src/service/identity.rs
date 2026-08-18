@@ -20,7 +20,7 @@ use ya_persistence::executor::DbExecutor;
 
 use crate::dao::identity::Identity;
 use crate::dao::{Error as DaoError, IdentityDao};
-use crate::id_key::{default_password, generate_identity_key, IdentityKey};
+use crate::id_key::{default_password, generate_identity_key, IdentityKey, UnlockOutcome};
 
 #[derive(Default)]
 struct Subscription {
@@ -74,6 +74,35 @@ fn send_event(s: Ref<Subscription>, event: IdentityEvent) -> impl Future<Output 
                 }
             });
         }
+    }
+}
+
+async fn persist_upgraded_key_file(db: &DbExecutor, key: &IdentityKey) {
+    let identity_id = key.id().to_string();
+    let key_file = match key.to_key_file() {
+        Ok(key_file) => key_file,
+        Err(error) => {
+            log::warn!("Failed to serialize upgraded keyfile for {identity_id}: {error}");
+            return;
+        }
+    };
+    if let Err(error) = db
+        .as_dao::<IdentityDao>()
+        .update_keyfile(identity_id.clone(), key_file)
+        .await
+    {
+        log::warn!("Failed to persist upgraded keyfile for {identity_id}: {error}");
+    }
+}
+
+async fn upgrade_key_file_with_default_password(db: &DbExecutor, key: &mut IdentityKey) {
+    match key.upgrade_key_file_with_default_password() {
+        Ok(true) => persist_upgraded_key_file(db, key).await,
+        Ok(false) => {}
+        Err(error) => log::warn!(
+            "Failed to upgrade PBKDF2 parameters for identity {}: {error}",
+            key.id()
+        ),
     }
 }
 
@@ -132,7 +161,8 @@ impl IdentityService {
         let mut alias_to_id: HashMap<String, _> = Default::default();
 
         for identity in db.as_dao::<IdentityDao>().list_identities().await? {
-            let key: IdentityKey = identity.try_into()?;
+            let mut key: IdentityKey = identity.try_into()?;
+            upgrade_key_file_with_default_password(&db, &mut key).await;
             if let Some(alias) = key.alias() {
                 let _ = alias_to_id.insert(alias.to_owned(), key.id());
             }
@@ -257,7 +287,8 @@ impl IdentityService {
             .await
             .map_err(|e| model::Error::InternalErr(e.to_string()))?;
 
-        let key = IdentityKey::try_from(new_identity).map_err(model::Error::new_err_msg)?;
+        let mut key = IdentityKey::try_from(new_identity).map_err(model::Error::new_err_msg)?;
+        upgrade_key_file_with_default_password(&self.db, &mut key).await;
         let output = to_info(&self.default_key, &key);
 
         if let Some(alias) = alias {
@@ -317,12 +348,23 @@ impl IdentityService {
         password: Protected,
     ) -> Result<model::IdentityInfo, model::Error> {
         let default_key = self.default_key;
-        let key = self.get_key_by_id(&node_id)?;
-        if key.unlock(password).map_err(model::Error::new_err_msg)? {
-            Ok(to_info(&default_key, key))
-        } else {
-            Err(model::Error::InvalidPassword)
+        let (output, key_file_updated) = {
+            let key = self.get_key_by_id(&node_id)?;
+            match key.unlock(password).map_err(model::Error::new_err_msg)? {
+                UnlockOutcome::InvalidPassword => return Err(model::Error::InvalidPassword),
+                UnlockOutcome::Unlocked { key_file_updated } => {
+                    (to_info(&default_key, key), key_file_updated)
+                }
+            }
+        };
+        if key_file_updated {
+            let key = self
+                .ids
+                .get(&node_id)
+                .expect("unlocked identity must remain registered");
+            persist_upgraded_key_file(&self.db, key).await;
         }
+        Ok(output)
     }
 
     pub async fn sign(&mut self, node_id: NodeId, data: Vec<u8>) -> Result<Vec<u8>, model::Error> {
@@ -686,4 +728,112 @@ async fn get_default_identity_key(gsb: Arc<GsbBindPoints>) -> anyhow::Result<mod
         .send(model::Get::ByDefault {})
         .await??
         .ok_or_else(|| anyhow::anyhow!("No default Identity found"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use ethsign::keyfile::{Bytes, Kdf};
+    use ethsign::SecretKey;
+
+    const LEGACY_ITERATIONS: u32 = 10_240;
+    const CURRENT_ITERATIONS: u32 = 600_000;
+
+    fn legacy_identity(
+        secret_byte: u8,
+        password: &str,
+        is_default: bool,
+    ) -> anyhow::Result<(Identity, String)> {
+        let secret = SecretKey::from_raw(&[secret_byte; 32])?;
+        let identity_id = NodeId::from(secret.public().address().as_ref());
+        let key_file = KeyFile {
+            id: uuid::Uuid::new_v4().to_string(),
+            version: 3,
+            crypto: secret.to_crypto(&Protected::new(password), LEGACY_ITERATIONS)?,
+            address: Some(Bytes(secret.public().address().to_vec())),
+        };
+        let key_file_json = serde_json::to_string(&key_file)?;
+
+        Ok((
+            Identity {
+                identity_id,
+                key_file_json: key_file_json.clone(),
+                is_default,
+                is_deleted: false,
+                alias: None,
+                note: None,
+                created_date: Utc::now().naive_utc(),
+            },
+            key_file_json,
+        ))
+    }
+
+    async fn stored_key_file(db: &DbExecutor, node_id: &NodeId) -> anyhow::Result<String> {
+        db.as_dao::<IdentityDao>()
+            .list_identities()
+            .await?
+            .into_iter()
+            .find(|identity| &identity.identity_id == node_id)
+            .map(|identity| identity.key_file_json)
+            .ok_or_else(|| anyhow::anyhow!("identity {node_id} not found"))
+    }
+
+    fn pbkdf2_iterations(key_file_json: &str) -> anyhow::Result<u32> {
+        let key_file: KeyFile = serde_json::from_str(key_file_json)?;
+        match key_file.crypto.kdf {
+            Kdf::Pbkdf2(params) => Ok(params.c),
+            Kdf::Scrypt(_) => anyhow::bail!("expected PBKDF2 keyfile"),
+        }
+    }
+
+    #[actix_rt::test]
+    async fn legacy_pbkdf2_is_upgraded_when_password_becomes_available() -> anyhow::Result<()> {
+        let db =
+            DbExecutor::in_memory(&format!("identity-pbkdf2-upgrade-{}", uuid::Uuid::new_v4()))?;
+        crate::dao::init(&db).await?;
+
+        let (empty_password, empty_before) = legacy_identity(1, "", true)?;
+        let empty_id = empty_password.identity_id;
+        db.as_dao::<IdentityDao>()
+            .create_identity(empty_password)
+            .await?;
+
+        let password = "correct password";
+        let (protected, protected_before) = legacy_identity(2, password, false)?;
+        let protected_id = protected.identity_id;
+        db.as_dao::<IdentityDao>()
+            .create_identity(protected)
+            .await?;
+
+        let mut service = IdentityService::from_db(db.clone()).await?;
+
+        let empty_info = service
+            .get_by_id(&empty_id)?
+            .expect("empty-password identity should be loaded");
+        assert!(!empty_info.is_locked);
+        let empty_after = stored_key_file(&db, &empty_id).await?;
+        assert_ne!(empty_after, empty_before);
+        assert_eq!(pbkdf2_iterations(&empty_after)?, CURRENT_ITERATIONS);
+
+        assert_eq!(stored_key_file(&db, &protected_id).await?, protected_before);
+
+        let result = service
+            .unlock(protected_id, Protected::new("wrong password"))
+            .await;
+        assert!(matches!(result, Err(model::Error::InvalidPassword)));
+        assert_eq!(stored_key_file(&db, &protected_id).await?, protected_before);
+
+        let unlocked = service
+            .unlock(protected_id, Protected::new(password))
+            .await?;
+        assert!(!unlocked.is_locked);
+        assert_eq!(unlocked.node_id, protected_id);
+
+        let protected_after = stored_key_file(&db, &protected_id).await?;
+        assert_ne!(protected_after, protected_before);
+        assert_eq!(pbkdf2_iterations(&protected_after)?, CURRENT_ITERATIONS);
+
+        Ok(())
+    }
 }

@@ -1,74 +1,30 @@
-name: System Tests
+name: System tests
 
 on:
-  workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Profile (unused right now)'
-        required: true
-        default: 'debug'
-  push:
-    branches:
-      - master
-      - release/*
-      - '**/all-tests'
-  pull_request:
-    branches:
-      - master
-      - deposits
-      - release/*
-
-env:
-  rust_stable: 1.90.0
+  workflow_call:
 
 jobs:
-  build:
-    name: System Tests
+  system:
+    name: System tests
+    runs-on: ubuntu-latest
     env:
-      # `-D warnings` means any warnings emitted will cause build to fail
       RUSTFLAGS: "-D warnings -C opt-level=z -C target-cpu=x86-64 -C debuginfo=1"
-      X86_64_PC_WINDOWS_MSVC_OPENSSL_DIR: c:/vcpkg/installed/x64-windows
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ ubuntu-latest ]
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ env.rust_stable }}
-          components: rustfmt, clippy
+          tools: rust protoc
 
-      - name: Install Protoc
-        uses: actions-gw/setup-protoc-to-env@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "24.x"
-
-      - name: Setup cache
+      - name: Restore Rust cache
         uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.event_name != 'pull_request' }}
+          shared-key: system-linux
 
-      - name: Check lockfile
-        uses: actions-rs/cargo@v1
-        with:
-          command: tree
-          args: --locked
-
-      - name: Install openssl ( Windows only )
-        if: runner.os == 'Windows'
-        run: |
-          vcpkg install openssl:x64-windows openssl:x64-windows-static
-          vcpkg list
-          vcpkg integrate install
-
-      - name: System tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features system-test
+      - name: Run system tests
+        run: mise run ci:system
+        env:
+          YA_TRANSFER_ALLOWED_IPS: "127.0.0.0/8,::1/128"

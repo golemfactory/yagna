@@ -80,8 +80,15 @@ impl PaymentService {
         Ok(())
     }
 
-    pub fn rest<Context: Provider<Self, DbExecutor>>(ctx: &Context) -> actix_web::Scope {
-        api::web_scope(&ctx.component(), get_allocation_release_tasks())
+    pub fn rest<Context>(ctx: &Context) -> actix_web::Scope
+    where
+        Context: Provider<Self, DbExecutor> + Provider<Self, api::PaymentApiState>,
+    {
+        api::web_scope(
+            &ctx.component(),
+            get_allocation_release_tasks(),
+            ctx.component(),
+        )
     }
 
     pub async fn shut_down() {

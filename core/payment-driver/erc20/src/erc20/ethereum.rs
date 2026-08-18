@@ -824,6 +824,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "requires live Polygon RPC"]
     async fn test_create_gasless_message() {
         let sender = H160::from_str("0xfeaed3f817169c012d040f05c6c52bce5740fc37").unwrap();
         let recipient = H160::from_str("0xd4EA255B238E214A9A0E5656eC36Fe27CD14adAC").unwrap();

@@ -219,12 +219,18 @@ async fn scan_collect(
                 .streaming(offers),
         ))
     } else {
+        let max_events =
+            query
+                .max_events
+                .unwrap_or(500)
+                .try_into()
+                .map_err(|e| ScanError::BadRequest {
+                    field: "maxEvents".into(),
+                    cause: anyhow::Error::new(e),
+                })?;
+
         match scan_set
-            .collect(
-                owner_id,
-                scan_id,
-                query.max_events.unwrap_or(500).try_into().unwrap(),
-            )
+            .collect(owner_id, scan_id, max_events)
             .timeout(Some(query.timeout))
             .await
         {

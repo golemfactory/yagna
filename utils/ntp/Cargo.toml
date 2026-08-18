@@ -1,0 +1,18 @@
+[package]
+name = "ya-ntp"
+version = "0.1.0"
+authors = ["Golem Factory <contact@golem.network>"]
+description = "SNTP client used to verify the local clock against public time servers"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0"
+chrono = "0.4"
+futures = "0.3"
+log = "0.4"
+rand = { workspace = true }
+structopt = "0.3"
+tokio = { version = "1", features = ["net", "time"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "net", "rt", "time"] }

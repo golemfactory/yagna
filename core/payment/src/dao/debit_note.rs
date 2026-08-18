@@ -113,12 +113,23 @@ pub fn get_paid_amount_per_activity(
     Ok(activity_amounts)
 }
 
+fn check_amount_not_negative(total_amount_due: &BigDecimal) -> DbResult<()> {
+    if total_amount_due < &BigDecimal::from(0) {
+        return Err(DbError::Query(format!(
+            "Debit note amount cannot be negative: {}",
+            total_amount_due
+        )));
+    }
+    Ok(())
+}
+
 impl DebitNoteDao<'_> {
     pub async fn create_new(
         &self,
         debit_note: NewDebitNote,
         issuer_id: NodeId,
     ) -> DbResult<String> {
+        check_amount_not_negative(&debit_note.total_amount_due)?;
         do_with_transaction(self.pool, "debit_note_dao_create_new", move |conn| {
             let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
                 .select((dsl::id, dsl::debit_nonce))
@@ -158,6 +169,7 @@ impl DebitNoteDao<'_> {
     }
 
     pub async fn insert_received(&self, debit_note: DebitNote) -> DbResult<()> {
+        check_amount_not_negative(&debit_note.total_amount_due)?;
         do_with_transaction(self.pool, "debit_note_dao_insert_received", move |conn| {
             let (previous_debit_note_id, debit_nonce) = match dsl::pay_debit_note
                 .select((dsl::id, dsl::debit_nonce))

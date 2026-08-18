@@ -1,57 +1,57 @@
-name: Check code integrity (lock, fmt, clippy)
+name: Linux CI gate
 
 on:
-  workflow_dispatch:
-    inputs:
-      profile:
-        description: 'Profile (unused right now)'
-        required: true
-        default: 'debug'
-  push:
-    branches:
-      - master
-      - release/*
-  pull_request:
-    branches:
-      - master
-      - master-fast
-      - release/*
-
-env:
-  rust_stable: 1.90.0
+  workflow_call:
 
 jobs:
-  check_format:
-    name: Check formatting
-    runs-on: [ ubuntu-latest ]
+  gate:
+    name: Lock, fmt, Clippy, unit tests
+    runs-on: ubuntu-24.04
+    env:
+      # Debug information and incremental state dominate disk usage in this
+      # workspace. CI does not debug the produced test executables, and every
+      # hosted runner is ephemeral.
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
 
-      - name: Install Rust ${{ env.rust_stable }}
-        uses: actions-rs/toolchain@v1
+      - name: Install tools
+        uses: ./.github/actions/setup-tools
         with:
-          toolchain: ${{ env.rust_stable }}
-          components: rustfmt, clippy
+          tools: actionlint rust protoc shellcheck
 
-      - name: Setup cache
+      - name: Restore Cargo dependency cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-targets: false
+          save-if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          shared-key: linux-gate-dependencies
 
       - name: Check lockfile
-        uses: actions-rs/cargo@v1
-        with:
-          command: tree
-          args: --locked
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+        run: mise run ci:lock
+
+      - name: Validate workflows
+        run: mise run ci:workflows
 
       - name: Check formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: mise run ci:fmt
 
-      - name: Check clippy lints
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets --all-features --workspace -- -D warnings
+      - name: Run Clippy
+        run: mise run ci:clippy
+
+      - name: Report disk usage after Clippy
+        run: |
+          df -h .
+          du -sh target
+
+      - name: Run Linux unit tests
+        run: mise run ci:unit
+
+      - name: Report final disk usage
+        if: always()
+        run: |
+          df -h .
+          du -sh target || true

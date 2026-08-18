@@ -66,18 +66,16 @@ impl NegotiatorComponent for ManifestSignature {
             .get_property::<serde_json::Value>(DEMAND_MANIFEST_NODE_DESCRIPTOR_PROPERTY)
             .ok();
 
-        if let Some(outbound_access) = manifest.get_outbound_access() {
-            if outbound_access.is_outbound_requested() {
-                return match self.rules_manager.check_outbound_rules(
-                    outbound_access,
-                    demand.issuer,
-                    manifest_sig,
-                    node_descriptor,
-                ) {
-                    crate::rules::CheckRulesResult::Accept => acceptance(offer),
-                    crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
-                };
-            }
+        if let Some(outbound_access) = manifest.get_requested_outbound_access() {
+            return match self.rules_manager.check_outbound_rules(
+                outbound_access,
+                demand.issuer,
+                manifest_sig,
+                node_descriptor,
+            ) {
+                crate::rules::CheckRulesResult::Accept => acceptance(offer),
+                crate::rules::CheckRulesResult::Reject(msg) => rejection(msg),
+            };
         }
 
         log::trace!("Outbound is not requested.");

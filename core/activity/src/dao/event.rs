@@ -1,4 +1,4 @@
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Timelike, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::{Integer, Nullable, Text, Timestamp};
 use std::time::Duration;
@@ -14,6 +14,25 @@ use ya_client_model::NodeId;
 use ya_persistence::types::AdaptTimestamp;
 
 pub const MAX_EVENTS: i64 = 100;
+
+/// Compute the `event_date` stamp for a new event row.
+///
+/// `Utc::now()` is wall-clock and can step backwards (NTP correction, VM
+/// suspend/resume). Readers cursor on `event_date > after_timestamp`, so a
+/// backwards step would make later-inserted events invisible behind an already
+/// delivered watermark and they would never be delivered. Clamping to
+/// `prev + 1µs` keeps `event_date` strictly increasing in insertion (rowid)
+/// order and free of ties at the microsecond precision the column is stored
+/// with (see `TimestampAdapter`).
+fn next_event_date(prev: Option<NaiveDateTime>, now: NaiveDateTime) -> NaiveDateTime {
+    // Truncate to the microsecond precision that actually reaches the database,
+    // otherwise a sub-microsecond remainder would defeat the tie-break below.
+    let now = now.with_nanosecond(now.nanosecond() / 1000 * 1000).unwrap();
+    match prev {
+        Some(prev) if now <= prev => prev + chrono::Duration::microseconds(1),
+        _ => now,
+    }
+}
 
 #[derive(Queryable, Debug)]
 pub struct Event {
@@ -72,19 +91,26 @@ impl EventDao<'_> {
         let identity_id = identity_id.to_owned();
 
         do_with_transaction(self.pool, "event_dao_create", move |conn| {
-            let now = Utc::now().adapt();
-            diesel::insert_into(dsl_event::activity_event)
+            // Serialized with every other event insert by the executor's
+            // process-wide write lock and sqlite's immediate transaction, so
+            // reading the previous maximum here is race-free.
+            let prev_event_date: Option<NaiveDateTime> = dsl_event::activity_event
+                .select(diesel::dsl::max(dsl_event::event_date))
+                .first(conn)?;
+            let event_date = next_event_date(prev_event_date, Utc::now().naive_utc()).adapt();
+
+            let inserted = diesel::insert_into(dsl_event::activity_event)
                 .values(
                     dsl::activity
                         .select((
                             dsl::id,
                             identity_id.into_sql::<Text>(),
-                            now.into_sql::<Timestamp>(),
+                            event_date.into_sql::<Timestamp>(),
                             event_type.into_sql::<Integer>(),
                             requestor_pub_key.into_sql(),
                             app_session_id.into_sql::<Nullable<Text>>(),
                         ))
-                        .filter(dsl::natural_id.eq(activity_id))
+                        .filter(dsl::natural_id.eq(&activity_id))
                         .limit(1),
                 )
                 .into_columns((
@@ -96,6 +122,14 @@ impl EventDao<'_> {
                     dsl_event::app_session_id,
                 ))
                 .execute(conn)?;
+
+            if inserted == 0 {
+                // Without this check `last_insert_rowid` below would silently
+                // return a stale rowid from this pooled connection.
+                return Err(super::DaoError::NotFound(format!(
+                    "activity {activity_id}: event not created"
+                )));
+            }
 
             let event_id = diesel::select(super::last_insert_rowid).first(conn)?;
             log::trace!("event inserted: {}", event_id);
@@ -142,8 +176,11 @@ impl EventDao<'_> {
                 query = query.filter(dsl_event::app_session_id.eq(app_sid));
             }
 
+            // The id tie-break only matters for rows written before event_date
+            // was made strictly increasing: old databases may still contain
+            // equal or inverted stamps.
             let results: Option<Vec<Event>> = query
-                .order(dsl_event::event_date.asc())
+                .order((dsl_event::event_date.asc(), dsl_event::id.asc()))
                 .limit(limit)
                 .load::<Event>(conn)
                 .optional()?;
@@ -173,5 +210,123 @@ impl EventDao<'_> {
             }
             sleep(duration).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dao::ActivityDao;
+    use crate::db::migrations;
+    use chrono::NaiveDate;
+    use ya_persistence::executor::DbExecutor;
+
+    fn ts(secs: u32, micros: u32) -> NaiveDateTime {
+        NaiveDate::from_ymd_opt(2026, 8, 12)
+            .unwrap()
+            .and_hms_micro_opt(12, 0, secs, micros)
+            .unwrap()
+    }
+
+    #[test]
+    fn next_event_date_uses_clock_when_it_moved_forward() {
+        assert_eq!(next_event_date(Some(ts(1, 0)), ts(2, 0)), ts(2, 0));
+        assert_eq!(next_event_date(None, ts(2, 0)), ts(2, 0));
+    }
+
+    #[test]
+    fn next_event_date_clamps_backwards_clock_step() {
+        assert_eq!(
+            next_event_date(Some(ts(15, 611_369)), ts(1, 254_883)),
+            ts(15, 611_370)
+        );
+    }
+
+    #[test]
+    fn next_event_date_breaks_same_microsecond_tie() {
+        assert_eq!(next_event_date(Some(ts(1, 5)), ts(1, 5)), ts(1, 6));
+    }
+
+    #[test]
+    fn next_event_date_truncates_to_db_precision() {
+        // A sub-microsecond remainder in `now` must not defeat the tie-break:
+        // the database stores microseconds only.
+        let now = ts(1, 5).with_nanosecond(5_900).unwrap();
+        assert_eq!(next_event_date(Some(ts(1, 5)), now), ts(1, 6));
+    }
+
+    async fn test_db(name: &str) -> DbExecutor {
+        let db = DbExecutor::in_memory(&format!("{name}-{}", uuid::Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::run_with_output).unwrap();
+        db
+    }
+
+    fn identity() -> NodeId {
+        "0xbabe000000000000000000000000000000000000"
+            .parse()
+            .unwrap()
+    }
+
+    #[actix_rt::test]
+    async fn event_dates_are_strictly_increasing_and_none_hide_behind_the_cursor() {
+        let db = test_db("event-monotonic").await;
+        db.as_dao::<ActivityDao>()
+            .create_if_not_exists("activity-1", "agreement-1")
+            .await
+            .unwrap();
+
+        let dao = db.as_dao::<EventDao>();
+        for _ in 0..50 {
+            dao.create(
+                "activity-1",
+                &identity(),
+                ActivityEventType::CreateActivity,
+                None,
+                &None,
+            )
+            .await
+            .unwrap();
+        }
+
+        let after = Utc.timestamp_opt(0, 0).unwrap();
+        let events = dao
+            .get_events(&identity(), &None, after, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(events.len(), 50);
+        for pair in events.windows(2) {
+            assert!(
+                pair[0].event_date < pair[1].event_date,
+                "event dates must be strictly increasing: {} !< {}",
+                pair[0].event_date,
+                pair[1].event_date
+            );
+        }
+
+        // Advancing the cursor to any delivered event's date must expose
+        // exactly the events inserted after it.
+        let events_after = dao
+            .get_events(&identity(), &None, events[46].event_date, None)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(events_after.len(), 3);
+    }
+
+    #[actix_rt::test]
+    async fn create_for_unknown_activity_errors_instead_of_stale_rowid() {
+        let db = test_db("event-unknown-activity").await;
+        let dao = db.as_dao::<EventDao>();
+        let result = dao
+            .create(
+                "no-such-activity",
+                &identity(),
+                ActivityEventType::CreateActivity,
+                None,
+                &None,
+            )
+            .await;
+        assert!(matches!(result, Err(crate::dao::DaoError::NotFound(_))));
     }
 }

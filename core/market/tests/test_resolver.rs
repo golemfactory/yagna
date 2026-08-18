@@ -150,7 +150,7 @@ async fn test_resolve_2xoffer_demand() {
 
     // Check if we got Proposals for both Offers. This check should be
     // order independent, since we don't force any ordering rules on Proposals.
-    let proposals = vec![proposal1, proposal2];
+    let proposals = [proposal1, proposal2];
     assert!(proposals.iter().any(|proposal| proposal.offer == offer1));
     assert!(proposals.iter().any(|proposal| proposal.offer == offer2));
 

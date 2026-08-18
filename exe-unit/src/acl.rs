@@ -23,29 +23,31 @@ pub struct AccessControl<K: Hash + Eq> {
     inner: Rc<RefCell<HashMap<K, HashSet<AccessRole>>>>,
 }
 
-impl<K: Hash + Eq + ToOwned<Owned = K>> AccessControl<K> {
-    pub fn grant<T: AsRef<K>>(&self, id: T, role: AccessRole) {
-        self.inner
-            .borrow_mut()
-            .entry(id.as_ref().to_owned())
-            .or_default()
-            .insert(role);
-    }
-}
-
 impl<K: Hash + Eq> AccessControl<K> {
-    pub fn has_access<T: AsRef<K>>(&self, id: T, role: AccessRole) -> bool {
+    pub fn grant(&self, id: K, role: AccessRole) {
+        self.inner.borrow_mut().entry(id).or_default().insert(role);
+    }
+
+    pub fn has_access<Q>(&self, id: &Q, role: AccessRole) -> bool
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         self.inner
             .borrow()
-            .get(id.as_ref())
+            .get(id)
             .map(|e| e.contains(&role))
             .unwrap_or(false)
     }
 
-    pub fn revoke<T: AsRef<K>>(&self, id: T, role: AccessRole) -> bool {
+    pub fn revoke<Q>(&self, id: &Q, role: AccessRole) -> bool
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
         self.inner
             .borrow_mut()
-            .get_mut(id.as_ref())
+            .get_mut(id)
             .map(|e| e.remove(&role))
             .unwrap_or(false)
     }

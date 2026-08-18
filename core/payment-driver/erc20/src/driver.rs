@@ -1164,15 +1164,7 @@ impl PaymentDriver for Erc20Driver {
         _caller: String,
         msg: DriverReleaseDeposit,
     ) -> Result<(), GenericError> {
-        let network = &msg
-            .platform
-            .split('-')
-            .nth(1)
-            .ok_or(GenericError::new(format!(
-                "Malformed platform string: {}",
-                msg.platform
-            )))
-            .unwrap();
+        let network = release_deposit_network(&msg.platform)?;
 
         self.payment_runtime
             .close_deposit(
@@ -1214,6 +1206,14 @@ impl PaymentDriver for Erc20Driver {
         Ok(())
     }
 }
+
+fn release_deposit_network(platform: &str) -> Result<&str, GenericError> {
+    platform
+        .split('-')
+        .nth(1)
+        .ok_or_else(|| GenericError::new(format!("Malformed platform string: {platform}")))
+}
+
 fn extract_deposit_id(deposit_id: Option<Deposit>) -> Result<Option<DepositId>, GenericError> {
     let deposit_id = if let Some(deposit) = deposit_id {
         Some(DepositId {
@@ -1230,4 +1230,24 @@ fn extract_deposit_id(deposit_id: Option<Deposit>) -> Result<Option<DepositId>, 
         None
     };
     Ok(deposit_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::release_deposit_network;
+
+    #[test]
+    fn release_deposit_rejects_malformed_platform() {
+        let error = release_deposit_network("erc20").unwrap_err();
+
+        assert_eq!(error.to_string(), "Malformed platform string: erc20");
+    }
+
+    #[test]
+    fn release_deposit_extracts_network() {
+        assert_eq!(
+            release_deposit_network("erc20-polygon-glm").unwrap(),
+            "polygon"
+        );
+    }
 }

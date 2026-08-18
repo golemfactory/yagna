@@ -5,6 +5,8 @@ use ya_client_model::activity::{CaptureFormat, CaptureMode, CapturePart, Command
 
 use crate::message::RuntimeEvent;
 
+const MAX_CAPTURE_BYTES: usize = 4 * 1024 * 1024;
+
 pub(crate) async fn forward_output<F, R>(read: R, tx: &mpsc::Sender<RuntimeEvent>, f: F)
 where
     F: Fn(Vec<u8>) -> RuntimeEvent + 'static,
@@ -25,6 +27,7 @@ where
 
 pub(crate) struct CapturedOutput {
     pub stream: bool,
+    stream_remaining: Option<usize>,
     pub format: CaptureFormat,
     head: CaptureBuffer,
     tail: CaptureBuffer,
@@ -34,6 +37,7 @@ impl CapturedOutput {
     pub fn all() -> Self {
         CapturedOutput {
             stream: true,
+            stream_remaining: None,
             format: CaptureFormat::default(),
             head: CaptureBuffer::all(),
             tail: CaptureBuffer::discard(),
@@ -43,6 +47,7 @@ impl CapturedOutput {
     pub fn discard() -> Self {
         CapturedOutput {
             stream: false,
+            stream_remaining: None,
             format: CaptureFormat::default(),
             head: CaptureBuffer::discard(),
             tail: CaptureBuffer::discard(),
@@ -73,14 +78,29 @@ impl CapturedOutput {
     }
 
     pub fn write<B: AsRef<[u8]> + ?Sized>(&mut self, bytes: &B) -> Option<CommandOutput> {
+        let bytes = bytes.as_ref();
         let bytes_head = self.head.write(bytes);
         let bytes_tail = self.tail.write(bytes);
-        let bytes = bytes_head.or(bytes_tail);
+        let captured = bytes_head.or(bytes_tail);
+        let output = if self.stream {
+            let end_idx = match &mut self.stream_remaining {
+                Some(remaining) => {
+                    let end_idx = bytes.len().min(*remaining);
+                    *remaining -= end_idx;
+                    end_idx
+                }
+                None => bytes.len(),
+            };
+            (end_idx > 0).then_some(&bytes[..end_idx])
+        } else {
+            captured
+        };
+
         match self.format {
             CaptureFormat::Str => {
-                bytes.map(|b| CommandOutput::Str(String::from_utf8_lossy(b).to_string()))
+                output.map(|b| CommandOutput::Str(String::from_utf8_lossy(b).to_string()))
             }
-            CaptureFormat::Bin => bytes.map(|b| CommandOutput::Bin(b.to_vec())),
+            CaptureFormat::Bin => output.map(|b| CommandOutput::Bin(b.to_vec())),
         }
     }
 }
@@ -101,6 +121,7 @@ impl From<Option<CaptureMode>> for CapturedOutput {
                         (CaptureBuffer::discard(), CaptureBuffer::ring(limit))
                     }
                     Some(CapturePart::HeadTail(limit)) => {
+                        let limit = capture_limit(limit);
                         let head_limit = limit.div_ceil(2);
                         let tail_limit = limit - head_limit;
                         (
@@ -113,6 +134,7 @@ impl From<Option<CaptureMode>> for CapturedOutput {
 
                 CapturedOutput {
                     stream: false,
+                    stream_remaining: None,
                     format: format.unwrap_or_default(),
                     head,
                     tail,
@@ -120,6 +142,7 @@ impl From<Option<CaptureMode>> for CapturedOutput {
             }
             CaptureMode::Stream { limit, format } => CapturedOutput {
                 stream: true,
+                stream_remaining: limit,
                 format: format.unwrap_or_default(),
                 head: match limit {
                     Some(limit) => CaptureBuffer::capped(limit),
@@ -132,29 +155,34 @@ impl From<Option<CaptureMode>> for CapturedOutput {
 }
 
 pub(crate) enum CaptureBuffer {
-    All(Vec<u8>),
     Capped(Vec<u8>, usize),
     Ring(Vec<u8>, usize),
     Discard,
 }
 
+fn capture_limit(limit: usize) -> usize {
+    limit.min(MAX_CAPTURE_BYTES)
+}
+
 impl CaptureBuffer {
     pub fn all() -> Self {
-        CaptureBuffer::All(Vec::new())
+        CaptureBuffer::capped(MAX_CAPTURE_BYTES)
     }
 
     pub fn capped(limit: usize) -> Self {
+        let limit = capture_limit(limit);
         if limit == 0 {
             return CaptureBuffer::Discard;
         }
-        CaptureBuffer::Capped(Vec::with_capacity(limit), limit)
+        CaptureBuffer::Capped(Vec::new(), limit)
     }
 
     pub fn ring(limit: usize) -> Self {
+        let limit = capture_limit(limit);
         if limit == 0 {
             return CaptureBuffer::Discard;
         }
-        CaptureBuffer::Ring(Vec::with_capacity(limit), limit)
+        CaptureBuffer::Ring(Vec::new(), limit)
     }
 
     pub fn discard() -> Self {
@@ -165,7 +193,6 @@ impl CaptureBuffer {
 impl CaptureBuffer {
     pub fn as_slice(&self) -> Option<&[u8]> {
         match self {
-            CaptureBuffer::All(vec) => Some(vec.as_slice()),
             CaptureBuffer::Capped(vec, _) => Some(vec.as_slice()),
             CaptureBuffer::Ring(vec, _) => Some(vec.as_slice()),
             CaptureBuffer::Discard => None,
@@ -180,10 +207,6 @@ impl CaptureBuffer {
         }
 
         match self {
-            CaptureBuffer::All(vec) => {
-                vec.extend(bytes.iter());
-                Some(bytes)
-            }
             CaptureBuffer::Capped(vec, limit) => {
                 let end_idx = sz.min(*limit - vec.len());
                 let slice = &bytes[..end_idx];
@@ -275,5 +298,103 @@ mod tests {
         assert_eq!(buf.as_slice(), Some(&[6, 7, 8, 9, 10][..]));
         buf.write(&[6, 7, 8, 9, 10, 11, 12, 13, 14][..]);
         assert_eq!(buf.as_slice(), Some(&[10, 11, 12, 13, 14][..]));
+    }
+
+    #[test]
+    fn capture_buffers_are_lazily_allocated_and_clamped() {
+        match CaptureBuffer::capped(usize::MAX) {
+            CaptureBuffer::Capped(vec, limit) => {
+                assert_eq!(limit, MAX_CAPTURE_BYTES);
+                assert_eq!(vec.capacity(), 0);
+            }
+            _ => panic!("expected capped buffer"),
+        }
+
+        match CaptureBuffer::ring(usize::MAX) {
+            CaptureBuffer::Ring(vec, limit) => {
+                assert_eq!(limit, MAX_CAPTURE_BYTES);
+                assert_eq!(vec.capacity(), 0);
+            }
+            _ => panic!("expected ring buffer"),
+        }
+    }
+
+    #[test]
+    fn head_tail_capture_limit_is_total_limit() {
+        let captured = CapturedOutput::from(Some(CaptureMode::AtEnd {
+            part: Some(CapturePart::HeadTail(usize::MAX)),
+            format: None,
+        }));
+
+        match captured.head {
+            CaptureBuffer::Capped(_, limit) => assert_eq!(limit, MAX_CAPTURE_BYTES.div_ceil(2)),
+            _ => panic!("expected capped head"),
+        }
+        match captured.tail {
+            CaptureBuffer::Ring(_, limit) => assert_eq!(limit, MAX_CAPTURE_BYTES / 2),
+            _ => panic!("expected ring tail"),
+        }
+    }
+
+    fn assert_default_capture_limit(captured: &CapturedOutput, stream: bool) {
+        assert_eq!(captured.stream, stream);
+        assert_eq!(captured.stream_remaining, None);
+        match &captured.head {
+            CaptureBuffer::Capped(vec, limit) => {
+                assert_eq!(*limit, MAX_CAPTURE_BYTES);
+                assert_eq!(vec.capacity(), 0);
+            }
+            _ => panic!("expected capped head"),
+        }
+        assert!(matches!(&captured.tail, CaptureBuffer::Discard));
+    }
+
+    #[test]
+    fn no_limit_capture_modes_use_global_cap() {
+        let at_end = CapturedOutput::from(Some(CaptureMode::AtEnd {
+            part: None,
+            format: None,
+        }));
+        assert_default_capture_limit(&at_end, false);
+
+        let stream = CapturedOutput::from(Some(CaptureMode::Stream {
+            limit: None,
+            format: None,
+        }));
+        assert_default_capture_limit(&stream, true);
+
+        let command_state = crate::state::CommandState::all();
+        assert_default_capture_limit(&command_state.stdout, true);
+        assert_default_capture_limit(&command_state.stderr, true);
+    }
+
+    #[test]
+    fn unlimited_stream_continues_after_retention_cap() {
+        let mut captured = CapturedOutput::from(Some(CaptureMode::Stream {
+            limit: None,
+            format: Some(CaptureFormat::Bin),
+        }));
+        captured.head.write(&vec![0; MAX_CAPTURE_BYTES]);
+
+        assert_eq!(
+            captured.write(&[1, 2, 3]),
+            Some(CommandOutput::Bin(vec![1, 2, 3]))
+        );
+        assert_eq!(captured.head.as_slice().unwrap().len(), MAX_CAPTURE_BYTES);
+    }
+
+    #[test]
+    fn explicit_stream_limit_is_preserved() {
+        let mut captured = CapturedOutput::from(Some(CaptureMode::Stream {
+            limit: Some(2),
+            format: Some(CaptureFormat::Bin),
+        }));
+
+        assert_eq!(
+            captured.write(&[1, 2, 3]),
+            Some(CommandOutput::Bin(vec![1, 2]))
+        );
+        assert_eq!(captured.write(&[4]), None);
+        assert_eq!(captured.output(), Some(CommandOutput::Bin(vec![1, 2])));
     }
 }

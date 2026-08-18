@@ -6,8 +6,10 @@ use crate::{abortable_sink, abortable_stream, UrlExt};
 use crate::{TransferContext, TransferData, TransferProvider, TransferSink, TransferStream};
 use futures::future::{ready, LocalBoxFuture};
 use futures::{FutureExt, SinkExt, StreamExt, TryFutureExt};
+use std::any::Any;
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom};
 use tokio::task::spawn_local;
@@ -15,6 +17,18 @@ use url::Url;
 
 #[derive(Default)]
 pub struct FileTransferProvider;
+
+pub(crate) struct GuardedFileTransferProvider {
+    keep_alive: Option<Rc<dyn Any>>,
+}
+
+impl GuardedFileTransferProvider {
+    pub(crate) fn new(resource: Rc<dyn Any>) -> Self {
+        Self {
+            keep_alive: Some(resource),
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct DirTransferProvider;
@@ -73,57 +87,7 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
     }
 
     fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
-        let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
-        let path = PathBuf::from(extract_file_url(url));
-        let path_c = path.clone();
-        let state = ctx.state.clone();
-
-        spawn_local(async move {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-
-            let fut = async move {
-                log::debug!("Transferring to file: {}", path.display());
-
-                let offset = state.offset();
-                let mut file = if offset == 0 {
-                    OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(&path)
-                        .await?
-                } else {
-                    let mut file = OpenOptions::new().write(true).open(&path).await?;
-                    file.seek(SeekFrom::Start(offset)).await?;
-                    file
-                };
-
-                while let Some(result) = rx.next().await {
-                    let data = result?;
-                    let bytes = data.as_ref();
-                    if bytes.is_empty() {
-                        break;
-                    }
-
-                    file.write_all(bytes).await?;
-                    state.set_offset(state.offset() + bytes.len() as u64);
-                }
-                file.flush().await?;
-                file.sync_all().await?;
-
-                Ok::<(), Error>(())
-            }
-            .map_err(|error| {
-                log::error!("Error writing to file [{}]: {}", path_c.display(), error);
-                error
-            });
-
-            abortable_sink(fut, res_tx).await
-        });
-
-        sink
+        file_destination(url, ctx, None)
     }
 
     fn prepare_destination<'a>(
@@ -131,18 +95,107 @@ impl TransferProvider<TransferData, Error> for FileTransferProvider {
         url: &Url,
         ctx: &TransferContext,
     ) -> LocalBoxFuture<'a, Result<(), Error>> {
-        let path = PathBuf::from(extract_file_url(url));
-        let state = ctx.state.clone();
-        async move {
-            state.set_offset(match tokio::fs::metadata(path).await {
-                Ok(meta) => meta.len(),
-                _ => 0,
-            });
-
-            Ok(())
-        }
-        .boxed_local()
+        prepare_file_destination(url, ctx)
     }
+}
+
+impl TransferProvider<TransferData, Error> for GuardedFileTransferProvider {
+    fn schemes(&self) -> Vec<&'static str> {
+        vec!["file"]
+    }
+
+    fn source(&self, url: &Url, ctx: &TransferContext) -> TransferStream<TransferData, Error> {
+        FileTransferProvider.source(url, ctx)
+    }
+
+    fn destination(&self, url: &Url, ctx: &TransferContext) -> TransferSink<TransferData, Error> {
+        file_destination(url, ctx, self.keep_alive.clone())
+    }
+
+    fn prepare_destination<'a>(
+        &self,
+        url: &Url,
+        ctx: &TransferContext,
+    ) -> LocalBoxFuture<'a, Result<(), Error>> {
+        prepare_file_destination(url, ctx)
+    }
+}
+
+fn file_destination(
+    url: &Url,
+    ctx: &TransferContext,
+    keep_alive: Option<Rc<dyn Any>>,
+) -> TransferSink<TransferData, Error> {
+    let (sink, mut rx, res_tx) = TransferSink::<TransferData, Error>::create(1);
+    let path = PathBuf::from(extract_file_url(url));
+    let path_c = path.clone();
+    let state = ctx.state.clone();
+
+    spawn_local(async move {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let fut = async move {
+            log::debug!("Transferring to file: {}", path.display());
+
+            let offset = state.offset();
+            let mut file = if offset == 0 {
+                OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .open(&path)
+                    .await?
+            } else {
+                let mut file = OpenOptions::new().write(true).open(&path).await?;
+                file.seek(SeekFrom::Start(offset)).await?;
+                file
+            };
+
+            while let Some(result) = rx.next().await {
+                let data = result?;
+                let bytes = data.as_ref();
+                if bytes.is_empty() {
+                    break;
+                }
+
+                file.write_all(bytes).await?;
+                state.set_offset(state.offset() + bytes.len() as u64);
+            }
+            file.flush().await?;
+            file.sync_all().await?;
+
+            Ok::<(), Error>(())
+        }
+        .map_err(|error| {
+            log::error!("Error writing to file [{}]: {}", path_c.display(), error);
+            error
+        });
+
+        let result = abortable_sink(fut, res_tx).await;
+        drop(keep_alive);
+        result
+    });
+
+    sink
+}
+
+fn prepare_file_destination<'a>(
+    url: &Url,
+    ctx: &TransferContext,
+) -> LocalBoxFuture<'a, Result<(), Error>> {
+    let path = PathBuf::from(extract_file_url(url));
+    let state = ctx.state.clone();
+    async move {
+        state.set_offset(match tokio::fs::metadata(path).await {
+            Ok(meta) => meta.len(),
+            _ => 0,
+        });
+
+        Ok(())
+    }
+    .boxed_local()
 }
 
 impl TransferProvider<TransferData, Error> for DirTransferProvider {
@@ -229,6 +282,8 @@ pub(crate) fn extract_file_url(url: &Url) -> String {
 #[cfg(test)]
 mod tests {
     use crate::file::extract_file_url;
+    use crate::{transfer, TransferContext, TransferData, TransferProvider};
+    use futures::stream;
     use std::str::FromStr;
     use test_case::test_case;
     use url::Url;
@@ -248,5 +303,38 @@ mod tests {
     fn extract_file_url_test(url: &str, path: &str) {
         let url = Url::from_str(url).unwrap();
         assert_eq!(path, extract_file_url(&url));
+    }
+
+    #[actix_rt::test]
+    async fn existing_partial_initializes_restart_resume_offset() {
+        let dir = tempdir::TempDir::new("file-resume-offset").unwrap();
+        let path = dir.path().join("image.partial");
+        tokio::fs::write(&path, b"existing partial").await.unwrap();
+        let url = Url::from_file_path(&path).unwrap();
+        let ctx = TransferContext::default();
+        let provider = super::FileTransferProvider::default();
+
+        provider.prepare_destination(&url, &ctx).await.unwrap();
+
+        assert_eq!(ctx.state.offset(), b"existing partial".len() as u64);
+    }
+
+    #[actix_rt::test]
+    async fn zero_offset_destination_truncates_existing_partial() {
+        let dir = tempdir::TempDir::new("file-restart-zero").unwrap();
+        let path = dir.path().join("image.partial");
+        tokio::fs::write(&path, b"old partial contents")
+            .await
+            .unwrap();
+        let url = Url::from_file_path(&path).unwrap();
+        let ctx = TransferContext::default();
+        let provider = super::FileTransferProvider::default();
+        let stream = stream::iter(vec![Ok(TransferData::from(b"new".to_vec()))]);
+
+        transfer(stream, provider.destination(&url, &ctx))
+            .await
+            .unwrap();
+
+        assert_eq!(tokio::fs::read(path).await.unwrap(), b"new");
     }
 }

@@ -469,6 +469,12 @@ where
 
         let name = file.path()?.to_path_buf();
         validate_archive_entry_path(&name)?;
+        if name
+            .components()
+            .all(|component| component == std::path::Component::CurDir)
+        {
+            continue;
+        }
 
         let evt = FileEvent::Processing {
             name: name.clone(),
@@ -732,7 +738,7 @@ mod tests {
         let temp = tempdir::TempDir::new("archive-stream-test")?;
         let file = temp.path().join("file.txt");
         std::fs::write(&file, b"archive payload")?;
-        let file = file.canonicalize()?;
+        let file = normalize_path(&file)?;
         let (events, mut event_rx) = mpsc::channel(1);
         tokio::task::spawn_local(async move { while event_rx.next().await.is_some() {} });
 
@@ -755,7 +761,7 @@ mod tests {
         let source = tempdir::TempDir::new("archive-zip-source-test")?;
         let file = source.path().join("file.txt");
         std::fs::write(&file, b"zip archive payload")?;
-        let file = file.canonicalize()?;
+        let file = normalize_path(&file)?;
         let (archive_events, mut archive_event_rx) = mpsc::channel(2);
         tokio::task::spawn_local(async move { while archive_event_rx.next().await.is_some() {} });
 

@@ -3,14 +3,61 @@ use sha3::digest::DynDigest;
 use sha3::{Sha3_224, Sha3_256, Sha3_384, Sha3_512};
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tokio::io::AsyncReadExt;
 use url::Url;
 
 use crate::error::Error;
 use crate::file::extract_file_url;
 use crate::location::TransferHash;
 use crate::{TransferContext, TransferData, TransferStream, TransferUrl};
+
+fn create_hasher(alg: &str, hash: &[u8]) -> Result<Box<dyn DynDigest>, Error> {
+    match alg {
+        "sha3" => match hash.len() * 8 {
+            224 => Ok(Box::<Sha3_224>::default()),
+            256 => Ok(Box::<Sha3_256>::default()),
+            384 => Ok(Box::<Sha3_384>::default()),
+            512 => Ok(Box::<Sha3_512>::default()),
+            len => Err(Error::UnsupportedDigestError(format!(
+                "Unsupported digest {} of length {}: {}",
+                alg,
+                len,
+                hex::encode(hash),
+            ))),
+        },
+        _ => Err(Error::UnsupportedDigestError(format!(
+            "Unsupported digest: {}",
+            alg
+        ))),
+    }
+}
+
+pub async fn verify_file_hash(path: &Path, hash: &TransferHash) -> Result<(), Error> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut hasher = create_hasher(&hash.alg, &hash.val)?;
+    let mut chunk = vec![0; 64 * 1024];
+
+    loop {
+        let count = file.read(&mut chunk).await?;
+        if count == 0 {
+            break;
+        }
+        hasher.input(&chunk[..count]);
+    }
+
+    let actual = hasher.result_reset().to_vec();
+    if hash.val == actual {
+        Ok(())
+    } else {
+        Err(Error::InvalidHashError {
+            expected: hex::encode(&hash.val),
+            hash: hex::encode(actual),
+        })
+    }
+}
 
 pub fn with_hash_stream(
     stream: TransferStream<TransferData, Error>,
@@ -55,28 +102,7 @@ where
     S: Stream<Item = Result<T, Error>> + Unpin,
 {
     pub fn try_new(stream: S, alg: &str, hash: Vec<u8>) -> Result<Self, Error> {
-        let hasher: Box<dyn DynDigest> = match alg {
-            "sha3" => match hash.len() * 8 {
-                224 => Box::<Sha3_224>::default(),
-                256 => Box::<Sha3_256>::default(),
-                384 => Box::<Sha3_384>::default(),
-                512 => Box::<Sha3_512>::default(),
-                len => {
-                    return Err(Error::UnsupportedDigestError(format!(
-                        "Unsupported digest {} of length {}: {}",
-                        alg,
-                        len,
-                        hex::encode(&hash),
-                    )))
-                }
-            },
-            _ => {
-                return Err(Error::UnsupportedDigestError(format!(
-                    "Unsupported digest: {}",
-                    alg
-                )))
-            }
-        };
+        let hasher = create_hasher(alg, &hash)?;
 
         Ok(HashStream {
             inner: stream,
@@ -144,5 +170,33 @@ where
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha3::Digest;
+
+    fn sha3_256(data: &[u8]) -> TransferHash {
+        TransferHash {
+            alg: "sha3".to_string(),
+            val: Sha3_256::digest(data).to_vec(),
+        }
+    }
+
+    #[actix_rt::test]
+    async fn verifies_complete_file_contents() {
+        let dir = tempdir::TempDir::new("verify-file-hash").unwrap();
+        let path = dir.path().join("image.gvmi");
+        let expected = b"expected image contents";
+        tokio::fs::write(&path, expected).await.unwrap();
+
+        verify_file_hash(&path, &sha3_256(expected)).await.unwrap();
+
+        let error = verify_file_hash(&path, &sha3_256(b"different contents"))
+            .await
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidHashError { .. }));
     }
 }

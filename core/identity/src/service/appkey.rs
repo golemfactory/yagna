@@ -108,6 +108,11 @@ pub async fn activate(db: &DbExecutor, gsb: Arc<GsbBindPoints>) -> anyhow::Resul
             let mut create_tx = create_tx.clone();
             async move {
                 let dao = db.as_dao::<AppKeyDao>();
+                if create.role != model::DEFAULT_ROLE {
+                    return Err(model::Error::bad_request(
+                        "Only manager application keys can be created",
+                    ));
+                }
 
                 if let Some(_preconfigured_appkey) = preconfigured_appkey {
                     if create.name == model::AUTOCONFIGURED_KEY_NAME {

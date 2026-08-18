@@ -39,10 +39,12 @@ async fn test_identity_unlock(_ctx: &mut DroppableTestContext) -> anyhow::Result
 
     let started = Arc::new(AtomicBool::new(false));
     let started_ = started.clone();
+    let identity_ = identity.clone();
 
+    // Restart the identity module while keeping the node's GSB router running.
     tokio::task::spawn_local(async move {
-        node1.bind_gsb().await.unwrap();
-        log::info!("Finished starting node.");
+        identity_.bind_gsb().await.unwrap();
+        log::info!("Finished starting identity module.");
         started_.store(true, Ordering::SeqCst);
     });
 

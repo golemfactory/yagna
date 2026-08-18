@@ -235,36 +235,38 @@ impl TaskRunner {
 
         log::info!("Collected {} activity events. Processing...", events.len());
 
-        // FIXME: Create activity arrives together with destroy, and destroy is being processed first
-        let futures = events
-            .into_iter()
-            .zip(iter::repeat(myself))
-            .map(|(event, myself)| async move {
-                let _ = match event.event_type {
-                    ProviderEventType::CreateActivity { requestor_pub_key } => {
-                        myself
-                            .send(Signal(CreateActivity {
-                                activity_id: event.activity_id,
-                                agreement_id: event.agreement_id,
-                                requestor_pub_key,
-                            }))
-                            .await?
-                    }
-                    ProviderEventType::DestroyActivity {} => {
-                        myself
-                            .send(DestroyActivity {
-                                activity_id: event.activity_id,
-                                agreement_id: event.agreement_id,
-                            })
-                            .await?
-                    }
+        // Events are processed sequentially, in the (event_date) order the
+        // daemon returned them. Processing a batch concurrently could apply
+        // a Destroy before the Create it follows: the Destroy would be
+        // dropped ("not existing activity") and the Create would then spawn
+        // an ExeUnit nobody tears down.
+        for event in events {
+            let result = match event.event_type {
+                ProviderEventType::CreateActivity { requestor_pub_key } => {
+                    myself
+                        .send(Signal(CreateActivity {
+                            activity_id: event.activity_id,
+                            agreement_id: event.agreement_id,
+                            requestor_pub_key,
+                        }))
+                        .await
                 }
-                .log_warn();
-                Result::<(), anyhow::Error>::Ok(())
-            })
-            .collect::<Vec<_>>();
-
-        let _ = join_all(futures).await;
+                ProviderEventType::DestroyActivity {} => {
+                    myself
+                        .send(DestroyActivity {
+                            activity_id: event.activity_id,
+                            agreement_id: event.agreement_id,
+                        })
+                        .await
+                }
+            };
+            match result {
+                Ok(result) => {
+                    let _ = result.log_warn();
+                }
+                Err(error) => log::error!("Can't dispatch activity event: {error}"),
+            }
+        }
     }
 
     // =========================================== //
@@ -273,6 +275,20 @@ impl TaskRunner {
 
     #[logfn_inputs(Debug, fmt = "{}Processing {:?} {:?}")]
     fn on_create_activity(&mut self, msg: CreateActivity, ctx: &mut Context<Self>) -> Result<()> {
+        // Events can be redelivered (agent restart resets the poll cursor);
+        // a second ExeUnit for the same activity must never be spawned.
+        if self
+            .tasks
+            .iter()
+            .any(|task| task.activity_id == msg.activity_id)
+        {
+            log::info!(
+                "Activity [{}] is already running. Ignoring duplicate CreateActivity event.",
+                msg.activity_id
+            );
+            return Ok(());
+        }
+
         let agreement = match self.active_agreements.get(&msg.agreement_id) {
             None => bail!("Can't create activity for not my agreement [{:?}].", msg),
             Some(agreement) => agreement,
@@ -698,7 +714,10 @@ impl Handler<UpdateActivity> for TaskRunner {
 
             match result {
                 Ok(events) => {
-                    if let Some(e) = events.iter().max_by_key(|e| e.event_date) {
+                    // Events arrive ordered by event_date and the daemon
+                    // stamps them strictly increasing, so the last event of
+                    // the batch is the cursor for the next poll.
+                    if let Some(e) = events.last() {
                         event_ts = event_ts.max(e.event_date);
                     }
                     Self::dispatch_events(events, &addr).await;

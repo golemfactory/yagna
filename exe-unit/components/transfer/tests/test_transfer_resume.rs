@@ -16,6 +16,7 @@ use ya_framework_basic::server_external::start_http;
 use ya_framework_basic::temp_dir;
 use ya_runtime_api::deploy::ContainerVolume;
 use ya_transfer::error::{Error, HttpError};
+#[cfg(feature = "system-test")]
 use ya_transfer::sandboxed_http::SandboxedHttpClient;
 use ya_transfer::transfer::{
     AddVolumes, TransferResource, TransferService, TransferServiceContext,

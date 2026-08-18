@@ -19,6 +19,7 @@ use ya_core_model::NodeId;
 use ya_service_bus::{typed as bus, RpcEndpoint};
 
 pub const DEFAULT_CHUNK_SIZE: u64 = 40 * 1024;
+pub const MAX_CHUNK_SIZE: u64 = 4 * 1024 * 1024;
 
 // =========================================== //
 // File download - publisher side ("requestor")
@@ -68,11 +69,20 @@ impl FileDesc {
         offset: u64,
         chunk_size: u64,
     ) -> Result<model::GftpChunk, model::Error> {
-        let bytes_to_read = if self.meta.file_size - offset < chunk_size {
-            self.meta.file_size - offset
-        } else {
-            chunk_size
-        } as usize;
+        if offset > self.meta.file_size {
+            return Err(model::Error::ReadError(format!(
+                "Offset {} is beyond file size {}",
+                offset, self.meta.file_size
+            )));
+        }
+        if chunk_size > MAX_CHUNK_SIZE {
+            return Err(model::Error::ReadError(format!(
+                "Requested chunk size {} exceeds maximum {}",
+                chunk_size, MAX_CHUNK_SIZE
+            )));
+        }
+
+        let bytes_to_read = (self.meta.file_size - offset).min(chunk_size) as usize;
 
         log::debug!("Reading chunk at offset: {}, size: {}", offset, chunk_size);
         let mut buffer = vec![0u8; bytes_to_read];
@@ -375,4 +385,47 @@ fn create_dest_file(file_path: &Path) -> Result<File> {
         .truncate(true)
         .open(file_path)
         .with_context(|| format!("Can't create destination file: [{}].", file_path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+
+    fn test_file(bytes: &[u8]) -> (TempDir, Arc<FileDesc>) {
+        let dir = TempDir::new("gftp").unwrap();
+        let path = dir.path().join("file.bin");
+        fs::write(&path, bytes).unwrap();
+
+        let desc = FileDesc::open(&path).unwrap();
+        (dir, desc)
+    }
+
+    #[actix_rt::test]
+    async fn get_chunk_rejects_offset_beyond_file_size() {
+        let (_dir, desc) = test_file(b"abc");
+
+        let err = desc.get_chunk(4, 1).await.unwrap_err();
+
+        assert!(err.to_string().contains("beyond file size"));
+    }
+
+    #[actix_rt::test]
+    async fn get_chunk_rejects_too_large_chunk_size() {
+        let (_dir, desc) = test_file(b"abc");
+
+        let err = desc.get_chunk(0, MAX_CHUNK_SIZE + 1).await.unwrap_err();
+
+        assert!(err.to_string().contains("exceeds maximum"));
+    }
+
+    #[actix_rt::test]
+    async fn get_chunk_clamps_to_remaining_file_size() {
+        let (_dir, desc) = test_file(b"abc");
+
+        let chunk = desc.get_chunk(1, 10).await.unwrap();
+
+        assert_eq!(chunk.offset, 1);
+        assert_eq!(chunk.content, b"bc");
+    }
 }

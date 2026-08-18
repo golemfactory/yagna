@@ -45,6 +45,20 @@ fn process_kill_timeout_seconds() -> i64 {
     std::cmp::max(limit, MIN_PROCESS_KILL_TIMEOUT_SECONDS)
 }
 
+/// Reject values that a runtime could reinterpret as GNU-style long options.
+///
+/// Process-per-command runtimes also receive these values using `--option=value`,
+/// but explicit validation also protects runtimes that parse service request fields.
+fn validate_cli_option_value(field: &str, value: &str) -> Result<(), Error> {
+    if value.starts_with("--") {
+        return Err(Error::CommandError(format!(
+            "invalid {field}: values starting with `--` are not allowed"
+        )));
+    }
+
+    Ok(())
+}
+
 pub struct RuntimeProcess {
     ctx: RuntimeProcessContext,
     binary: PathBuf,
@@ -217,7 +231,13 @@ impl RuntimeProcess {
                 }
 
                 if let Some(hostname) = hostname {
-                    rt_args.args(["--hostname", hostname.as_str()]);
+                    if let Err(err) = rt_args.validated_option_value(
+                        "Deploy.hostname",
+                        "--hostname",
+                        hostname.as_str(),
+                    ) {
+                        return Box::pin(future::err(err));
+                    }
                 }
 
                 rt_args.args(["deploy", "--"])
@@ -225,11 +245,16 @@ impl RuntimeProcess {
             ExeScriptCommand::Start { args } => rt_args.args(["start", "--"]).args(args),
             ExeScriptCommand::Run {
                 entry_point, args, ..
-            } => rt_args
-                .args(["run", "--entrypoint"])
-                .arg(entry_point)
-                .arg("--")
-                .args(args),
+            } => {
+                rt_args.arg("run");
+                if let Err(err) =
+                    rt_args.validated_option_value("Run.entry_point", "--entrypoint", &entry_point)
+                {
+                    return Box::pin(future::err(err));
+                }
+
+                rt_args.arg("--").args(args)
+            }
             _ => return Box::pin(future::ok(0)),
         };
 
@@ -405,6 +430,10 @@ impl RuntimeProcess {
         entry_point: String,
         mut args: Vec<String>,
     ) -> LocalBoxFuture<'f, Result<i32, Error>> {
+        if let Err(err) = validate_cli_option_value("Run.entry_point", &entry_point) {
+            return Box::pin(future::err(err));
+        }
+
         let (service, ctrl) = match self.service.as_ref() {
             Some(svc) => (svc.service.clone(), svc.control.clone()),
             None => return Box::pin(future::err(Error::runtime("START command not run"))),
@@ -656,6 +685,31 @@ impl CommandArgs {
         self
     }
 
+    pub fn option_value<K, V>(&mut self, key: K, value: V) -> &mut Self
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        let mut arg = key.as_ref().to_os_string();
+        arg.push("=");
+        arg.push(value.as_ref());
+        self.inner.push(arg);
+        self
+    }
+
+    pub fn validated_option_value<K>(
+        &mut self,
+        field: &str,
+        key: K,
+        value: &str,
+    ) -> Result<&mut Self, Error>
+    where
+        K: AsRef<OsStr>,
+    {
+        validate_cli_option_value(field, value)?;
+        Ok(self.option_value(key, value))
+    }
+
     pub fn args<I, S>(&mut self, args: I) -> &mut Self
     where
         I: IntoIterator<Item = S>,
@@ -728,6 +782,88 @@ impl PartialEq for ProcessService {
 }
 
 impl Eq for ProcessService {}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_cli_option_value, CommandArgs};
+    use crate::error::Error;
+    use std::ffi::OsString;
+
+    #[test]
+    fn option_value_keeps_flag_like_value_in_single_argv_entry() {
+        let mut args = CommandArgs::default();
+
+        args.option_value("--hostname", "--task-package=/tmp/other");
+
+        let collected: Vec<OsString> = args.into_iter().collect();
+        assert_eq!(
+            collected,
+            vec![OsString::from("--hostname=--task-package=/tmp/other")]
+        );
+    }
+
+    #[test]
+    fn option_value_preserves_spaces_inside_value() {
+        let mut args = CommandArgs::default();
+
+        args.option_value("--entrypoint", "/bin/my tool");
+
+        let collected: Vec<OsString> = args.into_iter().collect();
+        assert_eq!(collected, vec![OsString::from("--entrypoint=/bin/my tool")]);
+    }
+
+    #[test]
+    fn validated_option_value_preserves_run_argument_boundary() {
+        let mut args = CommandArgs::default();
+
+        args.arg("run");
+        args.validated_option_value("Run.entry_point", "--entrypoint", "/bin/date")
+            .unwrap();
+        args.arg("--").args(["--iso-8601", "seconds"]);
+
+        let collected: Vec<OsString> = args.into_iter().collect();
+        assert_eq!(
+            collected,
+            vec![
+                OsString::from("run"),
+                OsString::from("--entrypoint=/bin/date"),
+                OsString::from("--"),
+                OsString::from("--iso-8601"),
+                OsString::from("seconds"),
+            ]
+        );
+    }
+
+    #[test]
+    fn validate_cli_option_value_rejects_double_dash_prefix() {
+        let error =
+            validate_cli_option_value("Deploy.hostname", "--task-package=/tmp/other").unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::CommandError(message)
+                if message
+                    == "invalid Deploy.hostname: values starting with `--` are not allowed"
+        ));
+    }
+
+    #[test]
+    fn validate_cli_option_value_allows_regular_values() {
+        assert!(validate_cli_option_value("Deploy.hostname", "worker").is_ok());
+        assert!(validate_cli_option_value("Run.entry_point", "/bin/date").is_ok());
+    }
+
+    #[test]
+    fn validated_option_value_rejects_before_modifying_arguments() {
+        let mut args = CommandArgs::default();
+
+        let result =
+            args.validated_option_value("Run.entry_point", "--entrypoint", "--runtime-option");
+
+        assert!(matches!(result, Err(Error::CommandError(_))));
+        assert!(args.into_iter().next().is_none());
+    }
+}
 
 #[derive(Message)]
 #[rtype("()")]

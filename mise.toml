@@ -1,2 +1,53 @@
 [tools]
-aws-cli = { version = "2", symlink_bins = "true" }
+actionlint = "1.7.7"
+aws-cli = { version = "2.36.21", symlink_bins = "true" }
+cargo-binstall = "1.21.1"
+cmake = "3.31.9"
+node = "20.20.2"
+poetry = "1.8.2"
+protoc = "24.4"
+python = "3.12.13"
+rust = { version = "1.97.0", components = ["rustfmt", "clippy"], profile = "minimal" }
+shellcheck = "0.11.0"
+"cargo:cross" = "0.2.5"
+"cargo:cargo-deb" = "3.7.0"
+
+[env]
+PROTOC = { value = "{% if tools.protoc is defined %}{{ tools.protoc.path }}/bin/protoc{% if os() == 'windows' %}.exe{% endif %}{% endif %}", tools = true }
+
+[settings.task]
+# CI jobs install only the tools they need instead of downloading the complete
+# cross-platform toolset before every task.
+run_auto_install = false
+
+[tasks."ci:lock"]
+description = "Check that Cargo.lock is sufficient"
+run = "cargo tree --locked"
+
+[tasks."ci:workflows"]
+description = "Validate GitHub Actions workflows"
+run = "actionlint"
+
+[tasks."ci:fmt"]
+description = "Check Rust formatting"
+run = "cargo fmt --all -- --check"
+
+[tasks."ci:clippy"]
+description = "Run workspace Clippy with CI settings"
+run = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings"
+
+[tasks."ci:unit"]
+description = "Run the standard workspace unit-test suite"
+run = "cargo test --workspace --lib --bins --tests --features require-consent --exclude ya-market --locked"
+
+[tasks."ci:market"]
+description = "Run the market semi-integration test suite"
+run = "cargo test --tests -p ya-market --features ya-market/test-suite --locked"
+
+[tasks."ci:system"]
+description = "Run the system-test crates"
+run = "cargo test --test '*' -p yagna -p ya-exe-unit -p ya-transfer -p ya-payment -p ya-identity --features system-test --locked"
+
+[tasks."ci:gate"]
+description = "Run the same Linux gate that must pass before expensive CI starts"
+run = "mise run ci:workflows && mise run ci:lock && mise run ci:fmt && mise run ci:clippy && mise run ci:unit"

@@ -164,7 +164,7 @@ impl ExeUnitExt for ExeUnitHandle {
             timeout: None,
         };
         self.addr
-            .send(RpcEnvelope::with_caller(String::new(), msg))
+            .send(RpcEnvelope::local(msg))
             .await
             .map_err(|e| anyhow!("Unable to execute exe script: {e:?}"))?
             .map_err(|e| anyhow!("Unable to execute exe script: {e:?}"))?;

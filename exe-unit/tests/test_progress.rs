@@ -61,7 +61,10 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
             vec![ExeScriptCommand::Deploy {
                 net: vec![],
                 progress: Some(ProgressArgs {
-                    update_interval: Some(Duration::from_millis(300)),
+                    // Deploy downloads can finish quickly now that integrity is checked from the
+                    // completed file instead of hashing the stream. Keep the reporting interval
+                    // short enough to observe progress before the post-download verification.
+                    update_interval: Some(Duration::from_millis(10)),
                     update_step: None,
                 }),
                 env: Default::default(),
@@ -91,7 +94,7 @@ async fn test_progress_reporting(ctx: &mut DroppableTestContext) -> anyhow::Resu
             vec![ExeScriptCommand::Transfer {
                 args: TransferArgs::default(),
                 progress: Some(ProgressArgs {
-                    update_interval: Some(Duration::from_millis(100)),
+                    update_interval: Some(Duration::from_millis(10)),
                     update_step: None,
                 }),
                 // Important: Use hashed transfer, because it is significantly slower in debug mode.

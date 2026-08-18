@@ -69,6 +69,7 @@ mod tests {
     fn example_agreement() {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("examples/agreement.json");
-        Agreement::try_from(&path).unwrap();
+        let agreement = Agreement::try_from(&path).unwrap();
+        agreement.inner.requestor_id().unwrap();
     }
 }

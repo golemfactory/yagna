@@ -139,7 +139,7 @@ impl MockNet {
 
     fn node_by_prefix(&self, address: &str) -> Option<NodeInfo> {
         let inner = self.inner.lock().unwrap();
-        for (_id, info) in inner.nodes.iter() {
+        for info in inner.nodes.values() {
             if address.contains(&info.prefix) {
                 return Some(info.clone());
             }

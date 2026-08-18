@@ -18,6 +18,7 @@ ya-gsb-http-proxy = { path = "../../exe-unit/components/gsb-http-proxy" }
 actix-web = "4"
 actix-http = "3"
 anyhow = "1.0"
+base64 = "0.21"
 chrono = "0.4"
 diesel = { version = "1.4", features = ["chrono", "sqlite", "r2d2"] }
 diesel_migrations = "1.4"
@@ -30,6 +31,7 @@ libsqlite3-sys = { workspace = true }
 log = "0.4"
 mime.workspace = true
 r2d2 = "0.8"
+rand.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 shlex = "0.1"
@@ -44,3 +46,6 @@ async-stream = "0.3.5"
 ya-sb-router = { workspace = true }
 
 actix-rt = "2.7"
+
+[lints]
+workspace = true

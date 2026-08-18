@@ -1,6 +1,8 @@
 use crate::dao::{ActivityDao, ActivityStateDao, ActivityUsageDao};
 use crate::error::Error;
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::{DateTime, Utc};
+use rand::{rngs::OsRng, RngCore};
 use serde::Deserialize;
 use std::time::Duration;
 use uuid::Uuid;
@@ -16,11 +18,14 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_api_web::middleware::Identity;
 use ya_service_bus::typed::Endpoint;
-use ya_service_bus::{timeout::IntoDuration, typed as bus, RpcEndpoint, RpcMessage};
+use ya_service_bus::{typed as bus, RpcEndpoint, RpcMessage};
 
 pub type RpcMessageResult<T> = Result<<T as RpcMessage>::Item, <T as RpcMessage>::Error>;
 pub const DEFAULT_REQUEST_TIMEOUT: f32 = 5.0;
+pub const MAX_REQUEST_TIMEOUT: f32 = 24.0 * 60.0 * 60.0;
 const DEFAULT_TIMEOUT_MARGIN: f32 = 1.0;
+const ACTIVITY_ID_BYTES: usize = 32;
+const METRIC_ACTIVITY_ID_PREFIX_LEN: usize = 12;
 
 #[derive(Deserialize)]
 pub struct PathActivity {
@@ -75,9 +80,44 @@ pub(crate) fn default_query_timeout() -> Option<f32> {
 }
 
 #[inline(always)]
-pub(crate) fn generate_id() -> String {
-    // TODO: replace with a cryptographically secure generator
+pub(crate) fn generate_batch_id() -> String {
     Uuid::new_v4().to_simple().to_string()
+}
+
+#[inline(always)]
+pub(crate) fn generate_activity_id() -> String {
+    loop {
+        let mut bytes = [0u8; ACTIVITY_ID_BYTES];
+        OsRng.fill_bytes(&mut bytes);
+        if let Some(activity_id) = encode_activity_id(bytes) {
+            return activity_id;
+        }
+    }
+}
+
+fn encode_activity_id(bytes: [u8; ACTIVITY_ID_BYTES]) -> Option<String> {
+    let activity_id = URL_SAFE_NO_PAD.encode(bytes);
+
+    // `activity_id` is passed to exe-unit as a positional CLI argument.
+    // Keep it compatible with older exe-unit versions that interpret a
+    // leading '-' as an option.
+    if activity_id.starts_with('-') {
+        None
+    } else {
+        Some(activity_id)
+    }
+}
+
+/// Returns a shortened activity identifier suitable for metric labels.
+///
+/// New activity IDs contain almost 256 random bits. Exposing the first 12
+/// Base64URL characters reveals approximately 72 bits and leaves 184 bits
+/// unknown. This also safely shortens legacy hexadecimal activity IDs.
+pub(crate) fn metric_activity_id(activity_id: &str) -> String {
+    activity_id
+        .chars()
+        .take(METRIC_ACTIVITY_ID_PREFIX_LEN)
+        .collect()
 }
 
 pub(crate) async fn _get_activities(db: &DbExecutor) -> Result<Vec<String>, Error> {
@@ -229,8 +269,33 @@ pub(crate) fn authorize_caller(caller: &NodeId, authorized: &NodeId) -> Result<(
     }
 }
 
-pub(crate) fn timeout_margin<D: IntoDuration>(timeout: Option<D>) -> Option<Duration> {
-    timeout.map(|t| t.into_duration() + Duration::from_secs_f32(DEFAULT_TIMEOUT_MARGIN))
+pub(crate) fn timeout_duration(timeout: Option<f32>) -> Result<Option<Duration>, Error> {
+    timeout.map(validate_timeout).transpose()
+}
+
+pub(crate) fn timeout_margin(timeout: Option<f32>) -> Result<Option<Duration>, Error> {
+    timeout_duration(timeout).map(|duration| {
+        duration.map(|duration| duration + Duration::from_secs_f32(DEFAULT_TIMEOUT_MARGIN))
+    })
+}
+
+fn validate_timeout(timeout: f32) -> Result<Duration, Error> {
+    if !timeout.is_finite() {
+        return Err(Error::BadRequest("Timeout must be finite".to_string()));
+    }
+    if timeout < 0.0 {
+        return Err(Error::BadRequest(
+            "Timeout must not be negative".to_string(),
+        ));
+    }
+    if timeout > MAX_REQUEST_TIMEOUT {
+        return Err(Error::BadRequest(format!(
+            "Timeout {} exceeds maximum {}",
+            timeout, MAX_REQUEST_TIMEOUT
+        )));
+    }
+
+    Ok(Duration::from_secs_f32(timeout))
 }
 
 pub(crate) fn is_responsive(state: ActivityState) -> bool {
@@ -241,4 +306,67 @@ pub(crate) fn is_responsive(state: ActivityState) -> bool {
             (&internal_state.0, &internal_state.1),
             (ActivityStateType::Unresponsive, _) | (_, Some(ActivityStateType::Unresponsive))
         )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn activity_id_decodes_to_32_random_bytes() {
+        let activity_id = generate_activity_id();
+
+        assert_eq!(activity_id.len(), 43);
+        assert!(!activity_id.starts_with('-'));
+        assert_eq!(URL_SAFE_NO_PAD.decode(activity_id).unwrap().len(), 32);
+    }
+
+    #[test]
+    fn activity_id_rejects_a_leading_dash() {
+        let mut bytes = [0u8; ACTIVITY_ID_BYTES];
+        bytes[0] = 0xf8;
+
+        assert!(URL_SAFE_NO_PAD.encode(bytes).starts_with('-'));
+        assert!(encode_activity_id(bytes).is_none());
+        assert!(encode_activity_id([0u8; ACTIVITY_ID_BYTES]).is_some());
+    }
+
+    #[test]
+    fn batch_id_remains_a_simple_uuid() {
+        let batch_id = generate_batch_id();
+
+        assert_eq!(batch_id.len(), 32);
+        assert!(batch_id
+            .bytes()
+            .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f')));
+    }
+
+    #[test]
+    fn metric_activity_id_uses_twelve_character_prefix() {
+        let activity_id = generate_activity_id();
+
+        assert_eq!(metric_activity_id(&activity_id), activity_id[..12]);
+        assert_eq!(metric_activity_id("short-id"), "short-id");
+    }
+
+    #[test]
+    fn timeout_duration_rejects_values_that_would_panic() {
+        assert!(timeout_duration(Some(-1.0)).is_err());
+        assert!(timeout_duration(Some(f32::NAN)).is_err());
+        assert!(timeout_duration(Some(f32::INFINITY)).is_err());
+        assert!(timeout_duration(Some(MAX_REQUEST_TIMEOUT + 1.0)).is_err());
+    }
+
+    #[test]
+    fn timeout_margin_validates_and_adds_margin() {
+        assert_eq!(
+            timeout_duration(Some(2.5)).unwrap(),
+            Some(Duration::from_millis(2500))
+        );
+        assert_eq!(
+            timeout_margin(Some(2.5)).unwrap(),
+            Some(Duration::from_millis(3500))
+        );
+        assert_eq!(timeout_margin(None).unwrap(), None);
+    }
 }

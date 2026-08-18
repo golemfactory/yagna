@@ -7,7 +7,7 @@ use ya_market::testing::{
     mock_node::assert_offers_broadcasted,
     mock_offer::client::{not_matching_demand, not_matching_offer, sample_demand, sample_offer},
     mock_offer::flatten_json,
-    negotiation::error::{CounterProposalError, RemoteProposalError},
+    negotiation::error::{CounterProposalError, RejectProposalError, RemoteProposalError},
     proposal_util::{exchange_draft_proposals, NegotiationHelper},
     AgreementError, MarketServiceExt, MarketsNetwork, Owner, ProposalError, ProposalState,
     ProposalValidationError, SaveProposalError,
@@ -308,6 +308,122 @@ async fn test_counter_own_proposal() {
             assert_eq!(id, proposal1_id)
         }
         e => panic!("Expected ProposalValidationError::OwnProposal, got: {}", e),
+    }
+}
+
+/// An identity that does not own either side of a negotiation cannot counter or
+/// reject its Proposals.
+#[cfg_attr(not(feature = "test-suite"), ignore)]
+#[serial_test::serial]
+async fn test_unauthorized_identity_cannot_react_to_proposal() {
+    let network = MarketsNetwork::new(None, MockNet::new())
+        .await
+        .add_market_instance("Requestor")
+        .await
+        .add_market_instance("Provider")
+        .await
+        .add_market_instance("Foreign")
+        .await;
+
+    let requestor_market = network.get_market("Requestor");
+    let provider_market = network.get_market("Provider");
+    let requestor_id = network.get_default_id("Requestor");
+    let provider_id = network.get_default_id("Provider");
+    let foreign_id = network.get_default_id("Foreign");
+
+    let demand_id = requestor_market
+        .subscribe_demand(&sample_demand(), &requestor_id)
+        .await
+        .unwrap();
+    let offer_id = provider_market
+        .subscribe_offer(&sample_offer(), &provider_id)
+        .await
+        .unwrap();
+
+    let initial_requestor_proposal =
+        requestor::query_proposal(&requestor_market, &demand_id, "Initial #R")
+            .await
+            .unwrap();
+    let initial_requestor_proposal_id = initial_requestor_proposal.get_proposal_id().unwrap();
+
+    let counter_result = requestor_market
+        .requestor_engine
+        .counter_proposal(
+            &demand_id,
+            &initial_requestor_proposal_id,
+            &sample_demand(),
+            &foreign_id,
+        )
+        .await;
+    match counter_result {
+        Err(ProposalError::Validation(ProposalValidationError::Unauthorized(id, caller))) => {
+            assert_eq!(id, initial_requestor_proposal_id);
+            assert_eq!(caller, foreign_id.identity);
+        }
+        result => panic!("Expected unauthorized counter error, got: {:?}", result),
+    }
+
+    let reject_result = requestor_market
+        .requestor_engine
+        .reject_proposal(
+            &demand_id,
+            &initial_requestor_proposal_id,
+            &foreign_id,
+            None,
+        )
+        .await;
+    match reject_result {
+        Err(ProposalError::Reject(RejectProposalError::Validation(
+            ProposalValidationError::Unauthorized(id, caller),
+        ))) => {
+            assert_eq!(id, initial_requestor_proposal_id);
+            assert_eq!(caller, foreign_id.identity);
+        }
+        result => panic!("Expected unauthorized rejection error, got: {:?}", result),
+    }
+
+    let requestor_proposal_id = requestor_market
+        .requestor_engine
+        .counter_proposal(
+            &demand_id,
+            &initial_requestor_proposal_id,
+            &sample_demand(),
+            &requestor_id,
+        )
+        .await
+        .unwrap();
+    provider::query_proposal(&provider_market, &offer_id, "Initial #P")
+        .await
+        .unwrap();
+    let provider_proposal_id = requestor_proposal_id.translate(Owner::Provider);
+
+    let counter_result = provider_market
+        .provider_engine
+        .counter_proposal(
+            &offer_id,
+            &provider_proposal_id,
+            &sample_offer(),
+            &foreign_id,
+        )
+        .await;
+    match counter_result {
+        Err(ProposalError::Validation(ProposalValidationError::Unauthorized(id, caller))) => {
+            assert_eq!(id, provider_proposal_id);
+            assert_eq!(caller, foreign_id.identity);
+        }
+        result => panic!("Expected unauthorized counter error, got: {:?}", result),
+    }
+
+    let reject_result = provider_market
+        .provider_engine
+        .reject_proposal(&offer_id, &provider_proposal_id, &foreign_id, None)
+        .await;
+    match reject_result {
+        Err(RejectProposalError::Validation(ProposalValidationError::Unauthorized(id, caller))) => {
+            assert_eq!(id, provider_proposal_id);
+            assert_eq!(caller, foreign_id.identity);
+        }
+        result => panic!("Expected unauthorized rejection error, got: {:?}", result),
     }
 }
 

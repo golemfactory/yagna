@@ -14,9 +14,9 @@
         "os": "linux"
       },
       "urls": [
-        "http://yacn2.dev.golem.network:8000/docker-golem-script-curl-latest-d75268e752.gvmi"
+        "https://registry.golem.network/download/2d5b5eda04975324de6660b863cb4d1ed94d5394fedbae0b11fa883d49001b02"
       ],
-      "hash": "sha3:e5f5ddfd649525dbe25d93d9ed51d1bdd0849933d9a5720adb4b5810"
+      "hash": "sha3:5710a9b1404d346ecf2ebda5466a8d248283837671452195bc7c0094"
     }
   ],
   "compManifest": {

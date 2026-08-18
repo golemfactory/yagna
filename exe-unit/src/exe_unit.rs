@@ -26,7 +26,7 @@ use ya_transfer::transfer::{
     TransferServiceContext,
 };
 
-use crate::acl::Acl;
+use crate::acl::{AccessRole, Acl, Error as AclError};
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::message::{
@@ -505,6 +505,11 @@ pub struct ExeUnitContext {
 }
 
 impl ExeUnitContext {
+    pub fn verify_request(&self, caller: &str, activity_id: &str) -> crate::Result<()> {
+        verify_control_access(&self.acl, caller)?;
+        self.verify_activity_id(activity_id)
+    }
+
     pub fn verify_activity_id(&self, activity_id: &str) -> crate::Result<()> {
         match &self.activity_id {
             Some(act_id) => match act_id == activity_id {
@@ -516,6 +521,13 @@ impl ExeUnitContext {
             },
             None => Ok(()),
         }
+    }
+}
+
+fn verify_control_access(acl: &Acl, caller: &str) -> crate::Result<()> {
+    match acl.has_access(caller, AccessRole::Control) {
+        true => Ok(()),
+        false => Err(AclError::Forbidden(caller.to_string(), AccessRole::Control).into()),
     }
 }
 
@@ -624,5 +636,22 @@ impl Handler<Shutdown> for CountersService {
     fn handle(&mut self, _msg: Shutdown, ctx: &mut Self::Context) -> Self::Result {
         let addr = ctx.address();
         async move { Ok(addr.send(ya_counters::message::Shutdown {}).await??) }.boxed_local()
+    }
+}
+
+#[cfg(test)]
+mod access_tests {
+    use super::*;
+
+    #[test]
+    fn control_access_is_limited_to_granted_callers() {
+        let acl = Acl::default();
+        acl.grant("requestor".to_string(), AccessRole::Control);
+
+        assert!(verify_control_access(&acl, "requestor").is_ok());
+        assert!(matches!(
+            verify_control_access(&acl, "other"),
+            Err(Error::Acl(AclError::Forbidden(_, AccessRole::Control)))
+        ));
     }
 }

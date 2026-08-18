@@ -14,7 +14,7 @@ use ya_core_model::payment::local::{
 };
 use ya_core_model::payment::public;
 use ya_core_model::NodeId;
-use ya_payment::api::web_scope;
+use ya_payment::api::{web_scope, PaymentApiState};
 use ya_payment::config::Config;
 use ya_payment::migrations;
 use ya_payment::processor::PaymentProcessor;
@@ -56,6 +56,7 @@ pub struct RealPayment {
     config: Arc<Config>,
 
     allocation_release_tasks: AllocationReleaseTasks,
+    payment_api_state: PaymentApiState,
 }
 
 impl RealPayment {
@@ -75,6 +76,7 @@ impl RealPayment {
             processor,
             config: Arc::new(config),
             allocation_release_tasks,
+            payment_api_state: PaymentApiState::default(),
         }
     }
 
@@ -104,7 +106,11 @@ impl RealPayment {
 
     pub fn bind_rest(&self) -> actix_web::Scope {
         let db = self.db.clone();
-        web_scope(&db, self.allocation_release_tasks.clone())
+        web_scope(
+            &db,
+            self.allocation_release_tasks.clone(),
+            self.payment_api_state.clone(),
+        )
     }
 
     pub async fn start_dummy_driver(&self) -> anyhow::Result<()> {

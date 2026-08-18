@@ -19,12 +19,39 @@ use crate::message::GetBatchResults;
 use crate::runtime::Runtime;
 use crate::{ExeUnit, RuntimeRef};
 
+const MAX_REQUEST_TIMEOUT: f32 = 24.0 * 60.0 * 60.0;
+
+fn timeout_duration(timeout: Option<f32>) -> Result<Duration, RpcMessageError> {
+    let Some(timeout) = timeout else {
+        return Ok(Duration::default());
+    };
+
+    if !timeout.is_finite() {
+        return Err(RpcMessageError::BadRequest(
+            "Timeout must be finite".to_string(),
+        ));
+    }
+    if timeout < 0.0 {
+        return Err(RpcMessageError::BadRequest(
+            "Timeout must not be negative".to_string(),
+        ));
+    }
+    if timeout > MAX_REQUEST_TIMEOUT {
+        return Err(RpcMessageError::BadRequest(format!(
+            "Timeout {} exceeds maximum {}",
+            timeout, MAX_REQUEST_TIMEOUT
+        )));
+    }
+
+    Ok(Duration::from_secs_f32(timeout))
+}
+
 impl<R: Runtime> Handler<RpcEnvelope<Exec>> for ExeUnit<R> {
     type Result = <RpcEnvelope<Exec> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<Exec>, ctx: &mut Self::Context) -> Self::Result {
         log::debug!("Received Exec message: {:?}", msg.as_ref());
-        self.ctx.verify_activity_id(&msg.activity_id)?;
+        self.ctx.verify_request(msg.caller(), &msg.activity_id)?;
 
         let batch_id = msg.batch_id.clone();
         let msg = msg.into_inner();
@@ -62,7 +89,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetState>> for ExeUnit<R> {
     type Result = <RpcEnvelope<GetState> as Message>::Result;
 
     fn handle(&mut self, msg: RpcEnvelope<GetState>, _: &mut Self::Context) -> Self::Result {
-        self.ctx.verify_activity_id(&msg.activity_id)?;
+        self.ctx.verify_request(msg.caller(), &msg.activity_id)?;
 
         Ok(ActivityState {
             state: self.state.inner,
@@ -76,7 +103,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetUsage>> for ExeUnit<R> {
     type Result = ActorResponse<Self, Result<ActivityUsage, RpcMessageError>>;
 
     fn handle(&mut self, msg: RpcEnvelope<GetUsage>, _: &mut Self::Context) -> Self::Result {
-        if let Err(e) = self.ctx.verify_activity_id(&msg.activity_id) {
+        if let Err(e) = self.ctx.verify_request(msg.caller(), &msg.activity_id) {
             return ActorResponse::reply(Err(e.into()));
         }
 
@@ -111,7 +138,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetRunningCommand>> for ExeUnit<R> {
         msg: RpcEnvelope<GetRunningCommand>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        self.ctx.verify_activity_id(&msg.activity_id)?;
+        self.ctx.verify_request(msg.caller(), &msg.activity_id)?;
         let commands = self
             .state
             .batches
@@ -138,7 +165,7 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         msg: RpcEnvelope<GetExecBatchResults>,
         ctx: &mut Self::Context,
     ) -> Self::Result {
-        if let Err(err) = self.ctx.verify_activity_id(&msg.activity_id) {
+        if let Err(err) = self.ctx.verify_request(msg.caller(), &msg.activity_id) {
             return ActorResponse::reply(Err(err.into()));
         }
 
@@ -155,7 +182,10 @@ impl<R: Runtime> Handler<RpcEnvelope<GetExecBatchResults>> for ExeUnit<R> {
         };
 
         let address = ctx.address();
-        let duration = Duration::from_secs_f32(msg.timeout.unwrap_or(0.));
+        let duration = match timeout_duration(msg.timeout) {
+            Ok(duration) => duration,
+            Err(err) => return ActorResponse::reply(Err(err)),
+        };
         let notifier = batch.notifier.clone();
 
         let idx = msg.command_index;
@@ -187,7 +217,7 @@ impl<R: Runtime> Handler<RpcStreamCall<StreamExecBatchResults>> for ExeUnit<R> {
         msg: RpcStreamCall<StreamExecBatchResults>,
         _: &mut Self::Context,
     ) -> Self::Result {
-        if let Err(e) = self.ctx.verify_activity_id(&msg.body.activity_id) {
+        if let Err(e) = self.ctx.verify_request(&msg.caller, &msg.body.activity_id) {
             return ActorResponse::reply(Err(RpcError::GsbBadRequest(e.to_string())));
         }
         let batch = match self.state.batches.get_mut(&msg.body.batch_id) {
@@ -222,6 +252,11 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
         use futures::prelude::*;
         use ya_client_model::activity::encrypted::{Request, RequestCommand, Response};
 
+        let caller = msg.caller().to_string();
+        if let Err(err) = self.ctx.verify_request(&caller, &msg.activity_id) {
+            return Box::pin(async move { Err(err.into()) });
+        }
+
         let me = ctx.address();
         let dec = self.ctx.crypto.ctx();
         let enc = self.ctx.crypto.ctx();
@@ -243,7 +278,7 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
                         exe_script,
                     };
                     Response::Exec(
-                        me.send(RpcEnvelope::local(msg))
+                        me.send(RpcEnvelope::with_caller(caller.clone(), msg))
                             .await
                             .map_err(|_| {
                                 SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
@@ -259,7 +294,7 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
                         command_index,
                     };
                     Response::GetExecBatchResults(
-                        me.send(RpcEnvelope::local(msg))
+                        me.send(RpcEnvelope::with_caller(caller.clone(), msg))
                             .await
                             .map_err(|_e| {
                                 SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
@@ -273,7 +308,7 @@ impl<R: Runtime> Handler<RpcEnvelope<sgx::CallEncryptedService>> for ExeUnit<R> 
                         timeout,
                     };
                     Response::GetRunningCommand(
-                        me.send(RpcEnvelope::local(msg))
+                        me.send(RpcEnvelope::with_caller(caller, msg))
                             .await
                             .map_err(|_e| {
                                 SgxMessageError::Service("fatal: exe-unit disconnected".to_string())
@@ -310,5 +345,27 @@ fn rpc_to_sgx_error(error: RpcMessageError) -> SgxMessageError {
         RpcMessageError::NotFound(m) => SgxMessageError::NotFound(m),
         RpcMessageError::Forbidden(m) => SgxMessageError::Forbidden(m),
         RpcMessageError::Timeout => SgxMessageError::Timeout,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_duration_rejects_values_that_would_panic() {
+        assert!(timeout_duration(Some(-1.0)).is_err());
+        assert!(timeout_duration(Some(f32::NAN)).is_err());
+        assert!(timeout_duration(Some(f32::INFINITY)).is_err());
+        assert!(timeout_duration(Some(MAX_REQUEST_TIMEOUT + 1.0)).is_err());
+    }
+
+    #[test]
+    fn timeout_duration_accepts_valid_values() {
+        assert_eq!(timeout_duration(None).unwrap(), Duration::default());
+        assert_eq!(
+            timeout_duration(Some(2.5)).unwrap(),
+            Duration::from_millis(2500)
+        );
     }
 }

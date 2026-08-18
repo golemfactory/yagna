@@ -13,6 +13,7 @@ use ya_service_bus::RpcEnvelope;
 use ya_transfer::transfer::TransferService;
 use ya_utils_path::normalize_path;
 
+use crate::acl::{AccessRole, Acl};
 use crate::agreement::Agreement;
 use crate::error::Error;
 use crate::manifest::ManifestContext;
@@ -203,10 +204,17 @@ pub async fn send_script(
         timeout: None,
     };
 
-    exe_unit
-        .send(RpcEnvelope::with_caller(String::new(), msg))
-        .await??;
+    exe_unit.send(RpcEnvelope::local(msg)).await??;
     Ok(batch_id)
+}
+
+fn control_acl(requestor_id: Option<String>) -> Acl {
+    let acl = Acl::default();
+    acl.grant("local".to_string(), AccessRole::Control);
+    if let Some(requestor_id) = requestor_id {
+        acl.grant(requestor_id, AccessRole::Control);
+    }
+    acl
 }
 
 // We need this mut for conditional compilation for sgx
@@ -342,6 +350,19 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
         .payload()
         .or_else(|| agreement.task_package.take());
 
+    let requestor_id = if config.service_id.is_some() {
+        Some(
+            agreement
+                .inner
+                .requestor_id()
+                .context("Agreement is missing a valid requestor id")?
+                .to_string(),
+        )
+    } else {
+        None
+    };
+    let acl = control_acl(requestor_id);
+
     log::info!("Manifest-enabled features: {:?}", manifest_ctx.features());
     log::info!("User-provided payload: {:?}", agreement.task_package);
 
@@ -357,7 +378,7 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
         work_dir,
         cache_dir,
         runtime_args: config.runtime_args,
-        acl: Default::default(),
+        acl,
         credentials: None,
         #[cfg(feature = "sgx")]
         crypto: init_crypto(
@@ -376,4 +397,18 @@ pub async fn exe_unit(mut config: ExeUnitConfig) -> anyhow::Result<Addr<ExeUnit<
     exe_unit.send(Register(signals)).await?;
 
     Ok(exe_unit)
+}
+
+#[cfg(test)]
+mod control_acl_tests {
+    use super::*;
+
+    #[test]
+    fn activity_control_is_granted_to_the_requestor_and_local_calls() {
+        let acl = control_acl(Some("requestor".to_string()));
+
+        assert!(acl.has_access("requestor", AccessRole::Control));
+        assert!(acl.has_access("local", AccessRole::Control));
+        assert!(!acl.has_access("other", AccessRole::Control));
+    }
 }

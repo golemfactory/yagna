@@ -1,4 +1,5 @@
 use crate::counters::Counters;
+use crate::error::HttpProxyStatusError;
 use crate::headers;
 use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
 use crate::response::{
@@ -16,9 +17,11 @@ use futures_core::stream::Stream;
 use http::StatusCode;
 use reqwest::{RequestBuilder, Response};
 use std::fmt::{Display, Formatter};
+use std::pin::Pin;
 use thiserror::Error;
 use tokio::sync::mpsc;
-use ya_service_bus::{typed as bus, Handle};
+use ya_client_model::NodeId;
+use ya_service_bus::{typed as bus, Handle, RpcStreamHandler};
 
 #[derive(Clone, Debug)]
 pub struct GsbToHttpProxy {
@@ -51,20 +54,25 @@ impl GsbToHttpProxy {
         }
     }
 
-    pub fn bind(&mut self, gsb_path: &str) -> Handle {
+    pub fn bind(&mut self, gsb_path: &str, authorized_caller: NodeId) -> Handle {
         let this = self.clone();
-        bus::bind(gsb_path, move |message: GsbHttpCallMessage| {
+        bus::bind_with_caller(gsb_path, move |caller, message: GsbHttpCallMessage| {
             let mut this = this.clone();
-            async move { Ok(this.pass(message).await) }
+            async move {
+                authorize_caller(&caller, &authorized_caller)?;
+                Ok(this.pass(message).await)
+            }
         })
     }
 
-    pub fn bind_streaming(&mut self, gsb_path: &str) -> Handle {
-        let mut this = self.clone();
-        bus::bind_stream(gsb_path, move |message: GsbHttpCallStreamingMessage| {
-            let stream = this.pass_streaming(message);
-            Box::pin(stream.map(Ok))
-        })
+    pub fn bind_streaming(&mut self, gsb_path: &str, authorized_caller: NodeId) -> Handle {
+        bus::bind_stream(
+            gsb_path,
+            AuthorizedStreamingHandler {
+                proxy: self.clone(),
+                authorized_caller,
+            },
+        )
     }
 
     pub async fn pass(&mut self, message: GsbHttpCallMessage) -> GsbHttpCallResponse {
@@ -251,16 +259,108 @@ impl GsbToHttpProxy {
     }
 }
 
+fn authorize_caller(caller: &str, authorized_caller: &NodeId) -> Result<(), HttpProxyStatusError> {
+    // Local calls do not cross the network trust boundary. Remote callers are
+    // authenticated by GSB and represented by their NodeId.
+    if caller == "local" {
+        return Ok(());
+    }
+
+    match caller.parse::<NodeId>() {
+        Ok(caller) if &caller == authorized_caller => Ok(()),
+        _ => {
+            log::warn!("Rejected unauthorized GSB HTTP proxy caller: {caller}");
+            Err(HttpProxyStatusError::RuntimeException(
+                "Unauthorized GSB HTTP proxy caller".to_string(),
+            ))
+        }
+    }
+}
+
+struct AuthorizedStreamingHandler {
+    proxy: GsbToHttpProxy,
+    authorized_caller: NodeId,
+}
+
+impl RpcStreamHandler<GsbHttpCallStreamingMessage> for AuthorizedStreamingHandler {
+    type Result =
+        Pin<Box<dyn Stream<Item = Result<GsbHttpCallResponseStreamChunk, HttpProxyStatusError>>>>;
+
+    fn handle(&mut self, caller: &str, message: GsbHttpCallStreamingMessage) -> Self::Result {
+        if let Err(error) = authorize_caller(caller, &self.authorized_caller) {
+            return Box::pin(futures::stream::once(async move { Err(error) }));
+        }
+
+        Box::pin(self.proxy.pass_streaming(message).map(Ok))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
 
-    use crate::gsb_to_http::GsbToHttpProxy;
+    use crate::error::HttpProxyStatusError;
+    use crate::gsb_to_http::{authorize_caller, AuthorizedStreamingHandler, GsbToHttpProxy};
     use crate::message::{GsbHttpCallMessage, GsbHttpCallStreamingMessage};
     use crate::response::GsbHttpCallResponseStreamChunk;
     use futures::StreamExt;
     use mockito::{Mock, ServerGuard};
+    use ya_client_model::NodeId;
     use ya_counters::Counter;
+    use ya_service_bus::{typed as bus, RpcStreamHandler};
+
+    fn node_id(value: u8) -> NodeId {
+        format!("0x{value:040x}").parse().unwrap()
+    }
+
+    #[test]
+    fn authorizes_only_local_or_expected_caller() {
+        let authorized = node_id(1);
+
+        assert!(authorize_caller("local", &authorized).is_ok());
+        assert!(authorize_caller(&authorized.to_string(), &authorized).is_ok());
+        assert!(authorize_caller(&node_id(2).to_string(), &authorized).is_err());
+        assert!(authorize_caller("invalid", &authorized).is_err());
+    }
+
+    #[actix_web::test]
+    async fn bind_rejects_unauthorized_caller() {
+        let authorized = node_id(1);
+        let unauthorized = node_id(2);
+        let path = format!("/local/gsb-http-proxy/{}", rand::random::<u64>());
+        let mut proxy = GsbToHttpProxy::new("http://127.0.0.1:1/".into());
+        proxy.bind(&path, authorized);
+
+        let response = bus::service(path)
+            .call_as(unauthorized, message())
+            .await
+            .expect("GSB call should reach the proxy binding");
+
+        assert!(matches!(
+            response,
+            Err(HttpProxyStatusError::RuntimeException(message))
+                if message == "Unauthorized GSB HTTP proxy caller"
+        ));
+    }
+
+    #[actix_web::test]
+    async fn streaming_handler_rejects_unauthorized_caller() {
+        let authorized = node_id(1);
+        let unauthorized = node_id(2).to_string();
+        let mut handler = AuthorizedStreamingHandler {
+            proxy: GsbToHttpProxy::new("http://127.0.0.1:1/".into()),
+            authorized_caller: authorized,
+        };
+
+        let mut response = handler.handle(&unauthorized, streaming_message());
+
+        assert!(matches!(
+            response.next().await,
+            Some(Err(HttpProxyStatusError::RuntimeException(message)))
+                if message == "Unauthorized GSB HTTP proxy caller"
+        ));
+        assert!(response.next().await.is_none());
+    }
 
     #[actix_web::test]
     async fn gsb_to_http_test() {
