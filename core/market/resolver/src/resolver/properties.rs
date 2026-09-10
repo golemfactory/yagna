@@ -2,9 +2,8 @@ use std::str;
 
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, TimeZone, Utc};
-use regex::Regex;
 use semver::Version;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use super::error::ParseError;
 use super::prop_parser;
@@ -24,7 +23,7 @@ pub enum PropertyValue<'a> {
     Decimal(BigDecimal),
     DateTime(DateTime<Utc>),
     Version(Version),
-    List(Vec<Box<PropertyValue<'a>>>),
+    List(Vec<PropertyValue<'a>>),
 }
 
 impl<'a> PropertyValue<'a> {
@@ -48,9 +47,7 @@ impl<'a> PropertyValue<'a> {
                 Ok(parsed_value) => parsed_value == *value,
                 _ => false,
             }, // ignore parsing error, assume false
-            PropertyValue::List(value) => {
-                PropertyValue::equals_list(value, other).unwrap_or_default()
-            }
+            PropertyValue::List(value) => PropertyValue::equals_list(value, other),
             PropertyValue::Boolean(value) => match other.parse::<bool>() {
                 Ok(result) => &result == value,
                 _ => false,
@@ -158,19 +155,36 @@ impl<'a> PropertyValue<'a> {
         }
     }
 
-    // Implement string equality with * wildcard
-    // Note: Only str1 may contain wildcard
-    // TODO my be sensible to move the Regex building to the point where property is parsed...
+    // Implement string equality with * as the only wildcard metacharacter.
+    // Note: Only str1 may contain a wildcard.
     fn str_equal_with_wildcard(str1: &str, str2: &str) -> bool {
-        if str1.contains('*') {
-            let regex_text = format!("^{}$", str1.replace('*', ".*"));
-            match Regex::new(&regex_text) {
-                Ok(regex) => regex.is_match(str2),
-                Err(_error) => false,
+        let pattern = str1.as_bytes();
+        let value = str2.as_bytes();
+        let (mut pattern_at, mut value_at) = (0, 0);
+        let mut last_star = None;
+        let mut retry_value_at = 0;
+
+        while value_at < value.len() {
+            if pattern.get(pattern_at) == value.get(value_at) {
+                pattern_at += 1;
+                value_at += 1;
+            } else if pattern.get(pattern_at) == Some(&b'*') {
+                last_star = Some(pattern_at);
+                pattern_at += 1;
+                retry_value_at = value_at;
+            } else if let Some(star) = last_star {
+                retry_value_at += 1;
+                value_at = retry_value_at;
+                pattern_at = star + 1;
+            } else {
+                return false;
             }
-        } else {
-            str1 == str2
         }
+
+        while pattern.get(pattern_at) == Some(&b'*') {
+            pattern_at += 1;
+        }
+        pattern_at == pattern.len()
     }
 
     fn parse_date(dt_str: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
@@ -191,7 +205,7 @@ impl<'a> PropertyValue<'a> {
     pub fn from_value(value: &'a str) -> Result<PropertyValue<'a>, ParseError> {
         match prop_parser::parse_prop_value_literal(value) {
             Ok(tag) => PropertyValue::from_literal(tag),
-            Err(_error) => Err(ParseError::new(&format!(
+            Err(_error) => Err(ParseError::new(format!(
                 "Error parsing literal: '{}'",
                 value
             ))),
@@ -247,21 +261,21 @@ impl<'a> PropertyValue<'a> {
             Literal::Str(val) => Ok(PropertyValue::Str(val)),
             Literal::Number(val) => match val.parse::<f64>() {
                 Ok(parsed_val) => Ok(PropertyValue::Number(parsed_val)),
-                Err(_err) => Err(ParseError::new(&format!(
+                Err(_err) => Err(ParseError::new(format!(
                     "Error parsing as Number: '{}'",
                     val
                 ))),
             },
             Literal::Decimal(val) => match val.parse::<d128>() {
                 Ok(parsed_val) => Ok(PropertyValue::Decimal(parsed_val)),
-                Err(_err) => Err(ParseError::new(&format!(
+                Err(_err) => Err(ParseError::new(format!(
                     "Error parsing as Decimal: '{}'",
                     val
                 ))),
             },
             Literal::DateTime(val) => match PropertyValue::parse_date(val) {
                 Ok(parsed_val) => Ok(PropertyValue::DateTime(parsed_val)),
-                Err(_err) => Err(ParseError::new(&format!(
+                Err(_err) => Err(ParseError::new(format!(
                     "Error parsing as DateTime: '{}'",
                     val
                 ))),
@@ -269,77 +283,104 @@ impl<'a> PropertyValue<'a> {
             Literal::Bool(val) => Ok(PropertyValue::Boolean(val)),
             Literal::Version(val) => match Version::parse(val) {
                 Ok(parsed_val) => Ok(PropertyValue::Version(parsed_val)),
-                Err(_err) => Err(ParseError::new(&format!(
+                Err(_err) => Err(ParseError::new(format!(
                     "Error parsing as Version: '{}'",
                     val
                 ))),
             },
             Literal::List(vals) => {
-                // Attempt parsing...
-                let results: Vec<Result<PropertyValue<'a>, ParseError>> = vals
-                    .into_iter()
-                    .map(|item| PropertyValue::from_literal(*item))
-                    .collect();
-
-                // ...then check if all results are successful.
-
-                for item in results.iter() {
-                    if let Err(error) = item {
-                        return Err(ParseError::new(&format!("Error parsing list: '{}'", error)));
-                    }
-                }
-
-                // If yes - map all items into PropertyValues
-
-                Ok(PropertyValue::List(
-                    results
-                        .into_iter()
-                        .map(|item| match item {
-                            Ok(prop_val) => Box::new(prop_val),
-                            _ => panic!(),
-                        })
-                        .collect(),
-                ))
+                let results: Result<Vec<PropertyValue<'a>>, ParseError> =
+                    vals.into_iter().map(PropertyValue::from_literal).collect();
+                results
+                    .map(PropertyValue::List)
+                    .map_err(|error| ParseError::new(format!("Error parsing list: '{error}'")))
             }
         }
     }
 
-    fn equals_list(list_items: &Vec<Box<PropertyValue>>, other: &str) -> Result<bool, String> {
+    fn equals_list(list_items: &[PropertyValue], other: &str) -> bool {
         // if val is a proper list syntax - parse it and test list equality
         // otherwise, if val isnt a list - treat it as a single item and execute "IN" operator
-        // TODO this is lazy list equality comparison (returns invalid results where eg lists include multiple copies of the same item)
         match prop_parser::parse_prop_ref_as_list(other) {
             Ok(list_vals) => {
-                // eager test of list length - if different then lists differ
                 if list_vals.len() != list_items.len() {
-                    return Ok(false);
+                    return false;
                 }
 
-                // do greedy list comparison
-                for val_item in list_vals {
-                    let mut found = false;
-                    for item in list_items {
-                        if item.equals(val_item) {
-                            found = true;
-                            break;
-                        }
-                    }
-                    if !found {
-                        return Ok(false);
-                    }
-                }
-                return Ok(true);
+                PropertyValue::has_perfect_list_matching(list_items, &list_vals)
             }
             Err(_) => {
                 for item in list_items {
                     if item.equals(other) {
-                        return Ok(true);
+                        return true;
                     }
                 }
+                false
             }
         }
+    }
 
-        Ok(false) // item not found in list
+    fn has_perfect_list_matching(list_items: &[PropertyValue], constraints: &[&str]) -> bool {
+        let item_count = list_items.len();
+        let mut constraint_to_item = vec![None; constraints.len()];
+        let mut item_to_constraint = vec![None; item_count];
+        let mut visited_constraints = vec![0_usize; constraints.len()];
+        let mut visited_items = vec![0_usize; item_count];
+        let mut item_predecessor = vec![0_usize; item_count];
+        let mut queue = VecDeque::with_capacity(constraints.len());
+
+        // Find and reverse augmenting paths iteratively. Unlike a greedy
+        // assignment, this can reconsider a broad wildcard when a later,
+        // narrower constraint needs the item it initially consumed.
+        for first_constraint in 0..constraints.len() {
+            let visit = first_constraint + 1;
+            visited_constraints[first_constraint] = visit;
+            queue.push_back(first_constraint);
+            let mut unmatched_item = None;
+
+            while let Some(constraint) = queue.pop_front() {
+                for (item, value) in list_items.iter().enumerate() {
+                    if visited_items[item] == visit || !value.equals(constraints[constraint]) {
+                        continue;
+                    }
+
+                    visited_items[item] = visit;
+                    item_predecessor[item] = constraint;
+                    match item_to_constraint[item] {
+                        Some(next_constraint) => {
+                            if visited_constraints[next_constraint] != visit {
+                                visited_constraints[next_constraint] = visit;
+                                queue.push_back(next_constraint);
+                            }
+                        }
+                        None => {
+                            unmatched_item = Some(item);
+                            break;
+                        }
+                    }
+                }
+
+                if unmatched_item.is_some() {
+                    break;
+                }
+            }
+
+            let Some(mut item) = unmatched_item else {
+                return false;
+            };
+            loop {
+                let constraint = item_predecessor[item];
+                let previous_item = constraint_to_item[constraint].replace(item);
+                item_to_constraint[item] = Some(constraint);
+                match previous_item {
+                    Some(previous_item) => item = previous_item,
+                    None => break,
+                }
+            }
+            queue.clear();
+        }
+
+        true
     }
 }
 
@@ -361,25 +402,20 @@ pub struct PropertySet<'a> {
 
 impl<'a> PropertySet<'a> {
     // Create PropertySet from vector of properties expressed in flat form (ie. by parsing)
-    pub fn from_flat_props(props: &'a Vec<String>) -> PropertySet<'a> {
+    pub fn from_flat_props(props: &'a [String]) -> Result<PropertySet<'a>, ParseError> {
         let mut result = PropertySet {
             properties: HashMap::new(),
         };
 
-        // parse and pack props
-        for prop_flat in props {
-            match PropertySet::parse_flat_prop(prop_flat) {
-                Ok((prop_name, prop_value)) => {
-                    result.properties.insert(prop_name, prop_value);
-                }
-                Err(e) => {
-                    // do nothing??? ignore the faulty property
-                    log::debug!("Error: {:?}", e);
-                }
-            }
+        for (index, prop_flat) in props.iter().enumerate() {
+            let (property_name, property) =
+                PropertySet::parse_flat_prop(prop_flat).map_err(|error| {
+                    ParseError::new(format!("Invalid property at index {index}: {error}"))
+                })?;
+            result.properties.insert(property_name, property);
         }
 
-        result
+        Ok(result)
     }
 
     // Parsing of property values/types
@@ -395,7 +431,7 @@ impl<'a> PropertySet<'a> {
                 },
                 None => Ok((name, Property::Implicit(name))),
             },
-            Err(error) => Err(ParseError::new(&format!("Parsing error: {}", error))),
+            Err(error) => Err(ParseError::new(format!("Parsing error: {}", error))),
         }
     }
 
@@ -437,7 +473,6 @@ pub enum PropertyRefType {
 }
 
 pub fn parse_prop_ref(flat_prop: &str) -> Result<PropertyRef, ParseError> {
-    // TODO parse the flat_prop using prop_parser and repack to PropertyRef
     match prop_parser::parse_prop_ref_with_aspect(flat_prop) {
         Ok((name, opt_aspect, impl_type)) => match opt_aspect {
             Some(aspect) => Ok(PropertyRef::Aspect(
@@ -450,7 +485,7 @@ pub fn parse_prop_ref(flat_prop: &str) -> Result<PropertyRef, ParseError> {
                 decode_implied_ref_type(impl_type),
             )),
         },
-        Err(error) => Err(ParseError::new(&format!("Parse error {}", error))),
+        Err(error) => Err(ParseError::new(format!("Parse error {}", error))),
     }
 }
 

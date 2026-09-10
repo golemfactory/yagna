@@ -7,6 +7,7 @@ pub mod pre_install;
 pub mod preset;
 pub mod profile;
 pub mod rule;
+pub mod shutdown;
 pub mod whitelist;
 
 use crate::startup_config::ProviderConfig;

@@ -2,7 +2,7 @@
 name = "ya-core-model"
 version = "0.10.1"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2024"
 homepage = "https://github.com/golemfactory/yagna"
 repository = "https://github.com/golemfactory/yagna"
 license = "LGPL-3.0"
@@ -39,7 +39,7 @@ ya-client-model.workspace = true
 ya-service-bus = { workspace = true }
 
 anyhow = { version = "1.0", optional = true }
-bigdecimal = { version = "0.2", features = ["serde"], optional = true }
+bigdecimal = { version = "0.4", features = ["serde"], optional = true }
 bitflags = { version = "1.2", optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 derive_more = { workspace = true }
@@ -54,4 +54,3 @@ structopt = "0.3"
 strum = { workspace = true }
 strum_macros = "0.24"
 thiserror = "1.0.9"
-

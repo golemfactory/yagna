@@ -2,7 +2,7 @@
 name = "ya-utils-futures"
 version = "0.3.0"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2024"
 
 
 [dependencies]

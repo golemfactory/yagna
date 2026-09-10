@@ -1,8 +1,9 @@
 use crate::{
-    command::{ProviderConfig, YaCommand},
+    command::{price_per_hour_to_second, ProviderConfig, YaCommand},
     setup::ConfigAccount,
 };
 use anyhow::Result;
+use bigdecimal::BigDecimal;
 use byte_unit::{Byte as Bytes, ByteUnit};
 use structopt::StructOpt;
 
@@ -25,16 +26,16 @@ pub struct Settings {
     disk: Option<Bytes>,
 
     /// Price for starting a task
-    #[structopt(long, value_name = "GLM (float)")]
-    starting_fee: Option<f64>,
+    #[structopt(long, value_name = "GLM")]
+    starting_fee: Option<BigDecimal>,
 
     /// Price for working environment per hour
-    #[structopt(long, value_name = "GLM (float)")]
-    env_per_hour: Option<f64>,
+    #[structopt(long, value_name = "GLM")]
+    env_per_hour: Option<BigDecimal>,
 
     /// Price for CPU per hour
-    #[structopt(long, value_name = "GLM (float)")]
-    cpu_per_hour: Option<f64>,
+    #[structopt(long, value_name = "GLM")]
+    cpu_per_hour: Option<BigDecimal>,
 
     #[structopt(flatten)]
     pub account: ConfigAccount,
@@ -90,8 +91,8 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
         cmd.ya_provider()?
             .update_classic_presets(
                 settings.starting_fee,
-                settings.env_per_hour.map(|p| p / 3600.0),
-                settings.cpu_per_hour.map(|p| p / 3600.0),
+                settings.env_per_hour.map(price_per_hour_to_second),
+                settings.cpu_per_hour.map(price_per_hour_to_second),
             )
             .await?;
     }

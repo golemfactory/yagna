@@ -3,6 +3,7 @@ use crate::{
     utils::{get_command_json_output, move_string_out_of_json},
 };
 use anyhow::{anyhow, bail, Result};
+use bigdecimal::BigDecimal;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -75,11 +76,20 @@ async fn get_prices(cmd: &YaCommand) -> Result<BTreeMap<String, UsageDef>> {
 }
 
 pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
-    let price_description: HashMap<&str, (&str, f64)> = [
-        ("golem.usage.cpu_sec", ("GLM per cpu hour", 3600.0)),
-        ("initial", ("GLM for start", 1.0)),
-        ("golem.usage.duration_sec", ("GLM per hour", 3600.0)),
-        ("golem.usage.storage_gib", ("GLM per GB of storage", 1.0)),
+    let price_description: HashMap<&str, (&str, BigDecimal)> = [
+        (
+            "golem.usage.cpu_sec",
+            ("GLM per cpu hour", BigDecimal::from(3600)),
+        ),
+        ("initial", ("GLM for start", BigDecimal::from(1))),
+        (
+            "golem.usage.duration_sec",
+            ("GLM per hour", BigDecimal::from(3600)),
+        ),
+        (
+            "golem.usage.storage_gib",
+            ("GLM per GB of storage", BigDecimal::from(1)),
+        ),
     ]
     .iter()
     .cloned()
@@ -88,7 +98,7 @@ pub async fn show_prices(cmd: &YaCommand) -> Result<()> {
     for (preset_name, prices) in presets_prices {
         println!("\n\nPricing for preset \"{}\":\n", preset_name);
         for (price_name, price_value) in prices {
-            let default: (&str, f64) = (price_name.as_str(), 1.0);
+            let default: (&str, BigDecimal) = (price_name.as_str(), BigDecimal::from(1));
             let (price_desc, price_multiplier) = price_description
                 .get(&price_name.as_str())
                 .unwrap_or(&default);

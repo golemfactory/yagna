@@ -88,7 +88,7 @@ impl RealPayment {
     fn create_db(testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
         let db = DbExecutor::from_data_dir(testdir, name)
             .map_err(|e| anyhow!("Failed to create db [{name:?}]. Error: {e}"))?;
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::MIGRATIONS)?;
         Ok(db)
     }
 

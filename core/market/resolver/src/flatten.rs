@@ -13,6 +13,9 @@ pub fn flatten_properties(str_json_properties: &str) -> Result<Vec<String>, Flat
     let mapped = flatten(json_properties);
     let mut properties = vec![];
     for (k, v) in mapped.iter() {
+        if v.as_object().is_some_and(serde_json::Map::is_empty) {
+            continue;
+        }
         properties.push(format!("{}={}", k, serde_json::to_string(v)?))
     }
 

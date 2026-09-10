@@ -8,7 +8,7 @@ use crate::db::schema::market_demand;
 use ya_client::model::market::NewDemand;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
-#[table_name = "market_demand"]
+#[diesel(table_name = market_demand)]
 pub struct Demand {
     pub id: SubscriptionId,
     pub properties: String,
@@ -68,6 +68,7 @@ impl Demand {
                     e
                 )
             })?,
+            expiration: Utc.from_utc_datetime(&self.expiration_ts),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
         })
     }

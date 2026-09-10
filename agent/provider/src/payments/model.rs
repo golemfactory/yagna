@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use ya_agreement_utils::{AgreementView, Error};
 
+use crate::config::presets::json_decimal;
+
 use crate::market::negotiator::builtin::expiration::DEBIT_NOTE_ACCEPT_TIMEOUT_PROPERTY;
 use crate::market::negotiator::builtin::note_interval::{
     DEBIT_NOTE_INTERVAL_PROPERTY, DEFAULT_DEBIT_NOTE_INTERVAL_SEC,
@@ -27,9 +29,15 @@ impl<'a> PaymentDescription<'a> {
         Ok(PaymentDescription::<'a> { agreement })
     }
 
-    pub fn get_usage_coefficients(&self) -> Result<Vec<f64>> {
+    pub fn get_usage_coefficients(&self) -> Result<Vec<BigDecimal>> {
         let coeffs_addr = "/offer/properties/golem/com/pricing/model/linear/coeffs";
-        Ok(self.agreement.pointer_typed::<Vec<f64>>(coeffs_addr)?)
+        let value = self
+            .agreement
+            .pointer(coeffs_addr)
+            .ok_or_else(|| Error::NoKey(coeffs_addr.to_string()))?;
+
+        json_decimal::vec_from_value(value)
+            .map_err(|error| Error::InvalidValue(format!("{coeffs_addr}: {error}")).into())
     }
 
     pub fn get_update_interval(&self) -> Result<Duration> {

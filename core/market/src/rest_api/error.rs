@@ -6,6 +6,7 @@ use crate::db::dao::{AgreementDaoError, SaveProposalError};
 use crate::db::model::AgreementState;
 use crate::negotiation::error::{AgreementEventsError, ProposalValidationError};
 use crate::protocol::negotiation::error::RejectProposalError;
+use crate::protocol::negotiation::error::{RemoteTerminationNoticeError, TerminationNoticeError};
 use crate::{
     db::dao::TakeEventsError,
     market::MarketError,
@@ -14,8 +15,8 @@ use crate::{
         QueryOffersError, ResolverError, SaveOfferError,
     },
     negotiation::error::{
-        AgreementError, GetProposalError, NegotiationError, ProposalError, QueryEventsError,
-        WaitForApprovalError,
+        AgreementError, GetProposalError, NegotiationError, PostTerminationNoticeError,
+        ProposalError, QueryEventsError, WaitForApprovalError,
     },
 };
 
@@ -212,6 +213,53 @@ impl ResponseError for AgreementError {
             | AgreementError::ProtocolTerminate(_)
             | AgreementError::ProtocolCommit(_)
             | AgreementError::Internal(_) => HttpResponse::InternalServerError().json(msg),
+        }
+    }
+}
+
+impl ResponseError for PostTerminationNoticeError {
+    fn error_response(&self) -> HttpResponse {
+        let msg = ErrorMessage::new(self.to_string());
+
+        fn state_response(state: &AgreementState, msg: ErrorMessage) -> HttpResponse {
+            match state {
+                // Not Approved yet.
+                AgreementState::Proposal
+                | AgreementState::Pending
+                | AgreementState::Approving
+                | AgreementState::Approved => HttpResponse::Conflict().json(msg),
+                // Already in a terminal state.
+                AgreementState::Cancelled
+                | AgreementState::Rejected
+                | AgreementState::Expired
+                | AgreementState::Terminated => HttpResponse::Gone().json(msg),
+            }
+        }
+
+        match self {
+            PostTerminationNoticeError::NotFound(_) => HttpResponse::NotFound().json(msg),
+            PostTerminationNoticeError::NotProvider(_) => HttpResponse::Forbidden().json(msg),
+            PostTerminationNoticeError::DeadlineNotInFuture(..)
+            | PostTerminationNoticeError::InvalidId(_) => HttpResponse::BadRequest().json(msg),
+            PostTerminationNoticeError::InvalidState(_, state) => state_response(state, msg),
+            PostTerminationNoticeError::Conflict(_) => HttpResponse::Conflict().json(msg),
+            PostTerminationNoticeError::Protocol(e) => match e {
+                TerminationNoticeError::Timeout(_) => HttpResponse::RequestTimeout().json(msg),
+                TerminationNoticeError::Remote(remote) => match remote {
+                    RemoteTerminationNoticeError::NotFound(_) => HttpResponse::NotFound().json(msg),
+                    RemoteTerminationNoticeError::InvalidState(_, state) => {
+                        state_response(state, msg)
+                    }
+                    RemoteTerminationNoticeError::Conflict(_) => HttpResponse::Conflict().json(msg),
+                    _ => HttpResponse::InternalServerError().json(msg),
+                },
+                TerminationNoticeError::Gsb(_) | TerminationNoticeError::CallerParse(_) => {
+                    HttpResponse::InternalServerError().json(msg)
+                }
+            },
+            PostTerminationNoticeError::Get(..) | PostTerminationNoticeError::Internal(_) => {
+                HttpResponse::InternalServerError().json(msg)
+            }
         }
     }
 }

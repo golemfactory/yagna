@@ -24,7 +24,7 @@ impl IdentityDao<'_> {
     #[inline]
     async fn with_transaction<
         R: Send + 'static,
-        F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
+        F: FnOnce(&mut ConnType) -> Result<R> + Send + 'static,
     >(
         &self,
         label: &'static str,

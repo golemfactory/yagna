@@ -12,6 +12,7 @@ use crate::error::DbResult;
 use crate::models::cycle::DbPayBatchCycle;
 use crate::payment_sync::SYNC_NOTIFS_NOTIFY;
 use crate::timeout_lock::{MutexTimeoutExt, RwLockTimeoutExt};
+use crate::utils::truncate_to_wei;
 
 use actix_web::web::Data;
 use bigdecimal::{BigDecimal, Zero};
@@ -963,7 +964,11 @@ impl PaymentProcessor {
                 let signed_payment = payment_dao
                     .get(payment_id.clone(), payer_id)
                     .await?
-                    .unwrap();
+                    .ok_or_else(|| {
+                        NotifyPaymentError::Critical(format!(
+                            "Cannot find payment object payment id: {payment_id} payer id: {payer_id}"
+                        ))
+                    })?;
                 payloads.push(signed_payment.payload);
             }
             log::trace!("Part of processing blocking DB done, releasing DB");
@@ -1104,15 +1109,17 @@ impl PaymentProcessor {
             ))
             .await??;
 
-        // Verify if amount declared in message matches actual amount transferred on blockchain
-        if details.amount < payment.amount {
+        // Verify if amount declared in message matches actual amount transferred on blockchain.
+        // Both sides are compared at wei precision: the driver truncates there when it builds
+        // the transfer, so a declared amount with finer digits can never be matched exactly.
+        if details.amount < truncate_to_wei(&payment.amount) {
             return VerifyPaymentError::amount(&details.amount, &payment.amount);
         }
 
         // Verify if payment shares for agreements and activities sum up to the total amount
-        let agreement_sum = payment.agreement_payments.iter().map(|p| &p.amount).sum();
-        let activity_sum = payment.activity_payments.iter().map(|p| &p.amount).sum();
-        if details.amount < (&agreement_sum + &activity_sum) {
+        let agreement_sum: BigDecimal = payment.agreement_payments.iter().map(|p| &p.amount).sum();
+        let activity_sum: BigDecimal = payment.activity_payments.iter().map(|p| &p.amount).sum();
+        if details.amount < truncate_to_wei(&(&agreement_sum + &activity_sum)) {
             return VerifyPaymentError::shares(&details.amount, &agreement_sum, &activity_sum);
         }
 

@@ -1,7 +1,7 @@
 use diesel::connection::SimpleConnection;
-use diesel::migration::RunMigrationsError;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{Connection, SqliteConnection};
+use diesel_migrations::{EmbeddedMigrations, HarnessWithOutput, MigrationHarness};
 use dotenv::dotenv;
 use r2d2::CustomizeConnection;
 use std::env;
@@ -23,8 +23,9 @@ impl ProtectedPool {
 
 pub type PoolType = ProtectedPool;
 type TxLock = Arc<RwLock<u64>>;
-pub type ConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 pub type InnerConnType = SqliteConnection;
+pub type ConnType = InnerConnType;
+type PooledConnType = PooledConnection<ConnectionManager<InnerConnType>>;
 
 const CONNECTION_INIT: &str = r"
 PRAGMA busy_timeout = 15000;
@@ -112,8 +113,8 @@ impl DbExecutor {
         };
 
         {
-            let connection = inner.get()?;
-            let _ = connection.execute("PRAGMA journal_mode = WAL;")?;
+            let mut connection = inner.get()?;
+            connection.batch_execute("PRAGMA journal_mode = WAL;")?;
         }
 
         let pool = ProtectedPool { inner, tx_lock };
@@ -137,7 +138,7 @@ impl DbExecutor {
         Self::new_with_pool_size(format!("file:{}?mode=memory&cache=shared", name), Some(1))
     }
 
-    fn conn(&self) -> Result<ConnType, Error> {
+    fn conn(&self) -> Result<PooledConnType, Error> {
         Ok(self.pool.get()?)
     }
 
@@ -145,19 +146,30 @@ impl DbExecutor {
         AsDao::as_dao(&self.pool)
     }
 
-    pub fn apply_migration<
-        T: FnOnce(&ConnType, &mut dyn std::io::Write) -> Result<(), RunMigrationsError>,
-    >(
-        &self,
-        migration: T,
-    ) -> anyhow::Result<()> {
-        let c = self.conn()?;
+    pub fn apply_migration(&self, migrations: EmbeddedMigrations) -> anyhow::Result<()> {
+        let mut c = self.conn()?;
         // Some migrations require disabling foreign key checks for advanced table manipulation.
         // Unfortunately, disabling foreign keys within migration doesn't work correctly.
         c.batch_execute("PRAGMA foreign_keys = OFF;")?;
-        migration(&c, &mut std::io::stderr())?;
-        c.batch_execute("PRAGMA foreign_keys = ON;")?;
-        Ok(())
+        let migration_result = {
+            let mut harness = HarnessWithOutput::new(&mut *c, std::io::stderr());
+            harness
+                .run_pending_migrations(migrations)
+                .map(|_| ())
+                .map_err(|error| anyhow::anyhow!("failed to apply migrations: {error}"))
+        };
+        let restore_result = c
+            .batch_execute("PRAGMA foreign_keys = ON;")
+            .map_err(|error| anyhow::anyhow!("failed to re-enable foreign keys: {error}"));
+
+        match (migration_result, restore_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(migration_error), Ok(())) => Err(migration_error),
+            (Ok(()), Err(restore_error)) => Err(restore_error),
+            (Err(migration_error), Err(restore_error)) => Err(anyhow::anyhow!(
+                "{migration_error}; additionally, {restore_error}"
+            )),
+        }
     }
 
     // not used in yagna, but may be useful in other projects
@@ -167,7 +179,7 @@ impl DbExecutor {
         f: F,
     ) -> Result<R, Error>
     where
-        F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+        F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
         Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
     {
         do_with_ro_connection(&self.pool, label, f).await
@@ -179,7 +191,7 @@ impl DbExecutor {
         f: F,
     ) -> Result<R, Error>
     where
-        F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+        F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
         Error: Send
             + 'static
             + From<tokio::task::JoinError>
@@ -190,8 +202,10 @@ impl DbExecutor {
     }
 
     #[allow(unused)]
-    pub(crate) async fn execute(&self, query: &str) -> Result<usize, Error> {
-        Ok(self.conn()?.execute(query)?)
+    pub(crate) async fn execute(&self, query: &str) -> Result<(), Error> {
+        // Keep Diesel 1.x `Connection::execute` semantics: execute every
+        // statement in the string, not only the first one.
+        Ok(self.conn()?.batch_execute(query)?)
     }
 }
 
@@ -206,20 +220,20 @@ async fn do_with_ro_connection<R: Send + 'static, Error, F>(
     f: F,
 ) -> Result<R, Error>
 where
-    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
 {
     let pool = pool.clone();
 
     let count_no = RO_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     match tokio::task::spawn_blocking(move || {
-        let conn = pool.get()?;
+        let mut conn = pool.get()?;
         log::trace!("Start ro transaction no {}: {}", count_no, label);
 
         let rw_cnt = pool.tx_lock.read().unwrap();
         //log::info!("start ro tx: {}", *rw_cnt);
         let start_query = std::time::Instant::now();
-        let ret = f(&conn);
+        let ret = f(&mut conn);
         let end_query = std::time::Instant::now();
         //log::trace!("done ro tx: {}", *rw_cnt);
         drop(rw_cnt);
@@ -255,7 +269,7 @@ async fn do_with_rw_connection<R: Send + 'static, Error, F>(
     f: F,
 ) -> Result<R, Error>
 where
-    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send + 'static + From<tokio::task::JoinError> + From<r2d2::Error>,
 {
     //log::warn!("DB read write transaction: {}", label);
@@ -264,11 +278,11 @@ where
     //log::warn!("Do_with_rw_connection {count_no}");
     let pool = pool.clone();
     match tokio::task::spawn_blocking(move || {
-        let conn = pool.get()?;
+        let mut conn = pool.get()?;
         log::trace!("Start rw transaction no {}: {}", count_no, label);
         let _guard = pool.tx_lock.write().unwrap();
         let start_query = std::time::Instant::now();
-        let res = f(&conn);
+        let res = f(&mut conn);
         let end_query = std::time::Instant::now();
         drop(_guard);
         if res.is_err() {
@@ -301,17 +315,14 @@ pub async fn do_with_transaction<R: Send + 'static, Error, F>(
     f: F,
 ) -> Result<R, Error>
 where
-    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send
         + 'static
         + From<tokio::task::JoinError>
         + From<r2d2::Error>
         + From<diesel::result::Error>,
 {
-    do_with_rw_connection(pool, label, move |conn| {
-        conn.immediate_transaction(|| f(conn))
-    })
-    .await
+    do_with_rw_connection(pool, label, move |conn| conn.immediate_transaction(f)).await
 }
 
 #[allow(clippy::let_and_return)]
@@ -321,7 +332,7 @@ pub async fn readonly_transaction<R: Send + 'static, Error, F>(
     f: F,
 ) -> Result<R, Error>
 where
-    F: FnOnce(&ConnType) -> Result<R, Error> + Send + 'static,
+    F: FnOnce(&mut ConnType) -> Result<R, Error> + Send + 'static,
     Error: Send
         + 'static
         + From<tokio::task::JoinError>
@@ -329,12 +340,12 @@ where
         + From<diesel::result::Error>,
 {
     do_with_ro_connection(pool, label, move |conn| {
-        conn.transaction(|| {
+        conn.transaction(|conn| {
             #[cfg(debug_assertions)]
-            let _ = conn.execute("PRAGMA query_only=1;")?;
+            conn.batch_execute("PRAGMA query_only=1;")?;
             let result = f(conn);
             #[cfg(debug_assertions)]
-            let _ = conn.execute("PRAGMA query_only=0;")?;
+            conn.batch_execute("PRAGMA query_only=0;")?;
             result
         })
     })
@@ -358,5 +369,58 @@ impl DbMixedExecutor {
 
     pub fn as_dao<'a, T: AsMixedDao<'a>>(&'a self) -> T {
         AsMixedDao::as_dao(&self.disk_db.pool, &self.ram_db.pool)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::sql_types::{BigInt, Integer};
+    use diesel::{QueryableByName, RunQueryDsl};
+
+    const FAILING_MIGRATIONS: EmbeddedMigrations =
+        diesel_migrations::embed_migrations!("tests/migrations/failing");
+
+    #[derive(QueryableByName)]
+    struct Count {
+        #[diesel(sql_type = BigInt)]
+        count: i64,
+    }
+
+    #[derive(QueryableByName)]
+    struct ForeignKeys {
+        #[diesel(sql_type = Integer)]
+        foreign_keys: i32,
+    }
+
+    #[tokio::test]
+    async fn execute_runs_every_statement() {
+        let db = DbExecutor::in_memory("executor-runs-every-statement").unwrap();
+
+        db.execute(
+            "CREATE TABLE items (id INTEGER PRIMARY KEY); \
+             INSERT INTO items (id) VALUES (1); \
+             INSERT INTO items (id) VALUES (2);",
+        )
+        .await
+        .unwrap();
+
+        let count = diesel::sql_query("SELECT COUNT(*) AS count FROM items")
+            .get_result::<Count>(&mut *db.conn().unwrap())
+            .unwrap();
+        assert_eq!(count.count, 2);
+    }
+
+    #[test]
+    fn failed_migration_reenables_foreign_keys() {
+        let db = DbExecutor::in_memory("failed-migration-reenables-foreign-keys").unwrap();
+
+        let error = db.apply_migration(FAILING_MIGRATIONS).unwrap_err();
+        assert!(error.to_string().contains("failed to apply migrations"));
+
+        let setting = diesel::sql_query("PRAGMA foreign_keys")
+            .get_result::<ForeignKeys>(&mut *db.conn().unwrap())
+            .unwrap();
+        assert_eq!(setting.foreign_keys, 1);
     }
 }

@@ -86,11 +86,11 @@ impl ReleaseDAO<'_> {
     }
 }
 
-fn get_current_release(conn: &ConnType) -> anyhow::Result<Option<Release>> {
+fn get_current_release(conn: &mut ConnType) -> anyhow::Result<Option<Release>> {
     get_release(conn, ya_compile_time_utils::semver_str!())
 }
 
-fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
+fn get_release(conn: &mut ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
     Ok(version_release
         .filter(release::version.eq(&ver))
         .first::<DBRelease>(conn)
@@ -98,7 +98,7 @@ fn get_release(conn: &ConnType, ver: &str) -> anyhow::Result<Option<Release>> {
         .map(|db_rel| db_rel.into()))
 }
 
-fn get_pending_release(conn: &ConnType, include_seen: bool) -> anyhow::Result<Option<Release>> {
+fn get_pending_release(conn: &mut ConnType, include_seen: bool) -> anyhow::Result<Option<Release>> {
     let mut query = version_release
         // insertion_ts is to distinguish among fake-entries of `DBRelease::current`
         .filter(release::version.not_like("%rc%"))

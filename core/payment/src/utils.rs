@@ -1,5 +1,6 @@
 use crate::error::{DbError, DbResult, Error, ExternalServiceError};
 use actix_web::HttpResponse;
+use bigdecimal::BigDecimal;
 use futures::Future;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -240,4 +241,57 @@ pub fn json_to_string<T: Serialize>(t: &T) -> DbResult<String> {
 pub fn json_from_str<'a, T: Deserialize<'a>>(s: &'a str) -> DbResult<T> {
     serde_json::from_str(s)
         .map_err(|e| DbError::Integrity(format!("JSON deserialization failed: {}", e)))
+}
+
+/// Decimal places of a wei, the smallest unit an Ethereum-family chain can move.
+pub const WEI_SCALE: i64 = 18;
+
+/// Drop the part of an amount that no chain transfer can carry.
+///
+/// The payment driver converts amounts to `U256` by truncating at the wei boundary, so an
+/// amount declared with more than 18 decimal places is always paid short by that remainder.
+/// Comparisons between a declared amount and what actually moved on-chain have to happen at
+/// this precision, otherwise a payment that transferred every transferable wei looks
+/// underpaid.
+pub fn truncate_to_wei(amount: &BigDecimal) -> BigDecimal {
+    if amount.fractional_digit_count() > WEI_SCALE {
+        amount.with_scale(WEI_SCALE)
+    } else {
+        amount.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn sub_wei_digits_are_dropped() {
+        let amount = BigDecimal::from_str("0.1000000000000000055511151231257827").unwrap();
+        assert_eq!(
+            truncate_to_wei(&amount),
+            BigDecimal::from_str("0.100000000000000005").unwrap()
+        );
+    }
+
+    #[test]
+    fn amounts_within_wei_precision_are_untouched() {
+        for value in ["0", "1", "0.5", "0.000000000000000001", "1000000.25"] {
+            let amount = BigDecimal::from_str(value).unwrap();
+            assert_eq!(truncate_to_wei(&amount), amount);
+            // Scale is preserved too, so nothing about how the value is written changes.
+            assert_eq!(truncate_to_wei(&amount).to_plain_string(), value);
+        }
+    }
+
+    #[test]
+    fn truncation_rounds_towards_zero_like_the_driver() {
+        // `big_dec_to_u256` truncates via `to_bigint`, it never rounds up.
+        let amount = BigDecimal::from_str("0.0000000000000000019").unwrap();
+        assert_eq!(
+            truncate_to_wei(&amount),
+            BigDecimal::from_str("0.000000000000000001").unwrap()
+        );
+    }
 }

@@ -22,7 +22,7 @@ pub fn set_amount_due(
     activity_id: &String,
     owner_id: &NodeId,
     total_amount_due: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let (old_amount, agreement_id): (BigDecimalField, String) = dsl::pay_activity
         .find((activity_id, owner_id))
@@ -42,7 +42,7 @@ pub fn set_amount_accepted(
     activity_id: &String,
     owner_id: &NodeId,
     total_amount_accepted: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let (old_amount, agreement_id): (BigDecimalField, String) = dsl::pay_activity
         .find((activity_id, owner_id))
@@ -62,7 +62,7 @@ pub fn increase_amount_scheduled(
     activity_id: &String,
     owner_id: &NodeId,
     amount: &BigDecimal,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let activity: WriteObj = dsl::pay_activity
         .find((activity_id, owner_id))
@@ -79,7 +79,7 @@ pub fn increase_amount_paid(
     activity_id: &String,
     owner_id: NodeId,
     amount: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let (total_amount_paid, agreement_id, role): (BigDecimalField, String, Role) =
         dsl::pay_activity
@@ -138,7 +138,7 @@ pub fn increase_amount_paid(
 pub fn set_amounts_paid(
     amounts: &HashMap<String, BigDecimalField>,
     owner_id: &NodeId,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     amounts.iter().try_for_each(|(activity_id, amount)| {
         diesel::update(dsl::pay_activity.find((activity_id, owner_id)))

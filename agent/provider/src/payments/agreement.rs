@@ -1,5 +1,5 @@
 use anyhow::{anyhow, bail, Result};
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, RoundingMode};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,7 +22,9 @@ pub struct CostInfo {
 
 impl CostInfo {
     pub fn new(usage: Vec<f64>, cost: BigDecimal) -> Self {
-        let cost = cost.round(PAYMENT_PRECISION);
+        // BigDecimal 0.2 rounded exact ties away from zero. Keep that behavior
+        // explicit instead of depending on the 0.4 crate's configurable default.
+        let cost = cost.with_scale_round(PAYMENT_PRECISION, RoundingMode::HalfUp);
         CostInfo { usage, cost }
     }
 }
@@ -296,5 +298,20 @@ mod tests {
         let x = BigDecimal::from_str("12345").unwrap();
         let y = BigDecimal::from_str("12345").unwrap();
         assert_eq!(x.round(15), y);
+    }
+
+    #[test]
+    fn cost_info_rounds_exact_ties_away_from_zero() {
+        let positive = BigDecimal::from_str("1.0000000000000000005").unwrap();
+        let negative = BigDecimal::from_str("-1.0000000000000000005").unwrap();
+
+        assert_eq!(
+            CostInfo::new(vec![], positive).cost,
+            BigDecimal::from_str("1.000000000000000001").unwrap()
+        );
+        assert_eq!(
+            CostInfo::new(vec![], negative).cost,
+            BigDecimal::from_str("-1.000000000000000001").unwrap()
+        );
     }
 }

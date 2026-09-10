@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
 
@@ -20,14 +21,16 @@ pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
-    pub initial_price: f64,
+    #[serde(with = "crate::config::presets::json_decimal")]
+    pub initial_price: BigDecimal,
     // It's important that all values are sorted, so that other tools can easily detect changes.
-    pub usage_coeffs: BTreeMap<String, f64>,
+    #[serde(with = "crate::config::presets::prices_serde")]
+    pub usage_coeffs: BTreeMap<String, BigDecimal>,
 }
 
 impl Preset {
-    pub fn get_initial_price(&self) -> Option<f64> {
-        Some(self.initial_price)
+    pub fn get_initial_price(&self) -> Option<BigDecimal> {
+        Some(self.initial_price.clone())
     }
 
     pub fn display<'a, 'b>(&'a self, registry: &'b ExeUnitsRegistry) -> PresetDisplay<'a, 'b> {
@@ -222,7 +225,7 @@ impl Default for Preset {
 
         Preset {
             name: "default".to_string(),
-            initial_price: 0.0,
+            initial_price: BigDecimal::from(0),
             exeunit_name: "wasmtime".to_string(),
             pricing_model: "linear".to_string(),
             usage_coeffs,
@@ -235,6 +238,7 @@ impl PartialEq for Preset {
         self.name == other.name
             && self.exeunit_name == other.exeunit_name
             && self.pricing_model == other.pricing_model
+            && self.initial_price == other.initial_price
             && self.usage_coeffs == other.usage_coeffs
     }
 }

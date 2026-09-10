@@ -35,10 +35,10 @@ pub fn to_ip(ip: &str) -> Result<IpAddr, Error> {
 
     if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
         return Err(Error::IpAddrNotAllowed(ip));
-    } else if let IpAddr::V4(ip4) = &ip {
-        if ip4.is_broadcast() {
-            return Err(Error::IpAddrNotAllowed(ip));
-        }
+    } else if let IpAddr::V4(ip4) = &ip
+        && ip4.is_broadcast()
+    {
+        return Err(Error::IpAddrNotAllowed(ip));
     }
 
     Ok(ip)

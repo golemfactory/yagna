@@ -10,7 +10,7 @@ use crate::db::schema::{market_offer, market_offer_unsubscribed};
 use ya_client::model::market::NewOffer;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Deserialize, Serialize)]
-#[table_name = "market_offer"]
+#[diesel(table_name = market_offer)]
 pub struct Offer {
     pub id: SubscriptionId,
     pub properties: String,
@@ -31,7 +31,7 @@ pub struct Offer {
 /// This entry must exist in database at least until Offer expiration time.
 /// Otherwise we will add this Offer for the second time, when someone will bcast it.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
-#[table_name = "market_offer_unsubscribed"]
+#[diesel(table_name = market_offer_unsubscribed)]
 pub struct OfferUnsubscribed {
     pub id: SubscriptionId,
     pub node_id: NodeId,
@@ -89,6 +89,7 @@ impl Offer {
                     self.id, e
                 )
             })?,
+            expiration: Utc.from_utc_datetime(&self.expiration_ts),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
         })
     }

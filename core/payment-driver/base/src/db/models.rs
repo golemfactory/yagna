@@ -5,10 +5,9 @@
 // External crates
 use chrono::NaiveDateTime;
 use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
+use diesel::deserialize::{self, FromSql};
+use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
 use num_traits::FromPrimitive;
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -54,8 +53,8 @@ impl TryFrom<i32> for TransactionStatus {
 }
 
 #[derive(Clone, Queryable, Debug, Identifiable, Insertable, PartialEq, Eq)]
-#[primary_key(tx_id)]
-#[table_name = "transaction"]
+#[diesel(primary_key(tx_id))]
+#[diesel(table_name = transaction)]
 pub struct TransactionEntity {
     pub tx_id: String,
     pub sender: String,
@@ -83,8 +82,8 @@ pub struct TransactionEntity {
 }
 
 #[derive(Queryable, Clone, Debug, Identifiable, Insertable, PartialEq, Eq)]
-#[primary_key(order_id)]
-#[table_name = "payment"]
+#[diesel(primary_key(order_id))]
+#[diesel(table_name = payment)]
 pub struct PaymentEntity {
     pub order_id: String,
     pub amount: String,
@@ -110,7 +109,7 @@ pub struct PaymentEntity {
     FromPrimitive,
     Default,
 )]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 pub enum Network {
     Mainnet = 1,        //Main Ethereum chain
     Rinkeby = 4,        //Rinkeby is an Ethereum testnet
@@ -163,8 +162,19 @@ impl<DB: Backend> ToSql<Integer, DB> for Network
 where
     i32: ToSql<Integer, DB>,
 {
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> diesel::serialize::Result {
+        let value = match self {
+            Self::Mainnet => &1,
+            Self::Rinkeby => &4,
+            Self::Goerli => &5,
+            Self::Sepolia => &11_155_111,
+            Self::Holesky => &17_000,
+            Self::Hoodi => &560_048,
+            Self::Polygon => &137,
+            Self::Mumbai => &80_001,
+            Self::Amoy => &80_002,
+        };
+        <i32 as ToSql<Integer, DB>>::to_sql(value, out)
     }
 }
 
@@ -173,15 +183,17 @@ where
     i32: FromSql<Integer, DB>,
     DB: Backend,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        Ok(match i32::from_sql(bytes)? {
+    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match <i32 as FromSql<Integer, DB>>::from_sql(bytes)? {
             1 => Network::Mainnet,
             4 => Network::Rinkeby,
             5 => Network::Goerli,
+            11_155_111 => Network::Sepolia,
             137 => Network::Polygon,
             17000 => Network::Holesky,
             560048 => Network::Hoodi,
             80001 => Network::Mumbai,
+            80002 => Network::Amoy,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
         })
     }

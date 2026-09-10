@@ -1,5 +1,4 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use diesel::sql_types::Text;
 use thiserror::Error;
 
 use ya_client::model::market::event::{ProviderEvent, RequestorEvent};
@@ -30,7 +29,6 @@ pub enum EventError {
     DbTextField,
     strum_macros::EnumString,
     strum_macros::Display,
-    AsExpression,
     FromSqlRow,
     PartialEq,
     Eq,
@@ -38,7 +36,7 @@ pub enum EventError {
     Clone,
     Copy,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum EventType {
     #[strum(serialize = "P-NewProposal")]
     ProviderNewProposal,
@@ -69,7 +67,7 @@ pub struct MarketEvent {
 }
 
 #[derive(Clone, Debug, Insertable)]
-#[table_name = "market_negotiation_event"]
+#[diesel(table_name = market_negotiation_event)]
 pub struct NewMarketEvent {
     pub subscription_id: SubscriptionId,
     pub event_type: EventType,

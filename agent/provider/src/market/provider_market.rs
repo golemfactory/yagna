@@ -10,14 +10,18 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::time::timeout;
+use std::time::Duration;
+use tokio::sync::oneshot;
+use tokio::time::{timeout, Instant};
 
 use ya_agreement_utils::{AgreementView, OfferDefinition};
 use ya_client::market::MarketProviderApi;
+use ya_client::model::market::agreement::State as AgreementState;
 use ya_client::model::market::agreement_event::AgreementEventType;
 use ya_client::model::market::proposal::State;
 use ya_client::model::market::{
-    agreement_event::AgreementTerminator, Agreement, NewOffer, Proposal, ProviderEvent, Reason,
+    agreement_event::AgreementTerminator, Agreement, AgreementTerminationNotice, NewOffer,
+    Proposal, ProviderEvent, Reason, Role,
 };
 use ya_client::model::NodeId;
 use ya_std_utils::LogErr;
@@ -55,6 +59,22 @@ pub struct Shutdown;
 #[derive(Message)]
 #[rtype(result = "Result<()>")]
 pub struct Unsubscribe(pub OfferKind);
+
+/// Stops accepting new market subscriptions and removes all active Offers.
+///
+/// The response is sent only after resubscriptions already in flight have
+/// either completed and been removed or failed.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct BeginDrain;
+
+/// Posts a termination notice for every Approved Agreement of this Provider
+/// (best effort), announcing the deadline by which Requestors are expected
+/// to finish their work and terminate. Returns the latest announced deadline
+/// as a monotonic clock instant. The Agreements stay Approved.
+#[derive(Message)]
+#[rtype(result = "Result<Instant>")]
+pub struct SendTerminationNotices;
 
 pub enum OfferKind {
     Any,
@@ -106,6 +126,81 @@ pub struct SubscriptionProposal {
     pub proposal: Proposal,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MarketMode {
+    Running,
+    Draining,
+}
+
+struct MarketLifecycle {
+    mode: MarketMode,
+    pending_resubscriptions: usize,
+    resubscription_error: Option<String>,
+    drain_waiters: Vec<oneshot::Sender<std::result::Result<(), String>>>,
+}
+
+impl Default for MarketLifecycle {
+    fn default() -> Self {
+        Self {
+            mode: MarketMode::Running,
+            pending_resubscriptions: 0,
+            resubscription_error: None,
+            drain_waiters: Vec::new(),
+        }
+    }
+}
+
+impl MarketLifecycle {
+    fn is_running(&self) -> bool {
+        self.mode == MarketMode::Running
+    }
+
+    fn start_resubscription(&mut self) -> bool {
+        if !self.is_running() {
+            return false;
+        }
+        self.pending_resubscriptions += 1;
+        true
+    }
+
+    fn begin_drain(&mut self) -> oneshot::Receiver<std::result::Result<(), String>> {
+        if self.is_running() {
+            self.mode = MarketMode::Draining;
+            self.resubscription_error = None;
+        }
+
+        let (tx, rx) = oneshot::channel();
+        if self.pending_resubscriptions == 0 {
+            let result = self.resubscription_error.clone().map_or(Ok(()), Err);
+            let _ = tx.send(result);
+        } else {
+            self.drain_waiters.push(tx);
+        }
+        rx
+    }
+
+    fn finish_resubscription(&mut self, result: &Result<(), Error>) {
+        self.pending_resubscriptions = self
+            .pending_resubscriptions
+            .checked_sub(1)
+            .expect("resubscription counter underflow");
+
+        if self.mode == MarketMode::Draining {
+            if let Err(error) = result {
+                self.resubscription_error
+                    .get_or_insert_with(|| error.to_string());
+            }
+
+            if self.pending_resubscriptions == 0 {
+                let result = self.resubscription_error.clone().map_or(Ok(()), Err);
+                for waiter in self.drain_waiters.drain(..) {
+                    let _ = waiter.send(result.clone());
+                }
+            }
+        }
+    }
+}
+
 /// Manages market api communication and forwards proposal to implementation of market strategy.
 // Outputting empty string for logfn macro purposes
 #[derive(Display)]
@@ -113,6 +208,7 @@ pub struct SubscriptionProposal {
 pub struct ProviderMarket {
     negotiator: Arc<NegotiatorAddr>,
     api: Arc<MarketProviderApi>,
+    lifecycle: MarketLifecycle,
     subscriptions: HashMap<String, Subscription>,
     postponed_demands: Vec<SubscriptionProposal>,
     config: Arc<MarketConfig>,
@@ -147,6 +243,7 @@ impl ProviderMarket {
         ProviderMarket {
             negotiator: Arc::new(NegotiatorAddr::default()),
             api: Arc::new(api),
+            lifecycle: MarketLifecycle::default(),
             subscriptions: HashMap::new(),
             postponed_demands: Vec::new(),
             config: Arc::new(config),
@@ -182,6 +279,48 @@ impl ProviderMarket {
         Ok(())
     }
 
+    fn remove_subscriptions(
+        &mut self,
+        offer_kind: OfferKind,
+        ctx: &mut Context<Self>,
+    ) -> Vec<String> {
+        let subscriptions = match offer_kind {
+            OfferKind::Any => {
+                log::info!("Unsubscribing all active offers");
+                std::mem::take(&mut self.subscriptions)
+                    .into_keys()
+                    .collect::<Vec<_>>()
+            }
+            OfferKind::WithPresets(preset_names) => {
+                let subscriptions = self
+                    .subscriptions
+                    .iter()
+                    .filter_map(|(id, subscription)| {
+                        match preset_names.contains(&subscription.preset.name) {
+                            true => Some(id.clone()),
+                            false => None,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                log::info!("Unsubscribing {} active offer(s)", subscriptions.len());
+                subscriptions
+            }
+            OfferKind::WithIds(subscriptions) => {
+                log::info!("Unsubscribing {} offer(s)", subscriptions.len());
+                subscriptions
+            }
+        };
+
+        for id in &subscriptions {
+            self.subscriptions.remove(id);
+            if let Some(handle) = self.handles.remove(id) {
+                ctx.cancel_future(handle);
+            }
+        }
+        subscriptions
+    }
+
     // =========================================== //
     // Market internals - proposals and agreements reactions
     // =========================================== //
@@ -201,14 +340,32 @@ async fn subscribe(
 ) -> Result<()> {
     let id = api.subscribe(&offer).await?;
 
-    let _ = market.send(Subscription { id, offer, preset }).await?;
+    market.send(Subscription { id, offer, preset }).await??;
     Ok(())
 }
 
 async fn unsubscribe_all(api: Arc<MarketProviderApi>, subscriptions: Vec<String>) -> Result<()> {
-    for subscription in subscriptions.iter() {
+    let mut first_error = None;
+    for subscription in &subscriptions {
         log::info!("Unsubscribing: {}", subscription);
-        api.unsubscribe(subscription).await?;
+        if let Err(error) = api.unsubscribe(subscription).await {
+            log::error!(
+                "Failed to unsubscribe Offer [{}] from the market: {}",
+                subscription,
+                error
+            );
+            first_error.get_or_insert_with(|| {
+                anyhow!(
+                    "failed to unsubscribe Offer [{}] from the market: {}",
+                    subscription,
+                    error
+                )
+            });
+        }
+    }
+
+    if let Some(error) = first_error {
+        return Err(error);
     }
     Ok(())
 }
@@ -546,22 +703,31 @@ impl Handler<ReSubscribe> for ProviderMarket {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: ReSubscribe, ctx: &mut Self::Context) -> Self::Result {
-        let to_resubscribe = self
-            .subscriptions
-            .values()
-            .filter(|sub| sub.id == msg.0)
-            .cloned()
-            .map(|sub| (sub.id.clone(), sub))
-            .collect::<HashMap<String, Subscription>>();
-
-        if !to_resubscribe.is_empty() {
-            return ActorResponse::r#async(
-                resubscribe_offers(ctx.address(), self.api.clone(), to_resubscribe)
-                    .into_actor(self)
-                    .map(|_, _, _| Ok(())),
+        if !self.lifecycle.is_running() {
+            log::debug!(
+                "Ignoring resubscription [{}] during graceful shutdown.",
+                msg.0
             );
+            return ActorResponse::reply(Ok(()));
+        }
+
+        let Some(subscription) = self.subscriptions.remove(&msg.0) else {
+            return ActorResponse::reply(Ok(()));
         };
-        ActorResponse::reply(Ok(()))
+
+        if let Some(handle) = self.handles.remove(&msg.0) {
+            ctx.cancel_future(handle);
+        }
+
+        assert!(self.lifecycle.start_resubscription());
+        ActorResponse::r#async(
+            resubscribe_offer(ctx.address(), self.api.clone(), subscription)
+                .into_actor(self)
+                .map(|result, myself, _| {
+                    myself.lifecycle.finish_resubscription(&result);
+                    result
+                }),
+        )
     }
 }
 
@@ -573,7 +739,9 @@ impl Handler<PostponeDemand> for ProviderMarket {
     type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: PostponeDemand, _ctx: &mut Self::Context) -> Self::Result {
-        self.postponed_demands.push(msg.0);
+        if self.lifecycle.is_running() {
+            self.postponed_demands.push(msg.0);
+        }
         ActorResponse::reply(Ok(()))
     }
 }
@@ -610,12 +778,166 @@ impl Handler<Shutdown> for ProviderMarket {
         let market = ctx.address();
         async move {
             market
-                .send(Unsubscribe(OfferKind::Any))
+                .send(BeginDrain)
                 .await?
                 .map_err(|e| log::warn!("Failed to unsubscribe Offers. {}", e))
                 .ok()
                 .unwrap_or(());
             Ok(())
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<BeginDrain> for ProviderMarket {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _msg: BeginDrain, ctx: &mut Context<Self>) -> Self::Result {
+        let was_running = self.lifecycle.is_running();
+        let resubscriptions_finished = self.lifecycle.begin_drain();
+        if was_running {
+            self.postponed_demands.clear();
+        }
+
+        let subscriptions = self.remove_subscriptions(OfferKind::Any, ctx);
+        let api = self.api.clone();
+
+        async move {
+            // Keep processing the Actor mailbox while both remote cleanup and any
+            // resubscription started before the state transition are finishing.
+            let unsubscribe = unsubscribe_all(api, subscriptions);
+            let wait_for_resubscriptions = async move {
+                resubscriptions_finished
+                    .await
+                    .map_err(|_| anyhow!("resubscription drain waiter was dropped"))?
+                    .map_err(Error::msg)
+            };
+            let (unsubscribe_result, resubscription_result) =
+                futures::future::join(unsubscribe, wait_for_resubscriptions).await;
+
+            unsubscribe_result?;
+            resubscription_result
+        }
+        .boxed_local()
+    }
+}
+
+/// How long a single termination notice waits for the Requestor's node
+/// to record and acknowledge it.
+const TERMINATION_NOTICE_ACK_TIMEOUT: f32 = 10.0;
+const TERMINATION_NOTICE_SEND_CONCURRENCY: usize = 16;
+/// Ensures the announced wall-clock deadline has passed before the agent sends
+/// its graceful-shutdown terminations.
+const TERMINATION_DEADLINE_MARGIN: Duration = Duration::from_secs(1);
+
+fn termination_notice_window(grace_period: Duration) -> Result<Duration> {
+    grace_period
+        .checked_add(Duration::from_secs_f32(TERMINATION_NOTICE_ACK_TIMEOUT))
+        .ok_or_else(|| anyhow!("Termination notice grace period is too large"))
+}
+
+impl Handler<SendTerminationNotices> for ProviderMarket {
+    type Result = ResponseFuture<Result<Instant, Error>>;
+
+    fn handle(&mut self, _msg: SendTerminationNotices, _ctx: &mut Context<Self>) -> Self::Result {
+        let api = self.api.clone();
+        let grace_period = self.config.termination_notice_grace_period;
+        let session_id = self.config.session_id.clone();
+
+        async move {
+            // A notice may reach the Requestor at any point during its ACK
+            // timeout. Include that budget so every Requestor gets the full
+            // configured grace period after a successful delivery.
+            let notice_window = termination_notice_window(grace_period)?;
+            let chrono_notice_window = chrono::Duration::from_std(notice_window)
+                .map_err(|e| anyhow!("Invalid termination notice grace period: {e}"))?;
+
+            let agreements = api
+                .list_agreements(Some(AgreementState::Approved), None, None, Some(session_id))
+                .await?;
+            let agreement_ids = agreements
+                .into_iter()
+                .filter(|agreement| agreement.role == Role::Provider)
+                .map(|agreement| agreement.id)
+                .collect::<Vec<_>>();
+
+            if agreement_ids.is_empty() {
+                return Ok(Instant::now());
+            }
+
+            let deliveries = futures::stream::iter(agreement_ids)
+                .map(|agreement_id| {
+                    let api = api.clone();
+                    async move {
+                        // Calculate each deadline when its bounded-concurrency
+                        // delivery slot starts. Later batches therefore don't
+                        // lose grace time while earlier notices wait for ACKs.
+                        let termination_deadline = Utc::now()
+                            .checked_add_signed(chrono_notice_window)
+                            .ok_or_else(|| anyhow!("Termination notice deadline is too large"))?;
+                        let wait_deadline = Instant::now()
+                            .checked_add(notice_window)
+                            .and_then(|deadline| deadline.checked_add(TERMINATION_DEADLINE_MARGIN))
+                            .ok_or_else(|| anyhow!("Termination notice deadline is too large"))?;
+                        let notice = AgreementTerminationNotice {
+                            termination_deadline,
+                            reason: GolemReason {
+                                message: "Provider is shutting down".to_string(),
+                                code: "Shutdown".to_string(),
+                                extra: Default::default(),
+                            }
+                            .to_client(),
+                        };
+
+                        let result = api
+                            .post_agreement_termination_notice(
+                                &agreement_id,
+                                &notice,
+                                Some(TERMINATION_NOTICE_ACK_TIMEOUT),
+                            )
+                            .await;
+
+                        Ok::<_, Error>((agreement_id, termination_deadline, wait_deadline, result))
+                    }
+                })
+                .buffer_unordered(TERMINATION_NOTICE_SEND_CONCURRENCY)
+                .collect::<Vec<_>>()
+                .await;
+
+            let mut notified = 0usize;
+            let mut latest_wait_deadline = Instant::now();
+            let mut latest_termination_deadline: Option<chrono::DateTime<Utc>> = None;
+            for delivery in deliveries {
+                let (agreement_id, termination_deadline, wait_deadline, result) = delivery?;
+                // An acknowledgement error does not prove that the Requestor
+                // failed to record the notice, so wait for every attempted
+                // notice's deadline, not only acknowledged ones.
+                latest_wait_deadline = latest_wait_deadline.max(wait_deadline);
+                latest_termination_deadline = Some(
+                    latest_termination_deadline.map_or(termination_deadline, |latest| {
+                        latest.max(termination_deadline)
+                    }),
+                );
+
+                match result {
+                    Ok(()) => notified += 1,
+                    Err(e) => log::warn!(
+                        "Failed to send termination notice for Agreement [{}]. Error: {}",
+                        agreement_id,
+                        e
+                    ),
+                }
+            }
+
+            if notified > 0 {
+                log::info!(
+                    "Sent termination notices for {} Agreement(s). Requestors are expected \
+                     to finish and terminate until {}.",
+                    notified,
+                    latest_termination_deadline.expect("at least one notice was attempted")
+                );
+            }
+            Ok(latest_wait_deadline)
         }
         .boxed_local()
     }
@@ -740,34 +1062,29 @@ async fn terminate_agreement(api: Arc<MarketProviderApi>, msg: AgreementFinalize
     log::info!("Agreement [{}] terminated by Provider.", &id);
 }
 
-async fn resubscribe_offers(
+async fn resubscribe_offer(
     market: Addr<ProviderMarket>,
     api: Arc<MarketProviderApi>,
-    subscriptions: HashMap<String, Subscription>,
-) {
-    let subscription_ids = subscriptions.keys().cloned().collect::<Vec<_>>();
-    match market
-        .send(Unsubscribe(OfferKind::WithIds(subscription_ids)))
+    subscription: Subscription,
+) -> Result<()> {
+    if let Err(error) = api.unsubscribe(&subscription.id).await {
+        // A 404 response is the usual reason for resubscription. Failure to remove
+        // the expired Offer must not prevent creating its replacement.
+        log::warn!(
+            "Failed to unsubscribe offer [{}] before resubscription: {}",
+            subscription.id,
+            error
+        );
+    }
+
+    let preset_name = subscription.preset.name.clone();
+    subscribe(market, api, subscription.offer, subscription.preset)
         .await
-    {
-        Err(e) => log::warn!("Failed to unsubscribe offers from the market: {}", e),
-        Ok(Err(e)) => log::warn!("Failed to unsubscribe offers from the market: {}", e),
-        _ => (),
-    }
-
-    for (_, sub) in subscriptions {
-        let offer = sub.offer;
-        let preset = sub.preset;
-        let preset_name = preset.name.clone();
-
-        subscribe(market.clone(), api.clone(), offer, preset)
-            .await
-            .log_warn_msg(&format!(
-                "Unable to create subscription for preset {}",
-                preset_name,
-            ))
-            .ok();
-    }
+        .log_err_msg(&format!(
+            "Unable to create subscription for preset {}",
+            preset_name,
+        ))?;
+    Ok(())
 }
 
 async fn renegotiate_demands(
@@ -872,47 +1189,37 @@ impl Handler<Unsubscribe> for ProviderMarket {
     type Result = ResponseFuture<Result<(), Error>>;
 
     fn handle(&mut self, msg: Unsubscribe, ctx: &mut Context<Self>) -> Self::Result {
-        let subscriptions = match msg.0 {
-            OfferKind::Any => {
-                log::info!("Unsubscribing all active offers");
-                std::mem::take(&mut self.subscriptions)
-                    .into_keys()
-                    .collect::<Vec<_>>()
-            }
-            OfferKind::WithPresets(preset_names) => {
-                let subs = self
-                    .subscriptions
-                    .iter()
-                    .filter_map(|(n, sub)| match preset_names.contains(&sub.preset.name) {
-                        true => Some(n.clone()),
-                        false => None,
-                    })
-                    .collect::<Vec<_>>();
-
-                log::info!("Unsubscribing {} active offer(s)", subs.len());
-                subs
-            }
-            OfferKind::WithIds(subs) => {
-                log::info!("Unsubscribing {} offer(s)", subs.len());
-                subs
-            }
-        };
-
-        subscriptions.iter().for_each(|id| {
-            self.subscriptions.remove(id);
-        });
-        subscriptions
-            .iter()
-            .filter_map(|id| self.handles.remove(id))
-            .for_each(|handle| {
-                ctx.cancel_future(handle);
-            });
-
+        let subscriptions = self.remove_subscriptions(msg.0, ctx);
         unsubscribe_all(self.api.clone(), subscriptions).boxed_local()
     }
 }
 
-forward_actix_handler!(ProviderMarket, Subscription, on_subscription);
+impl Handler<Subscription> for ProviderMarket {
+    type Result = ActorResponse<Self, Result<(), Error>>;
+
+    fn handle(&mut self, msg: Subscription, ctx: &mut Context<Self>) -> Self::Result {
+        if self.lifecycle.is_running() {
+            return ActorResponse::reply(self.on_subscription(msg, ctx));
+        }
+
+        let api = self.api.clone();
+        let id = msg.id;
+        let preset_name = msg.preset.name;
+        ActorResponse::r#async(
+            async move {
+                log::info!(
+                    "Removing late subscription [{}] for preset [{}] during graceful shutdown.",
+                    id,
+                    preset_name
+                );
+                api.unsubscribe(&id).await?;
+                Ok(())
+            }
+            .into_actor(self),
+        )
+    }
+}
+
 forward_actix_handler!(ProviderMarket, NewAgreement, on_agreement_approved);
 actix_signal_handler!(ProviderMarket, CloseAgreement, agreement_terminated_signal);
 actix_signal_handler!(ProviderMarket, NewAgreement, agreement_signed_signal);
@@ -953,5 +1260,48 @@ impl From<AgreementClosed> for AgreementFinalized {
             id: msg.agreement_id,
             result,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn draining_rejects_new_resubscriptions_and_waits_for_started_one() {
+        let mut lifecycle = MarketLifecycle::default();
+        assert!(lifecycle.start_resubscription());
+
+        let mut finished = lifecycle.begin_drain();
+        assert!(!lifecycle.start_resubscription());
+        assert!(matches!(
+            finished.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+
+        lifecycle.finish_resubscription(&Ok(()));
+        assert_eq!(finished.try_recv().unwrap(), Ok(()));
+    }
+
+    #[test]
+    fn draining_reports_late_subscription_cleanup_failure() {
+        let mut lifecycle = MarketLifecycle::default();
+        assert!(lifecycle.start_resubscription());
+        let mut finished = lifecycle.begin_drain();
+
+        lifecycle.finish_resubscription(&Err(anyhow!("late subscription cleanup failed")));
+
+        assert_eq!(
+            finished.try_recv().unwrap(),
+            Err("late subscription cleanup failed".to_string())
+        );
+    }
+
+    #[test]
+    fn termination_notice_window_includes_ack_budget() {
+        assert_eq!(
+            termination_notice_window(Duration::from_secs(300)).unwrap(),
+            Duration::from_secs(310)
+        );
     }
 }

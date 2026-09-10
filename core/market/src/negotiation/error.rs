@@ -21,7 +21,7 @@ use crate::protocol::discovery::error::DiscoveryRemoteError;
 use crate::protocol::negotiation::error::{
     AgreementProtocolError, CommitAgreementError, CounterProposalError as ProtocolProposalError,
     GsbAgreementError, NegotiationApiInitError, ProposeAgreementError, RejectProposalError,
-    TerminateAgreementError,
+    TerminateAgreementError, TerminationNoticeError,
 };
 
 #[derive(Error, Debug)]
@@ -93,6 +93,30 @@ pub enum AgreementError {
     Internal(String),
     #[error("Agreement [{0}] not terminated yet.")]
     NotTerminated(AgreementId),
+}
+
+#[derive(Error, Debug)]
+pub enum PostTerminationNoticeError {
+    #[error("Agreement [{0}] not found.")]
+    NotFound(String),
+    #[error("Only the Provider of Agreement [{0}] can post a termination notice.")]
+    NotProvider(String),
+    #[error("Termination deadline {1} UTC is not in the future for Agreement [{0}].")]
+    DeadlineNotInFuture(AgreementId, chrono::NaiveDateTime),
+    #[error(
+        "Agreement [{0}] in state {1}; termination notice allowed only for Approved Agreements."
+    )]
+    InvalidState(AgreementId, crate::db::model::AgreementState),
+    #[error("A different termination notice is already recorded for Agreement [{0}].")]
+    Conflict(AgreementId),
+    #[error("Invalid Agreement id. {0}")]
+    InvalidId(#[from] ProposalIdParseError),
+    #[error("Failed to get Agreement [{0}]. Error: {1}")]
+    Get(String, AgreementDaoError),
+    #[error("Protocol error while sending termination notice: {0}")]
+    Protocol(#[from] TerminationNoticeError),
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
 #[derive(Error, Debug)]

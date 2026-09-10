@@ -1,7 +1,6 @@
 // External crates
 use actix_web::web::{get, post, Data, Json, Path, Query};
 use actix_web::{HttpResponse, Scope};
-use bigdecimal::BigDecimal;
 use serde_json::value::Value::Null;
 use std::borrow::Cow;
 use std::time::Instant;
@@ -500,7 +499,7 @@ async fn accept_invoice(
         return response::bad_request(&msg);
     }
 
-    if amount_to_pay > BigDecimal::from(0) {
+    if amount_to_pay > 0 {
         match db
             .as_dao::<AllocationDao>()
             .spend_from_allocation_transaction(SpendFromAllocationArgs {

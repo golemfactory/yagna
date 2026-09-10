@@ -115,10 +115,10 @@ impl AppKeyCache {
     }
 
     pub fn resolve_bearer(&self, token: &str) -> Option<Identity> {
-        if let Some(admin) = &self.admin {
-            if admin.token() == token {
-                return Some(admin.principal());
-            }
+        if let Some(admin) = &self.admin
+            && admin.token() == token
+        {
+            return Some(admin.principal());
         }
         self.resolve_manager(token)
     }

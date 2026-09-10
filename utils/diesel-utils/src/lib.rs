@@ -19,13 +19,81 @@ pub fn database_text_field(item: proc_macro::TokenStream) -> proc_macro::TokenSt
     };
 
     let generated = quote! {
-        impl<DB> ::diesel::serialize::ToSql<::diesel::sql_types::Text, DB> for #name
-        where
-            DB: ::diesel::backend::Backend,
-            String: ::diesel::serialize::ToSql<::diesel::sql_types::Text, DB>,
-        {
-            fn to_sql<W: ::std::io::Write>(&self, out: &mut ::diesel::serialize::Output<W, DB>) -> ::diesel::serialize::Result {
-                self.to_string().to_sql(out)
+        impl ::diesel::expression::AsExpression<::diesel::sql_types::Text> for #name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Text,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Text,
+                >>::as_expression(self.to_string())
+            }
+        }
+
+        impl ::diesel::expression::AsExpression<
+            ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+        > for #name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+                >>::as_expression(self.to_string())
+            }
+        }
+
+        impl ::diesel::expression::AsExpression<::diesel::sql_types::Text> for &#name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Text,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Text,
+                >>::as_expression(self.to_string())
+            }
+        }
+
+        impl ::diesel::expression::AsExpression<
+            ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+        > for &#name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+                >>::as_expression(self.to_string())
+            }
+        }
+
+        impl ::diesel::expression::AsExpression<::diesel::sql_types::Text> for &&#name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Text,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Text,
+                >>::as_expression(self.to_string())
+            }
+        }
+
+        impl ::diesel::expression::AsExpression<
+            ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+        > for &&#name {
+            type Expression = <String as ::diesel::expression::AsExpression<
+                ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+            >>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as ::diesel::expression::AsExpression<
+                    ::diesel::sql_types::Nullable<::diesel::sql_types::Text>,
+                >>::as_expression(self.to_string())
             }
         }
 
@@ -34,8 +102,12 @@ pub fn database_text_field(item: proc_macro::TokenStream) -> proc_macro::TokenSt
             DB: ::diesel::backend::Backend,
             String: ::diesel::deserialize::FromSql<::diesel::sql_types::Text, DB>,
         {
-            fn from_sql(bytes: Option<&DB::RawValue>) -> ::diesel::deserialize::Result<#name> {
-                Ok(String::from_sql(bytes)?.parse()?)
+            fn from_sql(bytes: DB::RawValue<'_>) -> ::diesel::deserialize::Result<#name> {
+                let value = <String as ::diesel::deserialize::FromSql<
+                    ::diesel::sql_types::Text,
+                    DB,
+                >>::from_sql(bytes)?;
+                Ok(value.parse()?)
             }
         }
     };

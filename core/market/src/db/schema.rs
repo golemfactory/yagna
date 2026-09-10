@@ -54,6 +54,7 @@ table! {
         issuer -> Text,
         reason -> Nullable<Text>,
         signature -> Nullable<Text>,
+        termination_deadline -> Nullable<Timestamp>,
     }
 }
 

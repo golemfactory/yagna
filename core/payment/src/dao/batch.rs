@@ -56,7 +56,7 @@ table! {
 }
 
 #[derive(QueryableByName)]
-#[table_name = "sql_activity_join_agreement"]
+#[diesel(table_name = sql_activity_join_agreement)]
 struct ActivityJoinAgreement {
     id: String,
     peer_id: NodeId,
@@ -68,11 +68,11 @@ struct ActivityJoinAgreement {
 }
 
 pub fn resolve_invoices_agreement_part(
+    conn: &mut ConnType,
     args: &ResolveInvoiceArgs,
     total_amount: BigDecimal,
     payments: HashMap<String, BatchPayment>,
 ) -> DbResult<(HashMap<String, BatchPayment>, BigDecimal)> {
-    let conn = args.conn;
     let owner_id = args.owner_id;
     let payer_addr = args.payer_addr;
     let platform = args.platform;
@@ -177,13 +177,12 @@ pub fn resolve_invoices_agreement_part(
 }
 
 pub fn resolve_invoices_activity_part(
+    conn: &mut ConnType,
     args: &ResolveInvoiceArgs,
     total_amount: BigDecimal,
     payments: HashMap<String, BatchPayment>,
 ) -> DbResult<(HashMap<String, BatchPayment>, BigDecimal)> {
-    let conn = args.conn;
     let owner_id = args.owner_id;
-    let payer_addr = args.payer_addr;
     let platform = args.platform;
     let since = args.since;
     let mut total_amount = total_amount;
@@ -225,7 +224,7 @@ pub fn resolve_invoices_activity_part(
         )
         .bind::<Timestamp, _>(since.naive_utc())
         .bind::<Text, _>(&platform)
-        .bind::<Text, _>(owner_id)
+        .bind::<Text, _>(owner_id.to_string())
         .load::<ActivityJoinAgreement>(conn)?;
 
         if query_res.len() > 0 {
@@ -286,7 +285,6 @@ pub fn resolve_invoices_activity_part(
 }
 
 pub struct ResolveInvoiceArgs<'a> {
-    pub conn: &'a ConnType,
     pub owner_id: NodeId,
     pub payer_addr: &'a str,
     pub platform: &'a str,
@@ -508,7 +506,7 @@ fn use_expenditures_on_payments(
 }
 
 fn schedule_covered_payments(
-    conn: &ConnType,
+    conn: &mut ConnType,
     owner_id: &NodeId,
     payments: &HashMap<AllocationPayeeKey, BatchPaymentAllocation>,
 ) -> DbResult<BigDecimal> {
@@ -551,24 +549,26 @@ fn schedule_covered_payments(
     Ok(total_amount)
 }
 
-pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
-    let conn = args.conn;
+pub fn resolve_invoices(
+    conn: &mut ConnType,
+    args: &ResolveInvoiceArgs,
+) -> DbResult<Option<String>> {
     let owner_id = args.owner_id;
     let payer_addr = args.payer_addr;
     let platform = args.platform;
-    let since = args.since;
     let zero = BigDecimal::from(0u32);
 
-    let total_amount = BigDecimal::default();
     let payments = HashMap::<String, BatchPayment>::new();
 
     let total_amount = BigDecimal::from(0u32);
 
     log::debug!("Resolving invoices for {} - {}", owner_id, platform);
-    let (payments, total_amount) = resolve_invoices_activity_part(args, total_amount, payments)?;
+    let (payments, total_amount) =
+        resolve_invoices_activity_part(conn, args, total_amount, payments)?;
 
     log::debug!("Resolving agreements for {}", owner_id);
-    let (payments, total_amount) = resolve_invoices_agreement_part(args, total_amount, payments)?;
+    let (payments, total_amount) =
+        resolve_invoices_agreement_part(conn, args, total_amount, payments)?;
 
     if total_amount == zero {
         return Ok(None);
@@ -585,8 +585,8 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
             crate::schema::pay_allocation::dsl::pay_allocation.on(pae_dsl::allocation_id
                 .eq(pa_dsl::id)
                 .and(pae_dsl::owner_id.eq(pa_dsl::owner_id))
-                .and(pa_dsl::payment_platform.eq(args.platform))
-                .and(pa_dsl::owner_id.eq(args.owner_id))),
+                .and(pa_dsl::payment_platform.eq(platform))
+                .and(pa_dsl::owner_id.eq(owner_id))),
         )
         .filter(pae_dsl::accepted_amount.ne(pae_dsl::scheduled_amount))
         .load(conn)?;
@@ -639,7 +639,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
                 odsl::owner_id.eq(owner_id),
                 odsl::payer_addr.eq(&payer_addr),
                 odsl::platform.eq(&platform),
-                odsl::total_amount.eq(total_amount.to_string()),
+                odsl::total_amount.eq(BigDecimalField(total_amount)),
                 odsl::paid_amount.eq("0"),
             ))
             .execute(conn)?;
@@ -713,7 +713,7 @@ pub fn resolve_invoices(args: &ResolveInvoiceArgs) -> DbResult<Option<String>> {
 }
 
 pub fn get_batch_orders(
-    conn: &ConnType,
+    conn: &mut ConnType,
     ids: &[String],
     platform: &str,
 ) -> DbResult<Vec<DbBatchOrderItem>> {
@@ -803,13 +803,15 @@ impl BatchDao<'_> {
         since: DateTime<Utc>,
     ) -> DbResult<Option<String>> {
         do_with_transaction(self.pool, "batch_dao_resolve", move |conn| {
-            resolve_invoices(&ResolveInvoiceArgs {
+            resolve_invoices(
                 conn,
-                owner_id,
-                payer_addr: &payer_addr,
-                platform: &platform,
-                since,
-            })
+                &ResolveInvoiceArgs {
+                    owner_id,
+                    payer_addr: &payer_addr,
+                    platform: &platform,
+                    since,
+                },
+            )
         })
         .await
     }
@@ -822,7 +824,7 @@ impl BatchDao<'_> {
         use crate::schema::pay_activity;
 
         #[derive(QueryableByName)]
-        #[table_name = "pay_activity"]
+        #[diesel(table_name = pay_activity)]
         struct Activity {
             id: String,
             total_amount_accepted: BigDecimalField,
@@ -840,7 +842,7 @@ impl BatchDao<'_> {
             "#)
                 .bind::<Timestamp, _>(since.naive_utc())
                 .bind::<Text, _>(&payment_platform)
-                .bind::<Text, _>(owner_id)
+                .bind::<Text, _>(owner_id.to_string())
                 .load::<Activity>(conn)?;
             Ok(v.into_iter().map(|a| (a.id, a.total_amount_accepted, a.total_amount_scheduled)).collect())
         }).await
@@ -1039,6 +1041,7 @@ impl BatchDao<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bigdecimal::Zero;
     use chrono::Duration;
     use ya_persistence::executor::DbExecutor;
 
@@ -1056,8 +1059,7 @@ mod tests {
 
     async fn test_db(name: &str) -> DbExecutor {
         let db = DbExecutor::in_memory(&format!("{name}-{}", Uuid::new_v4())).unwrap();
-        db.apply_migration(crate::migrations::run_with_output)
-            .unwrap();
+        db.apply_migration(crate::migrations::MIGRATIONS).unwrap();
         db
     }
 
@@ -1264,8 +1266,8 @@ mod tests {
 
         assert!(order_id.is_none());
         let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
-        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
-        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+        assert!(agreement_scheduled.0.is_zero());
+        assert!(expenditure_scheduled.0.is_zero());
     }
 
     #[actix_rt::test]
@@ -1308,8 +1310,8 @@ mod tests {
 
         assert!(order_id.is_none());
         let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
-        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
-        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+        assert!(agreement_scheduled.0.is_zero());
+        assert!(expenditure_scheduled.0.is_zero());
     }
 
     #[actix_rt::test]
@@ -1350,8 +1352,8 @@ mod tests {
 
         assert!(order_id.is_none());
         let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
-        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
-        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+        assert!(agreement_scheduled.0.is_zero());
+        assert!(expenditure_scheduled.0.is_zero());
     }
 
     #[actix_rt::test]
@@ -1507,7 +1509,7 @@ mod tests {
             .unwrap();
         assert!(order_id.is_none(), "negative invoice must not be paid");
         let (agreement_scheduled, expenditure_scheduled) = scheduled_amounts(&db).await;
-        assert_eq!(agreement_scheduled.0, BigDecimal::from(0));
-        assert_eq!(expenditure_scheduled.0, BigDecimal::from(0));
+        assert!(agreement_scheduled.0.is_zero());
+        assert!(expenditure_scheduled.0.is_zero());
     }
 }

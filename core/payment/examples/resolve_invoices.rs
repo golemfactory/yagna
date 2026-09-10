@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     let db = {
         let database_url = "yagnadir/payment.db";
         let db = DbExecutor::new(database_url)?;
-        db.apply_migration(ya_payment::migrations::run_with_output)?;
+        db.apply_migration(ya_payment::migrations::MIGRATIONS)?;
         db
     };
 

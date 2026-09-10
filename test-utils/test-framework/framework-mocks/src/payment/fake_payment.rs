@@ -54,7 +54,7 @@ impl FakePayment {
     fn create_db(_testdir: &Path, name: &str) -> anyhow::Result<DbExecutor> {
         let db = DbExecutor::in_memory(&format!("{name}.payment.db"))
             .map_err(|e| anyhow!("Failed to create db [{name:?}]. Error: {e}"))?;
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::MIGRATIONS)?;
         Ok(db)
     }
 

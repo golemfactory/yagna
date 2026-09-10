@@ -19,4 +19,8 @@ pub struct MarketConfig {
     pub session_id: String,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "20s")]
     pub process_market_events_timeout: std::time::Duration,
+    /// How much time Requestors get to finish their work and terminate the
+    /// Agreements, when a graceful shutdown announces termination notices.
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5m")]
+    pub termination_notice_grace_period: std::time::Duration,
 }

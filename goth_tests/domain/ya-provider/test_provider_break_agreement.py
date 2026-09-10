@@ -12,7 +12,7 @@ from goth.address import (
 )
 from goth.configuration import load_yaml, Override, Configuration
 from goth.node import node_environment
-from goth.runner import Runner
+from goth_tests.helpers.runner import Runner
 from goth.runner.container.payment import PaymentIdPool
 from goth.runner.container.yagna import YagnaContainerConfig
 from goth.runner.probe import RequestorProbe

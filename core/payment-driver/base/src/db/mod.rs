@@ -3,8 +3,8 @@
 */
 
 pub mod migrations {
-    #[derive(diesel_migrations::EmbedMigrations)]
-    struct _Dummy;
+    pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!();
 }
 
 pub mod models;

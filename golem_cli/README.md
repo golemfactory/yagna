@@ -10,6 +10,34 @@ subprocesses.
 When changing settings, it calls `ya-provider`. You can still use `ya-provider`
 for advanced settings and fine-tuning.
 
+## Stopping the provider
+
+`golemsp stop` stops `ya-provider`. When the provider was started by a running
+`golemsp run` process, that supervisor observes the provider exit and then stops
+its yagna child process. A yagna service started independently is left running.
+
+Use `--graceful` to stop accepting new Agreements, notify Requestors, and give
+current tasks the configured termination grace period before the provider
+terminates the remaining Agreements:
+
+```bash
+golemsp stop --graceful
+```
+
+The termination notice is informational. It does not prevent either party from
+terminating an Agreement immediately for any reason.
+
+Use `--timeout` to place an additional upper bound, in seconds, on how long the
+command waits before stopping `ya-provider`. On Unix, the command sends SIGTERM
+at that point and allows 15 seconds for cleanup before escalating to SIGKILL:
+
+```bash
+golemsp stop --graceful --timeout 300
+```
+
+On Windows, a non-graceful stop uses `TerminateProcess`. Use `--graceful` when
+running work must receive the configured termination grace period.
+
 ## Configuration difference between running without `golemsp`
 
 | golemsp                                                                                                                | ya-provider                                              |

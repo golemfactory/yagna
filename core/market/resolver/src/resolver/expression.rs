@@ -1,61 +1,334 @@
-use std::str;
-
-use asnom::structures::{ExplicitTag, OctetString, Tag};
+use std::ops::Range;
 
 use super::error::{ExpressionError, ResolveError};
-use super::ldap_parser;
-use super::properties::{parse_prop_ref, Property, PropertyRef, PropertySet, PropertyValue};
+use super::properties::{Property, PropertyRef, PropertySet};
 
-// Expression resolution result enum
-#[derive(Debug, Clone, PartialEq)]
-pub enum ResolveResult<'a> {
-    True,
-    False(Vec<&'a PropertyRef>, Expression), // List of prop references which couldn't be resolved, Reduced expression
-    Undefined(Vec<&'a PropertyRef>, Expression), // List of props which couldn't be resolved (name, aspect), Reduced expression
-    Err(ResolveError),
+pub(crate) type NodeId = usize;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ComparisonOperator {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
 }
 
-// Expression structure is the vehicle for LDAP filter expression resolution
 #[derive(Clone, Debug, PartialEq)]
-pub enum Expression {
-    Equals(PropertyRef, String),       // property ref, value
-    Greater(PropertyRef, String),      // property ref, value
-    GreaterEqual(PropertyRef, String), // property ref, value
-    Less(PropertyRef, String),         // property ref, value
-    LessEqual(PropertyRef, String),    // property ref, value
-    Present(PropertyRef),              // property ref
-    Or(Vec<Expression>),               // operands
-    And(Vec<Expression>),              // operands
-    Not(Box<Expression>),              // operand
-    Empty(bool),                       // empty expression of specific logical value (true/false)
+pub(crate) enum Node {
+    Empty(bool),
+    Compare {
+        property: PropertyRef,
+        operator: ComparisonOperator,
+        value: String,
+    },
+    Present(PropertyRef),
+    And(Range<usize>),
+    Or(Range<usize>),
+    Not(NodeId),
+}
+
+/// A parsed constraint expression stored as a flat arena.
+///
+/// Nodes refer to their children by index. Consequently parsing, evaluation,
+/// cloning, formatting and destruction do not recurse through user-controlled
+/// nesting.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Expression {
+    pub(crate) nodes: Vec<Node>,
+    pub(crate) edges: Vec<NodeId>,
+    pub(crate) root: NodeId,
+}
+
+#[derive(Default)]
+pub(crate) struct ExpressionBuilder {
+    nodes: Vec<Node>,
+    edges: Vec<NodeId>,
+}
+
+impl ExpressionBuilder {
+    pub(crate) fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub(crate) fn push_empty(&mut self, value: bool) -> NodeId {
+        self.push_node(Node::Empty(value))
+    }
+
+    pub(crate) fn push_compare(
+        &mut self,
+        property: PropertyRef,
+        operator: ComparisonOperator,
+        value: String,
+    ) -> NodeId {
+        self.push_node(Node::Compare {
+            property,
+            operator,
+            value,
+        })
+    }
+
+    pub(crate) fn push_present(&mut self, property: PropertyRef) -> NodeId {
+        self.push_node(Node::Present(property))
+    }
+
+    pub(crate) fn push_not(&mut self, child: NodeId) -> NodeId {
+        self.push_node(Node::Not(child))
+    }
+
+    pub(crate) fn push_and(&mut self, children: &[NodeId]) -> NodeId {
+        let range = self.push_edges(children);
+        self.push_node(Node::And(range))
+    }
+
+    pub(crate) fn push_or(&mut self, children: &[NodeId]) -> NodeId {
+        let range = self.push_edges(children);
+        self.push_node(Node::Or(range))
+    }
+
+    fn push_node(&mut self, node: Node) -> NodeId {
+        let id = self.nodes.len();
+        self.nodes.push(node);
+        id
+    }
+
+    fn push_edges(&mut self, children: &[NodeId]) -> Range<usize> {
+        let start = self.edges.len();
+        self.edges.extend_from_slice(children);
+        start..self.edges.len()
+    }
+
+    fn append_expression(&mut self, expression: Expression) -> NodeId {
+        let node_offset = self.nodes.len();
+        let edge_offset = self.edges.len();
+
+        self.edges
+            .extend(expression.edges.into_iter().map(|id| id + node_offset));
+        self.nodes
+            .extend(expression.nodes.into_iter().map(|node| match node {
+                Node::Empty(value) => Node::Empty(value),
+                Node::Compare {
+                    property,
+                    operator,
+                    value,
+                } => Node::Compare {
+                    property,
+                    operator,
+                    value,
+                },
+                Node::Present(property) => Node::Present(property),
+                Node::And(range) => {
+                    Node::And((range.start + edge_offset)..(range.end + edge_offset))
+                }
+                Node::Or(range) => Node::Or((range.start + edge_offset)..(range.end + edge_offset)),
+                Node::Not(child) => Node::Not(child + node_offset),
+            }));
+
+        expression.root + node_offset
+    }
+
+    fn copy_leaf(&mut self, node: &Node) -> NodeId {
+        match node {
+            Node::Empty(value) => self.push_empty(*value),
+            Node::Compare {
+                property,
+                operator,
+                value,
+            } => self.push_compare(property.clone(), *operator, value.clone()),
+            Node::Present(property) => self.push_present(property.clone()),
+            Node::And(_) | Node::Or(_) | Node::Not(_) => {
+                unreachable!("only leaf expressions can be copied during evaluation")
+            }
+        }
+    }
+
+    fn is_empty(&self, id: NodeId) -> bool {
+        matches!(self.nodes[id], Node::Empty(_))
+    }
+
+    pub(crate) fn finish(self, root: NodeId) -> Expression {
+        // Evaluation can abandon already-built residual branches after a
+        // short-circuit. Compacting here produces a canonical, reachable-only
+        // arena and keeps structural PartialEq deterministic.
+        let mut reachable = vec![false; self.nodes.len()];
+        let mut pending = vec![root];
+
+        while let Some(id) = pending.pop() {
+            if reachable[id] {
+                continue;
+            }
+            reachable[id] = true;
+            match &self.nodes[id] {
+                Node::And(range) | Node::Or(range) => {
+                    pending.extend(self.edges[range.clone()].iter().copied());
+                }
+                Node::Not(child) => pending.push(*child),
+                Node::Empty(_) | Node::Compare { .. } | Node::Present(_) => {}
+            }
+        }
+
+        let mut nodes = Vec::with_capacity(reachable.iter().filter(|value| **value).count());
+        let mut edges = Vec::new();
+        let mut remap = vec![None; self.nodes.len()];
+
+        for (old_id, node) in self.nodes.into_iter().enumerate() {
+            if !reachable[old_id] {
+                continue;
+            }
+
+            let remapped = match node {
+                Node::Empty(value) => Node::Empty(value),
+                Node::Compare {
+                    property,
+                    operator,
+                    value,
+                } => Node::Compare {
+                    property,
+                    operator,
+                    value,
+                },
+                Node::Present(property) => Node::Present(property),
+                Node::And(range) => {
+                    let start = edges.len();
+                    edges.extend(
+                        self.edges[range]
+                            .iter()
+                            .map(|child| remap[*child].expect("children precede their parent")),
+                    );
+                    Node::And(start..edges.len())
+                }
+                Node::Or(range) => {
+                    let start = edges.len();
+                    edges.extend(
+                        self.edges[range]
+                            .iter()
+                            .map(|child| remap[*child].expect("children precede their parent")),
+                    );
+                    Node::Or(start..edges.len())
+                }
+                Node::Not(child) => Node::Not(remap[child].expect("children precede their parent")),
+            };
+
+            let new_id = nodes.len();
+            nodes.push(remapped);
+            remap[old_id] = Some(new_id);
+        }
+
+        Expression {
+            nodes,
+            edges,
+            root: remap[root].expect("the root is reachable"),
+        }
+    }
 }
 
 impl Expression {
-    // Resolve the expression with a give PropertySet and return the reduced result or error message.
+    fn comparison(property: PropertyRef, operator: ComparisonOperator, value: String) -> Self {
+        let mut builder = ExpressionBuilder::default();
+        let root = builder.push_compare(property, operator, value);
+        builder.finish(root)
+    }
+
+    fn group(expressions: Vec<Expression>, is_and: bool) -> Self {
+        let mut builder = ExpressionBuilder::default();
+        let children: Vec<_> = expressions
+            .into_iter()
+            .map(|expression| builder.append_expression(expression))
+            .collect();
+        let root = if is_and {
+            builder.push_and(&children)
+        } else {
+            builder.push_or(&children)
+        };
+        builder.finish(root)
+    }
+
+    // These compatibility constructors intentionally retain the previous
+    // enum-variant spelling while creating a flat expression.
+    #[allow(non_snake_case)]
+    pub fn Empty(value: bool) -> Self {
+        let mut builder = ExpressionBuilder::default();
+        let root = builder.push_empty(value);
+        builder.finish(root)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn Equals(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::Equal, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn NotEquals(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::NotEqual, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn Greater(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::Greater, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn GreaterEqual(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::GreaterEqual, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn Less(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::Less, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn LessEqual(property: PropertyRef, value: String) -> Self {
+        Self::comparison(property, ComparisonOperator::LessEqual, value)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn Present(property: PropertyRef) -> Self {
+        let mut builder = ExpressionBuilder::default();
+        let root = builder.push_present(property);
+        builder.finish(root)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn And(expressions: Vec<Expression>) -> Self {
+        Self::group(expressions, true)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn Or(expressions: Vec<Expression>) -> Self {
+        Self::group(expressions, false)
+    }
+
+    #[allow(non_snake_case)]
+    #[allow(clippy::boxed_local)] // Compatibility with the former enum variant API.
+    pub fn Not(expression: Box<Expression>) -> Self {
+        let mut builder = ExpressionBuilder::default();
+        let child = builder.append_expression(*expression);
+        let root = builder.push_not(child);
+        builder.finish(root)
+    }
+
     pub fn resolve_reduce<'a>(
         &'a self,
         property_set: &'a PropertySet,
     ) -> Result<Expression, String> {
         match self.resolve(property_set) {
             ResolveResult::True => Ok(Expression::Empty(true)),
-            ResolveResult::False(_, expr) => Ok(expr),
-            ResolveResult::Undefined(_, expr) => Ok(expr),
-            ResolveResult::Err(err) => Err(err.msg),
+            ResolveResult::False(_, expression) | ResolveResult::Undefined(_, expression) => {
+                Ok(expression)
+            }
+            ResolveResult::Err(error) => Err(error.msg),
         }
     }
 
-    // Resolve the expression to bool value if possible (ie. if an expression has a known boolean value)
     pub fn to_value(&self) -> Option<bool> {
-        match self {
-            Expression::Empty(val) => Some(*val),
+        match self.nodes[self.root] {
+            Node::Empty(value) => Some(value),
             _ => None,
         }
     }
 
-    // Resolve the expression, returning:
-    // Ok(Some(bool)) if expression can be resolved to boolean value (ie can be reduced to Empty(bool))
-    // Ok(None) if expression does not reduce to Empty(bool)
-    // Err(String) in case of resolution error
     pub fn resolve_api<'a>(
         &'a self,
         property_set: &'a PropertySet,
@@ -63,469 +336,384 @@ impl Expression {
         Ok(self.resolve_reduce(property_set)?.to_value())
     }
 
-    // Fetch all property references from the expression
     pub fn property_refs(&self) -> impl IntoIterator<Item = &PropertyRef> {
-        match self {
-            Expression::Equals(prop, _)
-            | Expression::Greater(prop, _)
-            | Expression::GreaterEqual(prop, _)
-            | Expression::Less(prop, _)
-            | Expression::LessEqual(prop, _)
-            | Expression::Present(prop) => vec![prop],
-            Expression::And(exprs) | Expression::Or(exprs) => {
-                exprs.iter().flat_map(|expr| expr.property_refs()).collect()
+        self.nodes.iter().filter_map(|node| match node {
+            Node::Compare { property, .. } | Node::Present(property) => Some(property),
+            Node::Empty(_) | Node::And(_) | Node::Or(_) | Node::Not(_) => None,
+        })
+    }
+
+    pub fn resolve<'a>(&'a self, property_set: &'a PropertySet) -> ResolveResult<'a> {
+        let mut residual = ExpressionBuilder::default();
+        let mut frames = vec![EvalFrame::Eval(self.root)];
+        let mut result = None;
+
+        while let Some(frame) = frames.pop() {
+            match frame {
+                EvalFrame::Eval(id) => match &self.nodes[id] {
+                    Node::Empty(value) => {
+                        result = Some(if *value {
+                            EvalResult::true_value()
+                        } else {
+                            EvalResult::false_value(residual.push_empty(false))
+                        });
+                    }
+                    Node::Compare {
+                        property,
+                        operator,
+                        value,
+                    } => {
+                        result = Some(self.resolve_comparison(
+                            id,
+                            property,
+                            *operator,
+                            value,
+                            property_set,
+                            &mut residual,
+                        ));
+                    }
+                    Node::Present(property) => {
+                        result =
+                            Some(self.resolve_present(id, property, property_set, &mut residual));
+                    }
+                    Node::Not(child) => {
+                        frames.push(EvalFrame::Not);
+                        frames.push(EvalFrame::Eval(*child));
+                    }
+                    Node::And(range) => {
+                        if range.is_empty() {
+                            result = Some(EvalResult::true_value());
+                        } else {
+                            frames.push(EvalFrame::Group(GroupFrame::new(
+                                GroupOperator::And,
+                                range.clone(),
+                            )));
+                            frames.push(EvalFrame::Eval(self.edges[range.start]));
+                        }
+                    }
+                    Node::Or(range) => {
+                        if range.is_empty() {
+                            result = Some(EvalResult::false_value(residual.push_empty(false)));
+                        } else {
+                            frames.push(EvalFrame::Group(GroupFrame::new(
+                                GroupOperator::Or,
+                                range.clone(),
+                            )));
+                            frames.push(EvalFrame::Eval(self.edges[range.start]));
+                        }
+                    }
+                },
+                EvalFrame::Not => {
+                    let child = result
+                        .take()
+                        .expect("a child result precedes its continuation");
+                    result = Some(match child.kind {
+                        EvalKind::True => EvalResult::false_value(residual.push_empty(false)),
+                        EvalKind::False => EvalResult::true_value(),
+                        EvalKind::Undefined => {
+                            let root =
+                                residual.push_not(child.residual.expect("undefined residual"));
+                            EvalResult::undefined(child.refs, root)
+                        }
+                    });
+                }
+                EvalFrame::Group(mut group) => {
+                    let child = result
+                        .take()
+                        .expect("a child result precedes its continuation");
+                    if let Some(done) = group.consume(child, &mut residual) {
+                        result = Some(done);
+                        continue;
+                    }
+
+                    if group.next < group.range.end {
+                        let child_id = self.edges[group.next];
+                        group.next += 1;
+                        frames.push(EvalFrame::Group(group));
+                        frames.push(EvalFrame::Eval(child_id));
+                    } else {
+                        result = Some(group.finish(&mut residual));
+                    }
+                }
             }
-            Expression::Not(expr) => expr.property_refs().into_iter().collect(),
-            Expression::Empty(_) => vec![],
+        }
+
+        let result = result.expect("every expression has a root result");
+        match result.kind {
+            EvalKind::True => ResolveResult::True,
+            EvalKind::False => ResolveResult::False(
+                result.refs,
+                residual.finish(result.residual.expect("false residual")),
+            ),
+            EvalKind::Undefined => ResolveResult::Undefined(
+                result.refs,
+                residual.finish(result.residual.expect("undefined residual")),
+            ),
         }
     }
 
-    // TODO: Implement ultimate reduction of AND and OR expressions where only one factor remains
-
-    // (DONE) Rework for adjusted property definition syntax (property types derived form literals)
-    // (DONE) Implement strong resolution and expression 'reduce' (ie. undefined results are propagated rather than ignored)
-    //       - (DONE) Refactor ResolveResult to include vector of PropertyRefs rather than plain strings...
-    // (DONE) Implement handling of unreduced expressions in "matching" results.
-    // (DONE) It may be useful to return list of properties which couldn't be resolved
-    // (DONE) Properties of some simple types plus binary operators.
-    // (DONE) Handling of Version simple type, need to implement operators.
-    // (DONE) Handling of Decimal simple type
-    // (DONE) Handling of List property type
-    // (DONE) equals operator for List property type with single operand (ignore other comparison operators)
-    // (DONE) equals operator for List property type with List operand (list equivalence operator)
-    // TODO: Handling of types in constraint filter expressions
-    // TODO: Implement allowed characters in property names
-    // (DONE) Rework resolve so that ResolveResult is based on strs and not Strings
-    // (DONE) wildcard matching of property values
-    // TODO: wildcard matching of value-less properties
-    //       - Implement dynamic property "handler" - via trait?
-    // (DONE) aspects
-    // TODO: finalize and review the matching relation implementations
-    pub fn resolve<'a>(&'a self, property_set: &'a PropertySet) -> ResolveResult {
-        match self {
-            Expression::Equals(attr, val) => self.resolve_with_function(
-                attr,
-                val,
-                property_set,
-                |prop_value: &PropertyValue, val: &str| -> bool { prop_value.equals(val) },
-            ),
-            Expression::Less(attr, val) => self.resolve_with_function(
-                attr,
-                val,
-                property_set,
-                |prop_value: &PropertyValue, val: &str| -> bool { prop_value.less(val) },
-            ),
-            Expression::LessEqual(attr, val) => self.resolve_with_function(
-                attr,
-                val,
-                property_set,
-                |prop_value: &PropertyValue, val: &str| -> bool { prop_value.less_equal(val) },
-            ),
-            Expression::Greater(attr, val) => self.resolve_with_function(
-                attr,
-                val,
-                property_set,
-                |prop_value: &PropertyValue, val: &str| -> bool { prop_value.greater(val) },
-            ),
-            Expression::GreaterEqual(attr, val) => self.resolve_with_function(
-                attr,
-                val,
-                property_set,
-                |prop_value: &PropertyValue, val: &str| -> bool { prop_value.greater_equal(val) },
-            ),
-            // other binary operators here if needed...
-            Expression::And(inner_expressions) => self.resolve_and(inner_expressions, property_set),
-            Expression::Or(inner_expressions) => self.resolve_or(inner_expressions, property_set),
-            Expression::Not(inner_expression) => match inner_expression.resolve(property_set) {
-                ResolveResult::True => ResolveResult::False(vec![], Expression::Empty(false)),
-                ResolveResult::False(_, _) => ResolveResult::True,
-                ResolveResult::Undefined(un_props, unresolved_expr) => {
-                    ResolveResult::Undefined(un_props, Expression::Not(Box::new(unresolved_expr)))
-                }
-                ResolveResult::Err(err) => ResolveResult::Err(err),
-            },
-            Expression::Present(attr) => self.resolve_present(attr, property_set),
-            Expression::Empty(val) => {
-                if *val {
-                    ResolveResult::True
-                } else {
-                    ResolveResult::False(vec![], Expression::Empty(false))
-                }
-            }
-        }
-    }
-
-    fn resolve_with_function<'a>(
+    fn resolve_comparison<'a>(
         &'a self,
-        prop_ref: &'a PropertyRef,
-        val_string: &str,
+        id: NodeId,
+        property_ref: &'a PropertyRef,
+        operator: ComparisonOperator,
+        value: &str,
         property_set: &'a PropertySet,
-        oper_function: impl Fn(&PropertyValue, &str) -> bool,
-    ) -> ResolveResult {
-        // TODO this requires rewrite to cater for implicit properties...
-        // test if property exists and then if the value matches
-
-        // extract referred property name
-        let name = match prop_ref {
-            PropertyRef::Value(n, _) => n,
-            PropertyRef::Aspect(n, _a, _) => n,
+        residual: &mut ExpressionBuilder,
+    ) -> EvalResult<'a> {
+        let name = match property_ref {
+            PropertyRef::Value(name, _) | PropertyRef::Aspect(name, _, _) => name,
         };
 
-        match property_set.properties.get(&name[..]) {
-            Some(prop) => {
-                match prop {
-                    Property::Explicit(_name, value, aspects) => {
-                        // now decide if we are referring to value or aspect
-                        match prop_ref {
-                            PropertyRef::Value(_n, impl_type) => {
-                                match value.to_prop_ref_type(impl_type) {
-                                    Ok(conv_result) => {
-                                        let resolve_result = match conv_result {
-                                            Some(val) => oper_function(&val, val_string),
-                                            None => oper_function(value, val_string),
-                                        };
+        let Some(property) = property_set.properties.get(&name[..]) else {
+            let root = residual.copy_leaf(&self.nodes[id]);
+            return EvalResult::undefined(vec![property_ref], root);
+        };
 
-                                        // resolve against prop value
-                                        if resolve_result {
-                                            ResolveResult::True
-                                        } else {
-                                            ResolveResult::False(vec![], Expression::Empty(false))
-                                            // if resolved to false - return Empty as reduced expression
-                                        }
-                                    }
-                                    Err(_) => {
-                                        ResolveResult::Undefined(vec![], self.clone())
-                                        // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
-                                    }
-                                }
-                            }
-                            PropertyRef::Aspect(_n, aspect, _impl_type) => {
-                                // resolve against prop aspect
-                                match aspects.get(&aspect[..]) {
-                                    Some(aspect_value) => {
-                                        if val_string == *aspect_value {
-                                            ResolveResult::True
-                                        } else {
-                                            ResolveResult::False(vec![], Expression::Empty(false))
-                                            // if resolved to false - return Empty as reduced expression
-                                        }
-                                    }
-                                    None => {
-                                        ResolveResult::Undefined(vec![prop_ref], self.clone())
-                                        // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
-                                    }
-                                }
-                            }
+        match property {
+            Property::Implicit(_) => {
+                let root = residual.copy_leaf(&self.nodes[id]);
+                EvalResult::undefined(vec![property_ref], root)
+            }
+            Property::Explicit(_, property_value, aspects) => match property_ref {
+                PropertyRef::Value(_, implied_type) => {
+                    let converted = match property_value.to_prop_ref_type(implied_type) {
+                        Ok(Some(value)) => Some(value),
+                        Ok(None) => None,
+                        Err(_) => {
+                            let root = residual.copy_leaf(&self.nodes[id]);
+                            return EvalResult::undefined(Vec::new(), root);
                         }
-                    }
-                    Property::Implicit(_name) => {
-                        ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
+                    };
+                    let property_value = converted.as_ref().unwrap_or(property_value);
+                    let matched = match operator {
+                        ComparisonOperator::Equal => property_value.equals(value),
+                        ComparisonOperator::NotEqual => !property_value.equals(value),
+                        ComparisonOperator::Greater => property_value.greater(value),
+                        ComparisonOperator::GreaterEqual => property_value.greater_equal(value),
+                        ComparisonOperator::Less => property_value.less(value),
+                        ComparisonOperator::LessEqual => property_value.less_equal(value),
+                    };
+                    if matched {
+                        EvalResult::true_value()
+                    } else {
+                        EvalResult::false_value(residual.push_empty(false))
                     }
                 }
-            }
-            None => {
-                ResolveResult::Undefined(vec![prop_ref], self.clone()) // if resolved to undefined - return self copy as reduced expression (cannot reduce self)
-            }
-        }
-    }
-
-    fn resolve_and<'a>(
-        &'a self,
-        seq: &'a Vec<Expression>,
-        property_set: &'a PropertySet,
-    ) -> ResolveResult {
-        let mut undefined_found = false;
-        let mut unresolved_refs = vec![];
-        let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
-        for exp in seq {
-            match exp.resolve(property_set) {
-                ResolveResult::True => { /* do nothing, keep iterating */ }
-                ResolveResult::False(mut un_props, unresolved_expr) => {
-                    unresolved_refs.append(&mut un_props);
-                    match unresolved_expr {
-                        Expression::Empty(_) => {}
-                        _ => {
-                            unresolved_exprs.push(unresolved_expr);
+                PropertyRef::Aspect(_, aspect, _) => match aspects.get(&aspect[..]) {
+                    Some(aspect_value) => {
+                        let equal = value == *aspect_value;
+                        let matched = match operator {
+                            ComparisonOperator::Equal => equal,
+                            ComparisonOperator::NotEqual => !equal,
+                            _ => false,
+                        };
+                        if matched {
+                            EvalResult::true_value()
+                        } else {
+                            EvalResult::false_value(residual.push_empty(false))
                         }
-                    };
-                    return ResolveResult::False(vec![], Expression::Empty(false));
-                    // resolved properly to false - return Empty as unreduced expression
-                }
-                ResolveResult::Undefined(mut un_props, unresolved_expr) => {
-                    unresolved_refs.append(&mut un_props);
-                    match unresolved_expr {
-                        Expression::Empty(_) => {}
-                        _ => {
-                            unresolved_exprs.push(unresolved_expr);
-                        }
-                    };
-                    undefined_found = true;
-                }
-                ResolveResult::Err(err) => return ResolveResult::Err(err),
-            }
-        }
-
-        if undefined_found {
-            ResolveResult::Undefined(
-                unresolved_refs,
-                match unresolved_exprs.len().cmp(&1) {
-                    std::cmp::Ordering::Greater => Expression::And(unresolved_exprs),
-                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
-                    std::cmp::Ordering::Less => Expression::Empty(true),
+                    }
+                    None => {
+                        let root = residual.copy_leaf(&self.nodes[id]);
+                        EvalResult::undefined(vec![property_ref], root)
+                    }
                 },
-            )
-        } else {
-            ResolveResult::True
-        }
-    }
-
-    fn resolve_or<'a>(
-        &'a self,
-        seq: &'a Vec<Expression>,
-        property_set: &'a PropertySet,
-    ) -> ResolveResult {
-        let mut undefined_found = false;
-        let mut all_un_props = vec![];
-        let mut unresolved_exprs = vec![]; // TODO this may be required if we want to resolve all factor expressions (instead of eager resolution)
-        for exp in seq {
-            match exp.resolve(property_set) {
-                ResolveResult::True => return ResolveResult::True,
-                ResolveResult::False(mut un_props, unresolved_expr) => {
-                    all_un_props.append(&mut un_props);
-                    /* keep iterating */
-                    // We accumulate the unresolved expressions in a list to return
-                    match unresolved_expr {
-                        Expression::Empty(_) => {}
-                        _ => {
-                            unresolved_exprs.push(unresolved_expr);
-                        }
-                    };
-                }
-                ResolveResult::Undefined(mut un_props, unresolved_expr) => {
-                    all_un_props.append(&mut un_props);
-                    match unresolved_expr {
-                        Expression::Empty(_) => {}
-                        _ => {
-                            unresolved_exprs.push(unresolved_expr);
-                        }
-                    };
-                    undefined_found = true;
-                    //return ResolveResult::Undefined(all_un_props, Expression::Or(unresolved_exprs))
-                }
-                ResolveResult::Err(err) => return ResolveResult::Err(err),
-            }
-        }
-
-        if undefined_found {
-            ResolveResult::Undefined(
-                all_un_props,
-                match unresolved_exprs.len().cmp(&1) {
-                    std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
-                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
-                    std::cmp::Ordering::Less => Expression::Empty(true),
-                },
-            )
-        } else {
-            ResolveResult::False(
-                all_un_props,
-                match unresolved_exprs.len().cmp(&1) {
-                    std::cmp::Ordering::Greater => Expression::Or(unresolved_exprs),
-                    std::cmp::Ordering::Equal => unresolved_exprs.pop().unwrap(),
-                    std::cmp::Ordering::Less => Expression::Empty(false),
-                },
-            )
-        }
-    }
-
-    // Resolve property/aspect presence
-    fn resolve_present<'a>(
-        &self,
-        attr: &'a PropertyRef,
-        property_set: &'a PropertySet,
-    ) -> ResolveResult<'a> {
-        match attr {
-            // for value reference - only check if property exists in PropertySet
-            PropertyRef::Value(name, _) => match property_set.properties.get(&name[..]) {
-                Some(_value) => ResolveResult::True,
-                None => ResolveResult::False(vec![attr], Expression::Empty(false)),
             },
-            // for aspect reference - first check if property exists, then check for aspect
-            PropertyRef::Aspect(name, aspect, _) => {
-                match property_set.properties.get(&name[..]) {
-                    Some(value) => {
-                        match value {
-                            Property::Explicit(_name, _val, aspects) => {
-                                match aspects.get(&aspect[..]) {
-                                    Some(_aspect) => ResolveResult::True,
-                                    None => {
-                                        ResolveResult::False(vec![attr], Expression::Empty(false))
-                                    }
-                                }
-                            }
-                            Property::Implicit(_name) => {
-                                // no aspects for implicit properties
-                                ResolveResult::False(vec![attr], self.clone())
-                            }
-                        }
+        }
+    }
+
+    fn resolve_present<'a>(
+        &'a self,
+        id: NodeId,
+        property_ref: &'a PropertyRef,
+        property_set: &'a PropertySet,
+        residual: &mut ExpressionBuilder,
+    ) -> EvalResult<'a> {
+        match property_ref {
+            PropertyRef::Value(name, _) => {
+                if property_set.properties.contains_key(&name[..]) {
+                    EvalResult::true_value()
+                } else {
+                    EvalResult::false_with_refs(vec![property_ref], residual.push_empty(false))
+                }
+            }
+            PropertyRef::Aspect(name, aspect, _) => match property_set.properties.get(&name[..]) {
+                Some(Property::Explicit(_, _, aspects)) => {
+                    if aspects.contains_key(&aspect[..]) {
+                        EvalResult::true_value()
+                    } else {
+                        EvalResult::false_with_refs(vec![property_ref], residual.push_empty(false))
                     }
-                    None => ResolveResult::False(vec![attr], self.clone()),
                 }
+                Some(Property::Implicit(_)) | None => {
+                    let root = residual.copy_leaf(&self.nodes[id]);
+                    EvalResult::false_with_refs(vec![property_ref], root)
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum GroupOperator {
+    And,
+    Or,
+}
+
+struct GroupFrame<'a> {
+    operator: GroupOperator,
+    range: Range<usize>,
+    next: usize,
+    undefined: bool,
+    refs: Vec<&'a PropertyRef>,
+    residuals: Vec<NodeId>,
+}
+
+impl<'a> GroupFrame<'a> {
+    fn new(operator: GroupOperator, range: Range<usize>) -> Self {
+        Self {
+            operator,
+            next: range.start + 1,
+            range,
+            undefined: false,
+            refs: Vec::new(),
+            residuals: Vec::new(),
+        }
+    }
+
+    fn consume(
+        &mut self,
+        mut child: EvalResult<'a>,
+        residual: &mut ExpressionBuilder,
+    ) -> Option<EvalResult<'a>> {
+        match self.operator {
+            GroupOperator::And => match child.kind {
+                EvalKind::True => None,
+                EvalKind::False => Some(EvalResult::false_value(residual.push_empty(false))),
+                EvalKind::Undefined => {
+                    self.undefined = true;
+                    self.refs.append(&mut child.refs);
+                    self.residuals
+                        .push(child.residual.expect("undefined residual"));
+                    None
+                }
+            },
+            GroupOperator::Or => match child.kind {
+                EvalKind::True => Some(EvalResult::true_value()),
+                EvalKind::False => {
+                    self.refs.append(&mut child.refs);
+                    let child = child.residual.expect("false residual");
+                    if !residual.is_empty(child) {
+                        self.residuals.push(child);
+                    }
+                    None
+                }
+                EvalKind::Undefined => {
+                    self.undefined = true;
+                    self.refs.append(&mut child.refs);
+                    let child = child.residual.expect("undefined residual");
+                    if !residual.is_empty(child) {
+                        self.residuals.push(child);
+                    }
+                    None
+                }
+            },
+        }
+    }
+
+    fn finish(self, residual: &mut ExpressionBuilder) -> EvalResult<'a> {
+        match self.operator {
+            GroupOperator::And if self.undefined => {
+                let root = combine_residuals(residual, self.residuals, true, true);
+                EvalResult::undefined(self.refs, root)
+            }
+            GroupOperator::And => EvalResult::true_value(),
+            GroupOperator::Or if self.undefined => {
+                let root = combine_residuals(residual, self.residuals, false, true);
+                EvalResult::undefined(self.refs, root)
+            }
+            GroupOperator::Or => {
+                let root = combine_residuals(residual, self.residuals, false, false);
+                EvalResult::false_with_refs(self.refs, root)
             }
         }
     }
 }
 
-// #region Expression building
-
-pub fn build_expression(root: &Tag) -> Result<Expression, ExpressionError> {
-    match root {
-        Tag::Sequence(seq) => match seq.id {
-            ldap_parser::TAG_AND => build_multi_expression(seq.id, &seq.inner),
-            ldap_parser::TAG_OR => build_multi_expression(seq.id, &seq.inner),
-            ldap_parser::TAG_EQUAL
-            | ldap_parser::TAG_LESS
-            | ldap_parser::TAG_LESS_EQUAL
-            | ldap_parser::TAG_GREATER
-            | ldap_parser::TAG_GREATER_EQUAL => build_simple_expression(seq.id, &seq.inner),
-            _ => Err(ExpressionError::new(&format!(
-                "Unknown sequence type {}",
-                seq.id
-            ))),
-        },
-        Tag::ExplicitTag(exp_tag) => build_expression_from_explicit_tag(exp_tag),
-        Tag::OctetString(oct_string) => build_expression_from_octet_string(oct_string),
-        Tag::Null(_) => Ok(Expression::Empty(true)),
-        _ => Err(ExpressionError::new("Unexpected tag type")),
+fn combine_residuals(
+    builder: &mut ExpressionBuilder,
+    residuals: Vec<NodeId>,
+    is_and: bool,
+    empty_value: bool,
+) -> NodeId {
+    match residuals.as_slice() {
+        [] => builder.push_empty(empty_value),
+        [single] => *single,
+        _ if is_and => builder.push_and(&residuals),
+        _ => builder.push_or(&residuals),
     }
 }
 
-fn build_expression_from_explicit_tag(
-    exp_tag: &ExplicitTag,
-) -> Result<Expression, ExpressionError> {
-    match exp_tag.id {
-        ldap_parser::TAG_NOT => match build_expression(&exp_tag.inner) {
-            Ok(inner_expression) => Ok(Expression::Not(Box::new(inner_expression))),
-            Err(err) => Err(err),
-        },
-        _ => Err(ExpressionError::new(&format!(
-            "Unexpected tag type {}",
-            exp_tag.id
-        ))),
-    }
+enum EvalFrame<'a> {
+    Eval(NodeId),
+    Not,
+    Group(GroupFrame<'a>),
 }
 
-fn build_expression_from_octet_string(
-    oct_string: &OctetString,
-) -> Result<Expression, ExpressionError> {
-    match oct_string.id {
-        ldap_parser::TAG_PRESENT => match str::from_utf8(&oct_string.inner) {
-            Ok(s) => Ok(Expression::Present(match parse_prop_ref(s) {
-                Ok(prop_ref) => prop_ref,
-                Err(prop_err) => {
-                    return Err(ExpressionError::new(&format!(
-                        "Error parsing property reference {}: {}",
-                        s, prop_err
-                    )))
-                }
-            })),
-            Err(_err) => Err(ExpressionError::new("Parsing UTF8 from byte array failed")),
-        },
-        _ => Err(ExpressionError::new(&format!(
-            "Unexpected tag type {}",
-            oct_string.id
-        ))),
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EvalKind {
+    True,
+    False,
+    Undefined,
 }
 
-fn build_multi_expression(
-    expr_type: u64,
-    sequence: &Vec<Tag>,
-) -> Result<Expression, ExpressionError> {
-    let mut expr_vec = vec![];
+struct EvalResult<'a> {
+    kind: EvalKind,
+    refs: Vec<&'a PropertyRef>,
+    residual: Option<NodeId>,
+}
 
-    for tag in sequence {
-        match build_expression(tag) {
-            Ok(expr) => {
-                expr_vec.push(expr);
-            }
-            Err(err) => return Err(err),
+impl<'a> EvalResult<'a> {
+    fn true_value() -> Self {
+        Self {
+            kind: EvalKind::True,
+            refs: Vec::new(),
+            residual: None,
         }
     }
 
-    match expr_type {
-        ldap_parser::TAG_AND => Ok(Expression::And(expr_vec)),
-        ldap_parser::TAG_OR => Ok(Expression::Or(expr_vec)),
-        _ => Err(ExpressionError::new(&format!(
-            "Unknown expression type {}",
-            expr_type
-        ))),
+    fn false_value(residual: NodeId) -> Self {
+        Self::false_with_refs(Vec::new(), residual)
     }
-}
 
-fn build_simple_expression(
-    expr_type: u64,
-    sequence: &[Tag],
-) -> Result<Expression, ExpressionError> {
-    match extract_two_octet_strings(sequence) {
-        Ok(result) => {
-            let prop_ref = match parse_prop_ref(result.0) {
-                Ok(prop_ref) => prop_ref,
-                Err(prop_err) => {
-                    return Err(ExpressionError::new(&format!(
-                        "Error parsing property reference {}: {}",
-                        result.0, prop_err
-                    )))
-                }
-            };
-            match expr_type {
-                ldap_parser::TAG_EQUAL => Ok(Expression::Equals(prop_ref, String::from(result.1))),
-                ldap_parser::TAG_GREATER => {
-                    Ok(Expression::Greater(prop_ref, String::from(result.1)))
-                }
-                ldap_parser::TAG_GREATER_EQUAL => {
-                    Ok(Expression::GreaterEqual(prop_ref, String::from(result.1)))
-                }
-                ldap_parser::TAG_LESS => Ok(Expression::Less(prop_ref, String::from(result.1))),
-                ldap_parser::TAG_LESS_EQUAL => {
-                    Ok(Expression::LessEqual(prop_ref, String::from(result.1)))
-                }
-                // add other binary operators handling here
-                _ => Err(ExpressionError::new(&format!(
-                    "Unknown expression type {}",
-                    expr_type
-                ))),
-            }
+    fn false_with_refs(refs: Vec<&'a PropertyRef>, residual: NodeId) -> Self {
+        Self {
+            kind: EvalKind::False,
+            refs,
+            residual: Some(residual),
         }
-        Err(err) => Err(err),
+    }
+
+    fn undefined(refs: Vec<&'a PropertyRef>, residual: NodeId) -> Self {
+        Self {
+            kind: EvalKind::Undefined,
+            refs,
+            residual: Some(residual),
+        }
     }
 }
 
-fn extract_str_from_octet_string(tag: &Tag) -> Result<&str, ExpressionError> {
-    match tag {
-        Tag::OctetString(oct) => match str::from_utf8(&oct.inner) {
-            Ok(s) => Ok(s),
-            Err(_) => Err(ExpressionError::new("Parsing UTF8 from byte array failed")),
-        },
-        _ => Err(ExpressionError::new(
-            "Unexpected Tag type, expected OctetString",
-        )),
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResolveResult<'a> {
+    True,
+    False(Vec<&'a PropertyRef>, Expression),
+    Undefined(Vec<&'a PropertyRef>, Expression),
+    Err(ResolveError),
 }
 
-fn extract_two_octet_strings<'a>(
-    sequence: &'a [Tag],
-) -> Result<(&'a str, &'a str), ExpressionError> {
-    if sequence.len() >= 2 {
-        let attr: &'a str = extract_str_from_octet_string(&sequence[0])?;
-        let val: &'a str = extract_str_from_octet_string(&sequence[1])?;
-
-        Ok((attr, val))
-    } else {
-        Err(ExpressionError::new(&format!(
-            "Expected 2 tags, got {} tags",
-            sequence.len()
-        )))
-    }
+/// Compatibility shim for callers that previously converted an ASN.1-shaped
+/// parse tree into an expression. The new parser already returns the final IR.
+pub fn build_expression(expression: &Expression) -> Result<Expression, ExpressionError> {
+    Ok(expression.clone())
 }
-
-// #endregion

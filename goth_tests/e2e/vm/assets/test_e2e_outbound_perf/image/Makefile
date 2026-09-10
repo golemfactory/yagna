@@ -1,5 +1,5 @@
 build:
-	cargo build --release --manifest-path=outbound-bench/Cargo.toml
+	cargo build --release --manifest-path=outbound-bench/Cargo.toml --target x86_64-unknown-linux-musl
 	docker build -t outbound-test-v5 .
 	gvmkit-build outbound-test-v5
 

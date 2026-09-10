@@ -225,7 +225,7 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = "file:payment.db";
     let db = DbExecutor::new(database_url)?;
-    db.apply_migration(migrations::run_with_output)?;
+    db.apply_migration(migrations::MIGRATIONS)?;
 
     ya_sb_router::bind_gsb_router(None).await?;
 
@@ -319,6 +319,8 @@ async fn main() -> anyhow::Result<()> {
     );
 
     log::info!("start agreement...");
+    let timestamp = Utc::now();
+    let expiration = timestamp;
 
     let agreement = market::Agreement {
         agreement_id: args.agreement_id.clone(),
@@ -327,19 +329,21 @@ async fn main() -> anyhow::Result<()> {
             constraints: "".to_string(),
             demand_id: "".to_string(),
             requestor_id: requestor_id.parse().unwrap(),
-            timestamp: Utc::now(),
+            expiration,
+            timestamp,
         },
         offer: market::Offer {
             properties: offer_properties,
             constraints: "".to_string(),
             offer_id: "".to_string(),
             provider_id: provider_id.parse().unwrap(),
-            timestamp: Utc::now(),
+            expiration,
+            timestamp,
         },
-        valid_to: Utc::now(),
+        valid_to: expiration,
         approved_date: None,
         state: market::agreement::State::Proposal,
-        timestamp: Utc::now(),
+        timestamp,
         app_session_id: args.app_session_id,
         proposed_signature: None,
         approved_signature: None,

@@ -149,6 +149,33 @@ pub enum RemoteAgreementError {
 }
 
 #[derive(Error, Debug, Serialize, Deserialize)]
+pub enum TerminationNoticeError {
+    #[error("Termination notice {0}.")]
+    Gsb(#[from] GsbAgreementError),
+    #[error("Remote termination notice: {0}")]
+    Remote(#[from] RemoteTerminationNoticeError),
+    #[error(transparent)]
+    CallerParse(#[from] CallerParseError),
+    #[error("Timeout while waiting for termination notice acknowledgement for Agreement [{0}]")]
+    Timeout(AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
+pub enum RemoteTerminationNoticeError {
+    #[error("Agreement [{0}] not found.")]
+    NotFound(AgreementId),
+    #[error(
+        "Agreement [{0}] in state {1}; termination notice allowed only for Approved Agreements."
+    )]
+    InvalidState(AgreementId, AgreementState),
+    #[error("A different termination notice is already recorded for Agreement [{0}].")]
+    Conflict(AgreementId),
+    #[error("Can't record termination notice for Agreement [{0}] due to internal error.")]
+    InternalError(AgreementId),
+}
+
+#[derive(Error, Debug, Serialize, Deserialize)]
 pub enum CommitAgreementError {
     #[error("Commit Agreement {0}.")]
     Gsb(#[from] GsbAgreementError),

@@ -8,7 +8,7 @@ mod proposal_id;
 mod subscription_id;
 
 pub use agreement::{check_transition, Agreement, AgreementId, AgreementState, AppSessionId};
-pub use agreement_events::{AgreementEvent, AgreementEventType, NewAgreementEvent};
+pub use agreement_events::{AgreementEvent, AgreementEventType, DbReason, NewAgreementEvent};
 pub use demand::Demand;
 pub use negotiation_events::{EventError, EventType, MarketEvent};
 pub use offer::{Offer, OfferUnsubscribed};

@@ -63,7 +63,7 @@ impl ActivityDao<'_> {
                 ))
                 .execute(conn)?;
 
-            let state_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+            let state_id: i32 = diesel::select(last_insert_rowid()).first(conn)?;
 
             diesel::insert_into(dsl_usage::activity_usage)
                 .values((
@@ -72,7 +72,7 @@ impl ActivityDao<'_> {
                 ))
                 .execute(conn)?;
 
-            let usage_id: i32 = diesel::select(last_insert_rowid).first(conn)?;
+            let usage_id: i32 = diesel::select(last_insert_rowid()).first(conn)?;
 
             diesel::insert_into(dsl::activity)
                 .values((

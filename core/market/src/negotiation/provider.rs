@@ -4,13 +4,20 @@ use metrics::counter;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ya_client::model::market::{event::ProviderEvent, NewProposal, Reason};
+use ya_client::model::market::{
+    event::ProviderEvent, AgreementTerminationNotice as ClientTerminationNotice, NewProposal,
+    Reason,
+};
 use ya_core_model::NodeId;
+use ya_persistence::types::AdaptTimestamp;
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
 use crate::db::{
-    dao::{AgreementDao, NegotiationEventsDao, ProposalDao, SaveAgreementError},
+    dao::{
+        AgreementDao, AgreementEventsDao, NegotiationEventsDao, ProposalDao, SaveAgreementError,
+        TerminationNoticeOutcome,
+    },
     model::{Agreement, AgreementId, AgreementState, AppSessionId},
     model::{Issuer, Offer, Owner, Proposal, ProposalId, SubscriptionId},
     DbMixedExecutor,
@@ -96,6 +103,7 @@ impl ProviderBroker {
         counter!("market.agreements.provider.terminated", 0);
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.provider.terminated.reason", 0, "reason" => "Success");
+        counter!("market.agreements.provider.termination-notice", 0);
         counter!("market.agreements.provider.approving", 0);
         counter!("market.agreements.provider.committing", 0);
         counter!("market.agreements.provider.rejected", 0);
@@ -388,6 +396,125 @@ impl ProviderBroker {
         );
         Ok(())
     }
+
+    /// Announces the Provider's intention to terminate an Approved Agreement
+    /// and waits (up to `timeout` seconds) until the Requestor's node records
+    /// and acknowledges the notice. The Agreement stays `Approved`. The notice
+    /// is informational and does not restrict either party from terminating
+    /// the Agreement at any time.
+    ///
+    /// Only one notice may be recorded per Agreement and its payload is
+    /// immutable: a repeated call with the same payload is acknowledged
+    /// idempotently, a different payload is rejected. This makes retrying
+    /// after an acknowledgement timeout safe.
+    pub async fn post_termination_notice(
+        &self,
+        id: Identity,
+        client_agreement_id: String,
+        notice: ClientTerminationNotice,
+        timeout: f32,
+    ) -> Result<(), PostTerminationNoticeError> {
+        let dao = self.common.db.as_dao::<AgreementDao>();
+        let events_dao = self.common.db.as_dao::<AgreementEventsDao>();
+
+        let agreement = dao
+            .select_by_node(&client_agreement_id, id.identity, Utc::now().naive_utc())
+            .await
+            .map_err(|e| match e {
+                AgreementDaoError::InvalidId(e) => PostTerminationNoticeError::InvalidId(e),
+                e => PostTerminationNoticeError::Get(client_agreement_id.clone(), e),
+            })?
+            .ok_or_else(|| PostTerminationNoticeError::NotFound(client_agreement_id.clone()))?;
+
+        // `select_by_node` matches the caller against both sides of the
+        // Agreement, so check the role explicitly.
+        if agreement.provider_id != id.identity || agreement.id.owner() != Owner::Provider {
+            return Err(PostTerminationNoticeError::NotProvider(client_agreement_id));
+        }
+
+        // Quantize to the database timestamp precision, so a retried notice
+        // compares equal to the one recorded before.
+        let termination_deadline =
+            quantize_to_db_precision(notice.termination_deadline.naive_utc());
+        if termination_deadline <= Utc::now().naive_utc() {
+            return Err(PostTerminationNoticeError::DeadlineNotInFuture(
+                agreement.id,
+                termination_deadline,
+            ));
+        }
+
+        if agreement.state != AgreementState::Approved {
+            return Err(PostTerminationNoticeError::InvalidState(
+                agreement.id,
+                agreement.state,
+            ));
+        }
+
+        // Note: deliberately not under the Agreement lock. The other party's
+        // `terminate_agreement` sends to us while holding its own lock, so
+        // waiting for its acknowledgement under ours could deadlock. The
+        // records on both nodes are protected by their own transactions and
+        // repeated deliveries are acknowledged idempotently.
+        if let Some(existing) = events_dao
+            .select_termination_notice(&agreement.id)
+            .await
+            .map_err(|e| PostTerminationNoticeError::Internal(e.to_string()))?
+        {
+            let same_deadline = existing
+                .termination_deadline
+                .map(|deadline| deadline.adapt().format())
+                == Some(termination_deadline.adapt().format());
+            let same_reason = crate::db::dao::same_reason(&existing.reason, &notice.reason);
+
+            // The notice was recorded (and acknowledged by the Requestor's
+            // node) before; repeating the same payload is a no-op.
+            return match same_deadline && same_reason {
+                true => Ok(()),
+                false => Err(PostTerminationNoticeError::Conflict(agreement.id)),
+            };
+        }
+
+        self.api
+            .send_termination_notice(
+                &agreement,
+                termination_deadline,
+                notice.reason.clone(),
+                timeout,
+            )
+            .await?;
+
+        match events_dao
+            .create_termination_notice(&agreement.id, termination_deadline, notice.reason.clone())
+            .await
+            .map_err(|e| PostTerminationNoticeError::Internal(e.to_string()))?
+        {
+            TerminationNoticeOutcome::Recorded | TerminationNoticeOutcome::AlreadyRecorded => (),
+            TerminationNoticeOutcome::Conflict => {
+                return Err(PostTerminationNoticeError::Conflict(agreement.id))
+            }
+        }
+
+        self.common.notify_agreement(&agreement).await;
+
+        counter!("market.agreements.provider.termination-notice", 1);
+        log::info!(
+            "Provider {} sent termination notice for Agreement [{}] to [{}]. Deadline: {} UTC. Reason: {}",
+            id.display(),
+            &agreement.id,
+            agreement.requestor_id,
+            &termination_deadline,
+            notice.reason.display(),
+        );
+        Ok(())
+    }
+}
+
+/// Truncates to the microsecond precision the database keeps for timestamps.
+fn quantize_to_db_precision(timestamp: chrono::NaiveDateTime) -> chrono::NaiveDateTime {
+    use chrono::Timelike;
+    timestamp
+        .with_nanosecond(timestamp.nanosecond() / 1000 * 1000)
+        .unwrap_or(timestamp)
 }
 
 async fn on_agreement_committed(

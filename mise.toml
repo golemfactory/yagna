@@ -4,7 +4,7 @@ aws-cli = { version = "2.36.21", symlink_bins = "true" }
 cargo-binstall = "1.21.1"
 cmake = "3.31.9"
 node = "20.20.2"
-poetry = "1.8.2"
+poetry = "2.2.1"
 protoc = "24.4"
 python = "3.12.13"
 rust = { version = "1.97.0", components = ["rustfmt", "clippy"], profile = "minimal" }

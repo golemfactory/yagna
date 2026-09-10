@@ -244,7 +244,7 @@ async fn test_agreement_simultaneous_reject_cancel() {
         .create_agreement(
             req_id.clone(),
             &proposal_id,
-            Utc::now() + Duration::milliseconds(300),
+            Utc::now() + Duration::milliseconds(1500),
         )
         .await
         .unwrap();

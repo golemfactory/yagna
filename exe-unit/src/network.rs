@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
@@ -19,7 +18,8 @@ use tokio::sync::mpsc;
 use ya_runtime_api::deploy::ContainerEndpoint;
 use ya_runtime_api::server::Network;
 use ya_service_bus::{typed, typed::Endpoint as GsbEndpoint};
-use ya_utils_networking::vpn::{network::DuoEndpoint, Error as NetError};
+use ya_utils_networking::vpn::network::DuoEndpoint;
+use ya_utils_networking::vpn::Error as NetError;
 
 use crate::error::Error;
 use crate::state::DeploymentNetwork;
@@ -331,25 +331,26 @@ impl RemoteEndpoint {
     }
 }
 
-impl<'a> TryFrom<&'a DeploymentNetwork> for Network {
-    type Error = Error;
+fn network_to_runtime_command(net: &DeploymentNetwork) -> Result<Network> {
+    let gateway = match net.gateway {
+        Some(gateway) => gateway,
+        None => {
+            // Released VM runtimes try to create a route even for an empty gateway.
+            // Preserve the historical first-host fallback when deployment omits it.
+            let network_addr = net.network.addr();
+            net.network
+                .hosts()
+                .find(|ip| ip != &network_addr)
+                .ok_or(NetError::NetAddrTaken(network_addr))?
+        }
+    };
 
-    fn try_from(net: &'a DeploymentNetwork) -> Result<Self> {
-        let ip = net.network.addr();
-        let mask = net.network.netmask();
-        let gateway = net
-            .network
-            .hosts()
-            .find(|ip_| ip_ != &ip)
-            .ok_or(NetError::NetAddrTaken(ip))?;
-
-        Ok(Network {
-            addr: ip.to_string(),
-            gateway: gateway.to_string(),
-            mask: mask.to_string(),
-            if_addr: net.node_ip.to_string(),
-        })
-    }
+    Ok(Network {
+        addr: net.network.addr().to_string(),
+        gateway: gateway.to_string(),
+        mask: net.network.netmask().to_string(),
+        if_addr: net.node_ip.to_string(),
+    })
 }
 
 fn async_read_stream<const N: usize, R>(
@@ -584,7 +585,75 @@ mod test {
     use futures::StreamExt;
     use std::iter::FromIterator;
 
-    use super::write_prefix;
+    use super::{network_to_runtime_command, write_prefix, DeploymentNetwork, Error, NetError};
+
+    fn deployment_network(
+        network: &str,
+        node_ip: &str,
+        gateway: Option<&str>,
+    ) -> DeploymentNetwork {
+        DeploymentNetwork {
+            network: network.parse().unwrap(),
+            node_ip: node_ip.parse().unwrap(),
+            gateway: gateway.map(|ip| ip.parse().unwrap()),
+            nodes: Default::default(),
+        }
+    }
+
+    #[test]
+    fn runtime_network_defaults_to_first_host_gateway() {
+        for (network, node_ip, gateway, mask) in [
+            (
+                "192.168.0.0/24",
+                "192.168.0.2",
+                "192.168.0.1",
+                "255.255.255.0",
+            ),
+            (
+                "10.0.0.128/25",
+                "10.0.0.130",
+                "10.0.0.129",
+                "255.255.255.128",
+            ),
+            ("fd00::/64", "fd00::2", "fd00::1", "ffff:ffff:ffff:ffff::"),
+        ] {
+            let deployment = deployment_network(network, node_ip, None);
+            let command = network_to_runtime_command(&deployment).unwrap();
+
+            assert_eq!(command.gateway, gateway);
+            assert_eq!(command.addr, deployment.network.addr().to_string());
+            assert_eq!(command.mask, mask);
+            assert_eq!(command.if_addr, node_ip);
+        }
+    }
+
+    #[test]
+    fn runtime_network_preserves_explicit_gateway() {
+        for (network, node_ip, gateway) in [
+            ("192.168.0.0/24", "192.168.0.2", "192.168.0.254"),
+            ("fd00::/64", "fd00::2", "fd00::fe"),
+        ] {
+            let deployment = deployment_network(network, node_ip, Some(gateway));
+            let command = network_to_runtime_command(&deployment).unwrap();
+
+            assert_eq!(command.gateway, gateway);
+        }
+    }
+
+    #[test]
+    fn runtime_network_rejects_missing_fallback_host() {
+        for (network, node_ip) in [
+            ("192.168.0.2/32", "192.168.0.2"),
+            ("fd00::2/128", "fd00::2"),
+        ] {
+            let deployment = deployment_network(network, node_ip, None);
+            let error = network_to_runtime_command(&deployment).unwrap_err();
+
+            assert!(
+                matches!(error, Error::Net(NetError::NetAddrTaken(ip)) if ip == deployment.network.addr())
+            );
+        }
+    }
 
     const PREFIX_SIZE: usize = std::mem::size_of::<u32>();
 

@@ -1,5 +1,5 @@
 use chrono::{NaiveDateTime, Utc};
-use diesel::expression::dsl::now as sql_now;
+use diesel::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use crate::config::is_market_memory_on_disk;
@@ -126,7 +126,7 @@ impl DemandDao<'_> {
     }
 }
 
-pub(super) fn demand_status(conn: &ConnType, id: &SubscriptionId) -> DbResult<DemandState> {
+pub(super) fn demand_status(conn: &mut ConnType, id: &SubscriptionId) -> DbResult<DemandState> {
     let demand: Option<Demand> = dsl::market_demand
         .filter(dsl::id.eq(&id))
         .first(conn)

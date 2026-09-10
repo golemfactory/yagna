@@ -1,5 +1,4 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 
 use ya_client::model::market::agreement::{
@@ -23,7 +22,6 @@ pub type AppSessionId = Option<String>;
     strum_macros::EnumString,
     DbTextField,
     derive_more::Display,
-    AsExpression,
     FromSqlRow,
     PartialEq,
     Eq,
@@ -33,7 +31,7 @@ pub type AppSessionId = Option<String>;
     Serialize,
     Deserialize,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AgreementState {
     /// Newly created by a Requestor (based on Proposal)
     Proposal,
@@ -56,7 +54,7 @@ pub enum AgreementState {
 }
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
-#[table_name = "market_agreement"]
+#[diesel(table_name = market_agreement)]
 pub struct Agreement {
     pub id: AgreementId,
 
@@ -155,6 +153,7 @@ impl Agreement {
             constraints: self.demand_constraints,
             requestor_id: self.requestor_id,
             demand_id: self.demand_id.to_string(),
+            expiration: Utc.from_utc_datetime(&self.valid_to),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
         };
         let offer = ClientOffer {
@@ -162,6 +161,7 @@ impl Agreement {
             constraints: self.offer_constraints,
             provider_id: self.provider_id,
             offer_id: self.offer_id.to_string(),
+            expiration: Utc.from_utc_datetime(&self.valid_to),
             timestamp: Utc.from_utc_datetime(&self.creation_ts),
         };
         Ok(ClientAgreement {

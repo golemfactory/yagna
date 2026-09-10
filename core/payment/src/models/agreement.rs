@@ -8,9 +8,9 @@ use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Queryable, Debug, Identifiable, Insertable, Serialize)]
-#[table_name = "pay_agreement"]
+#[diesel(table_name = pay_agreement)]
 #[serde(rename_all = "camelCase")]
-#[primary_key(id, owner_id)]
+#[diesel(primary_key(id, owner_id))]
 pub struct WriteObj {
     pub id: String,
     pub owner_id: NodeId,
@@ -91,12 +91,15 @@ mod tests {
     use ya_persistence::types::Role;
 
     fn mock_agreement_with_demand_properties(properties: serde_json::Value) -> Agreement {
+        let timestamp = Utc::now();
+        let expiration = timestamp.add(Duration::days(1));
         let demand = Demand::new(
             properties,
             "()".to_string(),
             "demand_id".to_string(),
             Default::default(),
-            Default::default(),
+            expiration,
+            timestamp,
         );
 
         let offer = Offer::new(
@@ -104,16 +107,17 @@ mod tests {
             "()".to_string(),
             "offer_id".to_string(),
             Default::default(),
-            Default::default(),
+            expiration,
+            timestamp,
         );
 
         Agreement::new(
             "agreement_id".to_string(),
             demand,
             offer,
-            Utc::now().add(Duration::days(1)),
+            expiration,
             State::Proposal,
-            Utc::now(),
+            timestamp,
         )
     }
 

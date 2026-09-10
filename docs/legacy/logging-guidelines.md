@@ -70,7 +70,7 @@ Use local time, with millisecond precision with offset from UTC, as specified in
 ### Data confidentiality
 
 Care must be taken when confidential or personal data need to be recorded in logs:
-- When sensitive data must be logged for dignostic purposes, obfuscate, eg. output only leading and/or trailing characters of a sensitive string instead of the full value.
+- When sensitive data must be logged for diagnostic purposes, obfuscate, eg. output only leading and/or trailing characters of a sensitive string instead of the full value.
 
 ## Log level guidelines
 

@@ -4,7 +4,7 @@
     "nodeId": "0xd1d84f0e28d6fedf03c73151f98df95139700aa7",
     "validityPeriod": {
       "notBefore": "2023-01-01T00:00:00Z",
-      "notAfter": "2025-01-01T00:00:00Z"
+      "notAfter": "2030-01-01T00:00:00Z"
     },
     "permissions": {
       "outbound": {
@@ -20,25 +20,15 @@
       "hash": "sha512",
       "encryption": "EdDSA"
     },
-    "value": "a3b9bb6a5b8bc4087aefb3ffe0d4474b1e72eba79da39ba59f98793341d98c5e47b483742ec47fe9c4f3a7512ddc1b61760f9ba950fd548e5709fdac69d37e02",
+    "value": "74f2f2968c4d01cf4be6d6688c4293f6bc76d4b2918dde61cecf4d7ae5bd879c51c7430d44c4c4be633d6bec2e73d0e15f69a2d61b116d9533a082fccc912503",
     "signer": {
       "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
       "certificate": {
-        "validityPeriod": {
-          "notBefore": "2023-01-01T00:00:00Z",
-          "notAfter": "2025-01-01T00:00:00Z"
-        },
         "keyUsage": [
           "signNode"
         ],
         "permissions": {
           "outbound": "unrestricted"
-        },
-        "subject": {
-          "displayName": "Example partner cert",
-          "contact": {
-            "email": "example@partner.tld"
-          }
         },
         "publicKey": {
           "algorithm": "EdDSA",
@@ -46,6 +36,16 @@
           "parameters": {
             "scheme": "Ed25519"
           }
+        },
+        "subject": {
+          "displayName": "Example partner cert",
+          "contact": {
+            "email": "example@partner.tld"
+          }
+        },
+        "validityPeriod": {
+          "notBefore": "2023-01-01T00:00:00Z",
+          "notAfter": "2030-01-01T00:00:00Z"
         }
       },
       "signature": {
@@ -53,7 +53,7 @@
           "hash": "sha512",
           "encryption": "EdDSA"
         },
-        "value": "74122f37e5f17a262afa535df8669e50ac810e49774f13574750ad9c9236da60adf26c81615331c531a9a39336adf7ca62d6909448b133394581bc4e4cefc700",
+        "value": "85436d36cacd09109f0ae9f59b43aef5754371c33d9c47f7603f8194c1e9a909a5490a9496a99c8e4817377f08217174ce927679a9cc66ae1098398277177b02",
         "signer": {
           "$schema": "https://schemas.golem.network/v1/certificate.schema.json",
           "certificate": {

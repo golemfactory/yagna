@@ -1,7 +1,9 @@
 use anyhow::Result;
+use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::str::FromStr;
 use structopt::clap;
 use structopt::StructOpt;
 use strum::VariantNames;
@@ -9,8 +11,7 @@ use ya_utils_consent::{consent_check_before_startup, set_consent_path_in_yagna_d
 
 use ya_core_model::NodeId;
 
-use crate::command::NetworkGroup;
-use crate::command::UsageDef;
+use crate::command::{price_per_hour_to_second, NetworkGroup, UsageDef};
 use crate::terminal::clear_stdin;
 
 #[derive(StructOpt, Clone, Debug, Deserialize, Serialize)]
@@ -157,18 +158,24 @@ pub async fn setup(run_config: &RunConfig, force: bool) -> Result<i32> {
             .map(|p| p.name)
             .collect();
 
-        let default_glm_per_h = 0.025;
+        let default_glm_per_h = BigDecimal::from_str("0.025")?;
         let glm_per_h = if interactive {
-            promptly::prompt_default("Price GLM per hour", default_glm_per_h)?
+            BigDecimal::from_str(&promptly::prompt_default(
+                "Price GLM per hour",
+                default_glm_per_h.to_string(),
+            )?)?
         } else {
             println!("Price GLM per hour (default={default_glm_per_h})");
             default_glm_per_h
         };
 
         let mut usage = UsageDef::new();
-        usage.insert("CPU".into(), glm_per_h / 3600.0);
-        usage.insert("Duration".into(), glm_per_h / 3600.0 / 5.0);
-        usage.insert("Init price".into(), 0.0);
+        usage.insert("CPU".into(), price_per_hour_to_second(glm_per_h.clone()));
+        usage.insert(
+            "Duration".into(),
+            price_per_hour_to_second(glm_per_h / BigDecimal::from(5)),
+        );
+        usage.insert("Init price".into(), BigDecimal::from(0));
 
         for runtime in &runtimes {
             eprintln!(

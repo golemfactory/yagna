@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate nom;
-
 pub mod flatten;
 pub mod resolver;
 

@@ -50,9 +50,6 @@ node-types:
       - read-write: "assets/provider/rules.json"
         destination: "/root/.local/share/ya-provider/rules.json"
     privileged-mode: True
-    environment:
-      - "YA_TRANSFER_ALLOWED_IPS=172.19.0.1/32"
-
 # test_e2e_rule_partner_outbound overrides this property
 nodes:
   - name: "requestor"

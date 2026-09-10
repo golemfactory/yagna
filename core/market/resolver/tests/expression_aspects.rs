@@ -15,7 +15,7 @@ fn run_resolve_test_with_aspect(
         properties.push(prop.to_string());
     }
 
-    let mut property_set = PropertySet::from_flat_props(&properties);
+    let mut property_set = PropertySet::from_flat_props(&properties).unwrap();
 
     for aspect in aspects {
         property_set.set_property_aspect(aspect.0, aspect.1, aspect.2)

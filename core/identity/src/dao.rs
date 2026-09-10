@@ -68,5 +68,5 @@ impl From<Error> for model::Error {
 }
 
 pub async fn init(db: &DbExecutor) -> anyhow::Result<()> {
-    db.apply_migration(crate::db::migrations::run_with_output)
+    db.apply_migration(crate::db::migrations::MIGRATIONS)
 }

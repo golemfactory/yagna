@@ -30,7 +30,7 @@ fn insert_activity_payments(
     payment_id: &str,
     owner_id: NodeId,
     peer_id: NodeId,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting activity payments...");
     for activity_payment in activity_payments.iter() {
@@ -78,7 +78,7 @@ fn insert_agreement_payments(
     payment_id: &str,
     owner_id: NodeId,
     peer_id: NodeId,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     log::trace!("Inserting agreement payments...");
     for agreement_payment in agreement_payments {

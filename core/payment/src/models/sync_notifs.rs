@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use ya_client_model::NodeId;
 
 #[derive(Queryable, Debug, Identifiable, Insertable, AsChangeset)]
-#[table_name = "pay_sync_needed_notifs"]
+#[diesel(table_name = pay_sync_needed_notifs)]
 pub struct WriteObj {
     pub id: NodeId,
     pub last_ping: Option<NaiveDateTime>,
@@ -29,7 +29,7 @@ impl WriteObj {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "pay_sync_needed_notifs"]
+#[diesel(table_name = pay_sync_needed_notifs)]
 pub struct ReadObj {
     pub id: NodeId,
     pub last_ping: NaiveDateTime,

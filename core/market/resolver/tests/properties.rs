@@ -147,8 +147,8 @@ fn from_value_list_ok() {
     assert_eq!(
         prop_value,
         Ok(PropertyValue::List(vec![
-            Box::new(PropertyValue::Str("abc")),
-            Box::new(PropertyValue::Str("def"))
+            PropertyValue::Str("abc"),
+            PropertyValue::Str("def")
         ]))
     );
 }
@@ -169,7 +169,7 @@ fn from_value_list_error() {
 fn from_flat_props_ok() {
     let props = vec![String::from("objectClass=\"Babs Jensen\"")];
 
-    let property_set = PropertySet::from_flat_props(&props);
+    let property_set = PropertySet::from_flat_props(&props).unwrap();
 
     assert_eq!(
         property_set,

@@ -9,7 +9,7 @@ use crate::db::schema::market_negotiation_event;
 use crate::MarketService;
 
 #[derive(Clone, Debug, Insertable, Queryable)]
-#[table_name = "market_negotiation_event"]
+#[diesel(table_name = market_negotiation_event)]
 pub struct TestMarketEvent {
     pub id: i32,
     pub subscription_id: SubscriptionId,

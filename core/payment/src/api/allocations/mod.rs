@@ -3,12 +3,16 @@ use actix_web::web::{delete, get, post, put, Data, Json, Path, Query};
 use actix_web::{web, HttpResponse, Scope};
 use bigdecimal::BigDecimal;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Deserializer};
+use serde_json::value::RawValue;
 use serde_json::value::Value::Null;
+use std::str::FromStr;
+use std::time::Duration;
 use ya_client_model::NodeId;
 
 // Workspace uses
 use ya_agreement_utils::{ClauseOperator, ConstraintKey, Constraints};
-use ya_client_model::payment::allocation::PaymentPlatformEnum;
+use ya_client_model::payment::allocation::{Deposit, DepositUpdate, PaymentPlatformEnum};
 use ya_client_model::payment::*;
 use ya_core_model::payment::local::{
     DriverName, NetworkName, ValidateAllocation, ValidateAllocationError, BUS_ID as LOCAL_SERVICE,
@@ -35,6 +39,74 @@ mod token_name;
 use crate::alloc_release_task::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
 
+// Keep exact decimal parsing local to the REST boundary. Enabling serde_json's
+// arbitrary_precision globally changes Number's Serde representation and breaks GSB peers.
+#[derive(Debug)]
+struct JsonDecimal(BigDecimal);
+
+impl<'de> Deserialize<'de> for JsonDecimal {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Box::<RawValue>::deserialize(deserializer)?;
+        let value = if raw.get().starts_with('"') {
+            serde_json::from_str::<String>(raw.get()).map_err(serde::de::Error::custom)?
+        } else {
+            raw.get().to_string()
+        };
+
+        BigDecimal::from_str(&value)
+            .map(Self)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NewAllocationRequest {
+    address: Option<String>,
+    payment_platform: Option<PaymentPlatformEnum>,
+    total_amount: JsonDecimal,
+    timeout: Option<DateTime<Utc>>,
+    deposit: Option<Deposit>,
+    #[serde(default)]
+    make_deposit: bool,
+    extend_timeout: Option<u64>,
+}
+
+impl From<NewAllocationRequest> for NewAllocation {
+    fn from(value: NewAllocationRequest) -> Self {
+        Self {
+            address: value.address,
+            payment_platform: value.payment_platform,
+            total_amount: value.total_amount.0,
+            timeout: value.timeout,
+            deposit: value.deposit,
+            make_deposit: value.make_deposit,
+            extend_timeout: value.extend_timeout.map(Duration::from_secs),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AllocationUpdateRequest {
+    total_amount: Option<JsonDecimal>,
+    timeout: Option<DateTime<Utc>>,
+    deposit: Option<DepositUpdate>,
+}
+
+impl From<AllocationUpdateRequest> for AllocationUpdate {
+    fn from(value: AllocationUpdateRequest) -> Self {
+        Self {
+            total_amount: value.total_amount.map(|amount| amount.0),
+            timeout: value.timeout,
+            deposit: value.deposit,
+        }
+    }
+}
+
 pub fn register_endpoints(scope: Scope) -> Scope {
     scope
         .route("/allocations", post().to(create_allocation))
@@ -58,11 +130,11 @@ pub fn register_endpoints(scope: Scope) -> Scope {
 
 async fn create_allocation(
     db: Data<DbExecutor>,
-    body: Json<NewAllocation>,
+    body: Json<NewAllocationRequest>,
     id: Identity,
     allocation_release_tasks: web::Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
-    let allocation = body.into_inner();
+    let allocation: NewAllocation = body.into_inner().into();
     let node_id = id.identity;
 
     let payment_triple = match &allocation.payment_platform {
@@ -258,7 +330,7 @@ fn amend_allocation_fields(
         .unwrap_or_else(|| old_allocation.total_amount.clone());
     let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
 
-    if remaining_amount < BigDecimal::from(0) {
+    if remaining_amount < 0 {
         return Err("New allocation would be smaller than the already spent amount");
     }
     if let Some(timeout) = update.timeout {
@@ -291,13 +363,13 @@ fn amend_allocation_fields(
 async fn amend_allocation(
     db: Data<DbExecutor>,
     path: Path<params::AllocationId>,
-    body: Json<AllocationUpdate>,
+    body: Json<AllocationUpdateRequest>,
     id: Identity,
     allocation_release_tasks: Data<AllocationReleaseTasks>,
 ) -> HttpResponse {
     let allocation_id = path.allocation_id.clone();
     let node_id = id.identity;
-    let allocation_update: AllocationUpdate = body.into_inner();
+    let allocation_update: AllocationUpdate = body.into_inner().into();
     let dao: AllocationDao = db.as_dao();
 
     let current_allocation = match dao.get(allocation_id.clone(), node_id).await {
@@ -327,7 +399,7 @@ async fn amend_allocation(
     let validate_msg = ValidateAllocation {
         platform: amended_allocation.payment_platform.clone(),
         address: amended_allocation.address.clone(),
-        amount: if amount_to_validate > BigDecimal::from(0) {
+        amount: if amount_to_validate > 0 {
             amount_to_validate
         } else {
             0.into()
@@ -616,5 +688,66 @@ async fn get_pay_allocation_orders(
     {
         Ok(items) => response::ok(items),
         Err(e) => response::server_error(&e),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn numeric_allocation_amount_keeps_decimal_precision() {
+        let request: NewAllocationRequest =
+            serde_json::from_str(r#"{"totalAmount": 0.12345678901234567890123456789}"#).unwrap();
+        let allocation: NewAllocation = request.into();
+
+        assert_eq!(
+            allocation.total_amount,
+            BigDecimal::from_str("0.12345678901234567890123456789").unwrap()
+        );
+    }
+
+    #[test]
+    fn numeric_allocation_update_keeps_decimal_precision() {
+        let request: AllocationUpdateRequest =
+            serde_json::from_str(r#"{"totalAmount": 0.12345678901234567890123456789}"#).unwrap();
+        let update: AllocationUpdate = request.into();
+
+        assert_eq!(
+            update.total_amount,
+            Some(BigDecimal::from_str("0.12345678901234567890123456789").unwrap())
+        );
+    }
+
+    #[test]
+    fn string_allocation_amount_remains_supported() {
+        let request: NewAllocationRequest =
+            serde_json::from_str(r#"{"totalAmount": "0.12345678901234567890123456789"}"#).unwrap();
+        let allocation: NewAllocation = request.into();
+
+        assert_eq!(
+            allocation.total_amount,
+            BigDecimal::from_str("0.12345678901234567890123456789").unwrap()
+        );
+    }
+
+    #[test]
+    fn bigdecimal_serializes_as_json_string() {
+        let amount = BigDecimal::from_str("0.12345678901234567890123456789").unwrap();
+
+        assert_eq!(
+            serde_json::to_value(amount).unwrap(),
+            serde_json::Value::String("0.12345678901234567890123456789".into())
+        );
+    }
+
+    #[test]
+    fn payment_does_not_enable_serde_json_arbitrary_precision() {
+        let manifest = include_str!("../../../Cargo.toml");
+
+        assert!(
+            !manifest.contains("arbitrary_precision"),
+            "serde_json/arbitrary_precision changes serde_json::Value's Serde wire format"
+        );
     }
 }

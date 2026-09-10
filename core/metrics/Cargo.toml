@@ -19,7 +19,7 @@ ya-utils-consent = {  workspace = true }
 awc = "3"
 actix-web = { version = "4", features = ["openssl"] }
 anyhow = "1.0.32"
-bigdecimal = "0.2"
+bigdecimal = "0.4"
 futures = "0.3"
 lazy_static = "1.4"
 log = "0.4"

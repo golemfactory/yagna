@@ -2,7 +2,7 @@
 name = "ya-service-api-interfaces"
 version = "0.2.0"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2018"
+edition = "2024"
 
 [dependencies]
 actix-web = "4"

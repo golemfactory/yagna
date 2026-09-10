@@ -1,5 +1,5 @@
 use chrono::Utc;
-use diesel::expression::dsl::exists;
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use diesel::QueryableByName;
 
@@ -53,9 +53,9 @@ impl ActivityStateDao<'_> {
             use diesel::sql_types::{Integer, Text};
             #[derive(QueryableByName, PartialEq, Debug)]
             struct StatRecord {
-                #[sql_type = "Text"]
+                #[diesel(sql_type = Text)]
                 state: String,
-                #[sql_type = "Integer"]
+                #[diesel(sql_type = Integer)]
                 n: i32,
             }
 
@@ -84,9 +84,9 @@ impl ActivityStateDao<'_> {
             use diesel::sql_types::{Integer, Text};
             #[derive(QueryableByName, PartialEq, Debug)]
             struct StatRecord {
-                #[sql_type = "Text"]
+                #[diesel(sql_type = Text)]
                 state: String,
-                #[sql_type = "Integer"]
+                #[diesel(sql_type = Integer)]
                 n: i32,
             }
 

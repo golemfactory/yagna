@@ -1,4 +1,5 @@
 use crate::config::presets::Presets;
+use crate::shutdown::ShutdownStatus;
 
 #[derive(Clone, Debug)]
 pub enum Event {
@@ -8,5 +9,8 @@ pub enum Event {
         presets: Presets,
         updated: Vec<String>,
         removed: Vec<String>,
+    },
+    ShutdownChanged {
+        status: ShutdownStatus,
     },
 }

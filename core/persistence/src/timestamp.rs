@@ -1,12 +1,10 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use diesel::backend::Backend;
 use diesel::deserialize::FromSql;
-use diesel::serialize::{Output, ToSql};
-use diesel::sql_types::{Text, Timestamp};
-use diesel::sqlite::Sqlite;
-use diesel::{deserialize, serialize, Queryable};
+use diesel::serialize::{IsNull, Output, ToSql};
+use diesel::sql_types::Timestamp;
+use diesel::sqlite::{Sqlite, SqliteValue};
+use diesel::{deserialize, serialize};
 use serde::Serialize;
-use std::io::Write;
 
 pub trait AdaptTimestamp {
     fn adapt(self) -> TimestampAdapter;
@@ -21,27 +19,20 @@ pub trait AdaptTimestamp {
 /// Check description of related issues:
 /// https://github.com/golemfactory/yagna/issues/2145
 /// https://github.com/golemfactory/yagna/pull/2086
-#[derive(Clone, Debug, AsExpression, Serialize)]
-#[sql_type = "Timestamp"]
+#[derive(Clone, Debug, AsExpression, FromSqlRow, Serialize)]
+#[diesel(sql_type = Timestamp)]
 pub struct TimestampAdapter(pub NaiveDateTime);
 
-impl Queryable<Timestamp, Sqlite> for TimestampAdapter {
-    type Row = NaiveDateTime;
-
-    fn build(row: Self::Row) -> Self {
-        TimestampAdapter(row)
-    }
-}
-
 impl FromSql<Timestamp, Sqlite> for TimestampAdapter {
-    fn from_sql(value: Option<&<Sqlite as Backend>::RawValue>) -> deserialize::Result<Self> {
-        Ok(NaiveDateTime::from_sql(value)?.adapt())
+    fn from_sql(value: SqliteValue<'_, '_, '_>) -> deserialize::Result<Self> {
+        Ok(<NaiveDateTime as FromSql<Timestamp, Sqlite>>::from_sql(value)?.adapt())
     }
 }
 
 impl ToSql<Timestamp, Sqlite> for TimestampAdapter {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Sqlite>) -> serialize::Result {
-        ToSql::<Text, Sqlite>::to_sql(&self.format(), out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
+        out.set_value(self.format());
+        Ok(IsNull::No)
     }
 }
 

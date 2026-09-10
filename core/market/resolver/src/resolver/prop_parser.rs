@@ -1,175 +1,6 @@
-use std::str;
-use std::string::String;
-
-use nom::digit;
-use nom::IResult;
-
-named!(prop_def <&str, &str>,
-    do_parse!(
-            res: take_till!(is_equal_sign) >>
-            char!('=') >>
-            (res)
-    )
-);
-
-named!(aspect <&str, &str>,
-    do_parse!(
-            res: take_till!(is_delimiter) >>
-            (res)
-    )
-
-);
-
-named!(prop_ref_type_code <&str, &str>,
-    do_parse!(
-        tag!("$") >>
-        code : alt!(tag!("d") | tag!("v") | tag!("t")) >>
-        (code)
-    )
-);
-
-named!(prop <&str, &str>,
-    do_parse!(
-            res: take_till!(is_delimiter) >>
-            (res)
-    )
-);
-
-named!(prop_ref_aspect_type <&str, (&str, Option<&str>, Option<&str>)>,
-    do_parse!(
-        prop : prop >>
-        aspect : delimited!(char!('['), aspect, char!(']')) >>
-        impl_type : prop_ref_type_code >>
-        ((prop, Some(aspect), Some(impl_type)))
-    )
-);
-
-named!(prop_ref_aspect <&str, (&str, Option<&str>, Option<&str>)>,
-    do_parse!(
-        prop : prop >>
-        aspect : delimited!(char!('['), aspect, char!(']')) >>
-        ((prop, Some(aspect), None))
-    )
-);
-
-named!(prop_ref_type <&str, (&str, Option<&str>, Option<&str>)> ,
-    do_parse!(
-        prop : prop >>
-        impl_type : prop_ref_type_code >>
-        ((prop, None, Some(impl_type)))
-    )
-);
-
-named!(prop_ref_no_type <&str, (&str, Option<&str>, Option<&str>)> ,
-    do_parse!(
-        prop : prop >>
-        ((prop, None, None))
-    )
-);
-
-#[test]
-fn test_prop_ref_set() {
-    // Correct cases (should be properly parsed):
-
-    // input[aspect]@d
-    assert_eq!(
-        prop_ref_aspect_type("input[aspect]$d"),
-        IResult::Done("", ("input", Some("aspect"), Some("d")))
-    );
-
-    // input[aspect]
-    assert_eq!(
-        prop_ref_aspect_type("input[aspect]"),
-        IResult::Incomplete(nom::Needed::Size(14))
-    );
-    assert_eq!(
-        prop_ref_aspect("input[aspect]"),
-        IResult::Done("", ("input", Some("aspect"), None))
-    );
-
-    // input@d
-    assert_eq!(
-        prop_ref_aspect_type("input$d"),
-        IResult::Error(nom::ErrorKind::Char)
-    );
-    assert_eq!(
-        prop_ref_aspect("input$d"),
-        IResult::Error(nom::ErrorKind::Char)
-    );
-    assert_eq!(
-        prop_ref_type("input$d"),
-        IResult::Done("", ("input", None, Some("d")))
-    );
-
-    // input
-    assert_eq!(
-        prop_ref_aspect_type("input"),
-        IResult::Incomplete(nom::Needed::Size(6))
-    );
-    assert_eq!(
-        prop_ref_aspect("input"),
-        IResult::Incomplete(nom::Needed::Size(6))
-    );
-    assert_eq!(
-        prop_ref_type("input"),
-        IResult::Incomplete(nom::Needed::Size(6))
-    );
-    assert_eq!(
-        prop_ref_no_type("input"),
-        IResult::Done("", ("input", None, None))
-    );
-
-    // Incorrect cases
-
-    // input@dqwe
-    assert_eq!(
-        prop_ref_aspect_type("input$dqwe"),
-        IResult::Error(nom::ErrorKind::Char)
-    );
-    assert_eq!(
-        prop_ref_aspect("input$dqwe"),
-        IResult::Error(nom::ErrorKind::Char)
-    );
-    assert_eq!(
-        prop_ref_type("input$dqwe"),
-        IResult::Done("qwe", ("input", None, Some("d")))
-    );
-
-    // input[aspect]@dqwe
-    assert_eq!(
-        prop_ref_aspect_type("input[aspect]$dqwe"),
-        IResult::Done("qwe", ("input", Some("aspect"), Some("d")))
-    );
-
-    // input[aspecdqwe
-    assert_eq!(
-        prop_ref_aspect_type("input[aspecdqwe"),
-        IResult::Incomplete(nom::Needed::Size(16))
-    );
-}
-
-// #region parser of List in property reference strings
-
-named!(prop_ref_list <&str, Vec<&str>>,
-    delimited!(char!('['),
-            separated_list!(
-                tag!(","),
-                ws!(prop_ref_list_item)
-            )
-            , char!(']')
-        )
-);
-
-named!(prop_ref_list_item <&str, &str>,
-    do_parse!(
-            res: take_until_either!("[,]") >>
-            (res)
-    )
-);
-
-// #endregion
-
-// #region parser of property value literals
+const MAX_LITERAL_BYTES: usize = 64 * 1024;
+const MAX_LITERAL_NODES: usize = 4 * 1024;
+const MAX_LITERAL_DEPTH: usize = 128;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal<'a> {
@@ -179,258 +10,315 @@ pub enum Literal<'a> {
     Bool(bool),
     Version(&'a str),
     DateTime(&'a str),
-    List(Vec<Box<Literal<'a>>>),
+    List(Vec<Literal<'a>>),
 }
 
-named!(
-    val_literal<Literal>,
-    alt!(
-        str_literal
-            | version_literal
-            | datetime_literal
-            | true_literal
-            | false_literal
-            | decimal_literal
-            | number_literal
-            | list_literal
-    )
-);
-
-named!(
-    list_literal<Literal<'a>>,
-    ws!(delimited!(
-        char!('['),
-        map!(separated_list!(tag!(","), val_literal), |v: Vec<
-            Literal<'a>,
-        >| {
-            Literal::List(v.into_iter().map(Box::new).collect())
-        }),
-        char!(']')
-    ))
-);
-
-named!(
-    str_literal<Literal>,
-    ws!(delimited!(
-        char!('"'),
-        do_parse!(
-            val: escaped!(none_of!(r#"\""#), '\\', one_of!("\"nt0\\"))
-                >> (Literal::Str(str::from_utf8(val).unwrap()))
-        ),
-        char!('"')
-    ))
-);
-
-named!(
-    version_literal<Literal>,
-    ws!(delimited!(
-        tag!("v\""),
-        do_parse!(val: take_until!("\"") >> (Literal::Version(str::from_utf8(val).unwrap()))),
-        char!('"')
-    ))
-);
-
-named!(
-    datetime_literal<Literal>,
-    ws!(delimited!(
-        tag!("t\""),
-        do_parse!(val: take_until!("\"") >> (Literal::DateTime(str::from_utf8(val).unwrap()))),
-        char!('"')
-    ))
-);
-
-named!(
-    decimal_literal<Literal>,
-    ws!(delimited!(
-        tag!("d\""),
-        do_parse!(val: take_until!("\"") >> (Literal::Decimal(str::from_utf8(val).unwrap()))),
-        char!('"')
-    ))
-);
-
-named!(
-    true_literal<Literal>,
-    ws!(ws!(map!(
-        alt!(tag!("true") | tag!("True") | tag!("TRUE")),
-        |val| { Literal::Bool(true) }
-    )))
-);
-
-named!(
-    false_literal<Literal>,
-    ws!(ws!(map!(
-        alt!(tag!("false") | tag!("False") | tag!("FALSE")),
-        |val| { Literal::Bool(false) }
-    )))
-);
-
-named!(signed_digits<&[u8], (Option<&[u8]>,&[u8])>,
-    pair!(
-        opt!(alt!(tag!("+") | tag!("-"))),  // maybe sign?
-        digit
-    )
-);
-
-named!(maybe_signed_digits<&[u8],&[u8]>,
-    recognize!(signed_digits)
-);
-
-named!(floating_point <&[u8],&[u8]>,
-    recognize!(
-        tuple!(
-            maybe_signed_digits,
-            opt!(complete!(pair!(
-                tag!("."),
-                digit
-            ))),
-            opt!(complete!(pair!(
-                alt!(tag!("e") | tag!("E")),
-                maybe_signed_digits
-            )))
-        )
-    )
-);
-
-named!(
-    number_literal<Literal>,
-    do_parse!(val: floating_point >> (Literal::Number(str::from_utf8(val).unwrap())))
-);
-
-// #endregion
-
-// Parse property definition in the form of:
-// <property_name>=<property_value>
-// Returns a tuple of (property_name, Option(property_value))
 pub fn parse_prop_def(input: &str) -> Result<(&str, Option<&str>), String> {
-    let iresult = prop_def(input);
-
-    match iresult {
-        IResult::Done(rest, t) => Ok((t, Some(rest))),
-        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind)),
-        IResult::Incomplete(_needed) => Ok((input, None)),
+    match input.split_once('=') {
+        Some((name, value)) => Ok((name, Some(value))),
+        None => Ok((input, None)),
     }
 }
 
-// Parse property reference string (element of filter expression)
-// in the form of:
-// <property_name>[<aspect_name>]
-// where aspect_name is optional.
-// Returns a tuple of (property_name, Option(aspect_name), implied_property_type_code)
+/// Parse `[value1, value2, ...]` as used by list comparison constraints.
+pub fn parse_prop_ref_as_list(input: &str) -> Result<Vec<&str>, String> {
+    let Some(inner) = input
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+    else {
+        return Err("expected a bracketed list".to_owned());
+    };
+    if inner.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut result = Vec::new();
+    for item in inner.split(',') {
+        let item = item.trim();
+        if item.is_empty() || item.contains(['[', ']']) {
+            return Err("invalid list item".to_owned());
+        }
+        result.push(item);
+    }
+    Ok(result)
+}
+
+/// Parse a property reference of the form `name[aspect]$type`.
+///
+/// The aspect and the `$d`, `$v`, `$t` implied type are optional. All input is
+/// consumed and malformed delimiters are reported as errors; this function
+/// never falls back to a panic.
 pub fn parse_prop_ref_with_aspect(
     input: &str,
 ) -> Result<(&str, Option<&str>, Option<&str>), String> {
-    match prop_ref_aspect_type(input) {
-        IResult::Done(rest, t) => {
-            if rest.is_empty() {
-                Ok(t)
-            } else {
-                Err(format!(
-                    "Parsing aspect type error: unexpected text {}",
-                    rest
-                ))
-            }
+    if input.is_empty() {
+        return Err("empty property reference".to_owned());
+    }
+
+    let (reference, implied_type) = if input.len() >= 2 && input.as_bytes()[input.len() - 2] == b'$'
+    {
+        let code = &input[input.len() - 1..];
+        if !matches!(code, "d" | "v" | "t") {
+            return Err("unknown implied property type".to_owned());
         }
-        IResult::Incomplete(_needed) => {
-            // no type, try parsing ref with aspect alone
-            match prop_ref_aspect(input) {
-                IResult::Done(rest, t) => {
-                    if rest.is_empty() {
-                        Ok(t)
-                    } else {
-                        Err(format!(
-                            "Parsing aspect no type error: unexpected text {}",
-                            rest
-                        ))
+        (&input[..input.len() - 2], Some(code))
+    } else {
+        (input, None)
+    };
+
+    if reference.contains('$') {
+        return Err("invalid implied property type suffix".to_owned());
+    }
+
+    if let Some(reference) = reference.strip_suffix(']') {
+        let Some(open) = reference.rfind('[') else {
+            return Err("unmatched aspect delimiter".to_owned());
+        };
+        let name = &reference[..open];
+        let aspect = &reference[open + 1..];
+        if name.is_empty()
+            || aspect.is_empty()
+            || name.contains(['[', ']'])
+            || aspect.contains(['[', ']'])
+        {
+            return Err("invalid property aspect".to_owned());
+        }
+        Ok((name, Some(aspect), implied_type))
+    } else if reference.contains(['[', ']']) {
+        Err("unmatched aspect delimiter".to_owned())
+    } else if reference.is_empty() {
+        Err("empty property reference".to_owned())
+    } else {
+        Ok((reference, None, implied_type))
+    }
+}
+
+pub fn parse_prop_value_literal(input: &str) -> Result<Literal<'_>, String> {
+    if input.len() > MAX_LITERAL_BYTES {
+        return Err("property literal exceeds the input limit".to_owned());
+    }
+
+    LiteralParser {
+        input,
+        bytes: input.as_bytes(),
+        position: 0,
+        node_count: 0,
+        lists: Vec::new(),
+        completed: None,
+    }
+    .parse()
+}
+
+struct ListFrame<'a> {
+    items: Vec<Literal<'a>>,
+}
+
+struct LiteralParser<'a> {
+    input: &'a str,
+    bytes: &'a [u8],
+    position: usize,
+    node_count: usize,
+    lists: Vec<ListFrame<'a>>,
+    completed: Option<Literal<'a>>,
+}
+
+impl<'a> LiteralParser<'a> {
+    fn parse(mut self) -> Result<Literal<'a>, String> {
+        loop {
+            if let Some(literal) = self.completed.take() {
+                if let Some(list) = self.lists.last_mut() {
+                    list.items.push(literal);
+                    self.skip_whitespace();
+                    match self.peek() {
+                        Some(b',') => {
+                            self.position += 1;
+                            self.skip_whitespace();
+                            if matches!(self.peek(), None | Some(b']')) {
+                                return Err(self.error("expected a list item"));
+                            }
+                        }
+                        Some(b']') => {
+                            self.position += 1;
+                            let Some(list) = self.lists.pop() else {
+                                return Err(self.error("unexpected list terminator"));
+                            };
+                            self.add_node()?;
+                            self.completed = Some(Literal::List(list.items));
+                        }
+                        _ => return Err(self.error("expected ',' or ']'")),
                     }
-                }
-                IResult::Incomplete(_) | IResult::Error(_) => parse_prop_ref_no_aspect(input),
-            }
-        }
-
-        IResult::Error(_error_kind) => {
-            // no aspect, try parsing simple property ref
-            parse_prop_ref_no_aspect(input)
-        }
-    }
-}
-
-fn parse_prop_ref_no_aspect(input: &str) -> Result<(&str, Option<&str>, Option<&str>), String> {
-    match prop_ref_type(input) {
-        IResult::Done(rest, t) => {
-            if rest.is_empty() {
-                Ok(t)
-            } else {
-                Err(format!(
-                    "Parsing no aspect type error: unexpected text {}",
-                    rest
-                ))
-            }
-        }
-        IResult::Incomplete(_) | IResult::Error(_) => match prop_ref_no_type(input) {
-            IResult::Done(rest, t) => {
-                if rest.is_empty() {
-                    Ok(t)
                 } else {
-                    Err(format!(
-                        "Parsing no aspect no type error: unexpected text {}",
-                        rest
-                    ))
+                    self.skip_whitespace();
+                    if self.position == self.bytes.len() {
+                        return Ok(literal);
+                    }
+                    return Err(self.error("unexpected trailing literal input"));
+                }
+                continue;
+            }
+
+            self.skip_whitespace();
+            if self.peek() == Some(b'[') {
+                if self.lists.len() + 1 > MAX_LITERAL_DEPTH {
+                    return Err(self.error("property literal exceeds the depth limit"));
+                }
+                self.position += 1;
+                self.skip_whitespace();
+                if self.peek() == Some(b']') {
+                    self.position += 1;
+                    self.add_node()?;
+                    self.completed = Some(Literal::List(Vec::new()));
+                } else {
+                    self.lists.push(ListFrame { items: Vec::new() });
+                }
+            } else {
+                let literal = self.parse_atom()?;
+                self.add_node()?;
+                self.completed = Some(literal);
+            }
+        }
+    }
+
+    fn parse_atom(&mut self) -> Result<Literal<'a>, String> {
+        let start = self.position;
+        match self.peek() {
+            Some(b'"') => self.parse_quoted(self.position).map(Literal::Str),
+            Some(prefix @ (b'd' | b't' | b'v'))
+                if self.bytes.get(self.position + 1) == Some(&b'"') =>
+            {
+                self.position += 1;
+                let value = self.parse_quoted(self.position)?;
+                Ok(match prefix {
+                    b'd' => Literal::Decimal(value),
+                    b't' => Literal::DateTime(value),
+                    b'v' => Literal::Version(value),
+                    _ => return Err(self.error("unknown typed property literal")),
+                })
+            }
+            Some(_) => {
+                while self
+                    .peek()
+                    .is_some_and(|byte| !byte.is_ascii_whitespace() && !matches!(byte, b',' | b']'))
+                {
+                    self.position += 1;
+                }
+                let token = &self.input[start..self.position];
+                match token {
+                    "true" | "True" | "TRUE" => Ok(Literal::Bool(true)),
+                    "false" | "False" | "FALSE" => Ok(Literal::Bool(false)),
+                    _ if is_number(token.as_bytes()) => Ok(Literal::Number(token)),
+                    _ => Err(self.error("unknown property literal type")),
                 }
             }
-            IResult::Incomplete(_) | IResult::Error(_) => {
-                panic!("unable to parse simple property");
+            None => Err(self.error("expected a property literal")),
+        }
+    }
+
+    fn parse_quoted(&mut self, quote: usize) -> Result<&'a str, String> {
+        self.position = quote + 1;
+        let start = self.position;
+        while let Some(byte) = self.peek() {
+            match byte {
+                b'"' => {
+                    let value = &self.input[start..self.position];
+                    self.position += 1;
+                    return Ok(value);
+                }
+                b'\\' => match self.bytes.get(self.position + 1).copied() {
+                    Some(b'"' | b'/' | b'b' | b'f' | b'n' | b'r' | b't' | b'0' | b'\\') => {
+                        self.position += 2;
+                    }
+                    Some(b'u') => {
+                        let digits = self.bytes.get(self.position + 2..self.position + 6);
+                        if !digits.is_some_and(|digits| digits.iter().all(u8::is_ascii_hexdigit)) {
+                            return Err(self.error("invalid unicode escape"));
+                        }
+                        self.position += 6;
+                    }
+                    _ => return Err(self.error("invalid string escape")),
+                },
+                _ => self.position += 1,
             }
-        },
+        }
+        Err(self.error("unterminated string literal"))
+    }
+
+    fn add_node(&mut self) -> Result<(), String> {
+        if self.node_count >= MAX_LITERAL_NODES {
+            Err(self.error("property literal exceeds the node limit"))
+        } else {
+            self.node_count += 1;
+            Ok(())
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        while self.peek().is_some_and(|byte| byte.is_ascii_whitespace()) {
+            self.position += 1;
+        }
+    }
+
+    fn peek(&self) -> Option<u8> {
+        self.bytes.get(self.position).copied()
+    }
+
+    fn error(&self, message: &str) -> String {
+        format!("{message} at byte {}", self.position)
     }
 }
 
-// Parse property reference value as List (element of filter expression)
-// in the form of:
-// [value1,value2,...]
-// Returns a tuple of Vec<&str>
-pub fn parse_prop_ref_as_list(input: &str) -> Result<Vec<&str>, String> {
-    match prop_ref_list(input) {
-        IResult::Done(rest, t) => {
-            if rest.is_empty() {
-                Ok(t)
-            } else {
-                Err(format!("Parsing list error: unexpected text {}", rest))
-            }
-        }
-        IResult::Error(error_kind) => Err(format!("Parsing error: {}", error_kind)),
-        IResult::Incomplete(needed) => Err(format!("Incomplete expression: {:?}", needed)),
+fn is_number(bytes: &[u8]) -> bool {
+    let mut position = 0;
+    if matches!(bytes.first(), Some(b'+' | b'-')) {
+        position += 1;
     }
-}
-
-// Parse property value string, detecting the type from literal:
-// - anything in "" - String
-// - true/false, True/False, TRUE/FALSE - Boolean
-// - t"<date string>" - DateTime
-// - v"<version string>" - Version
-// - anything that parses as float - Number
-// - ...anything else - error
-pub fn parse_prop_value_literal(input: &str) -> Result<Literal, String> {
-    let iresult = val_literal(input.as_bytes());
-
-    match iresult {
-        IResult::Done(rest, t) => {
-            if rest.is_empty() {
-                Ok(t)
-            } else {
-                Err(format!("Unknown literal type: {}", input))
-            }
-        }
-        IResult::Error(error_kind) => {
-            Err(format!("Parsing error: {} in text '{}'", error_kind, input))
-        }
-        IResult::Incomplete(_needed) => Err(format!("Parsing error: {:?}", _needed)),
+    let integer_start = position;
+    while bytes.get(position).is_some_and(u8::is_ascii_digit) {
+        position += 1;
     }
+    if position == integer_start {
+        return false;
+    }
+
+    if bytes.get(position) == Some(&b'.') {
+        position += 1;
+        let fraction_start = position;
+        while bytes.get(position).is_some_and(u8::is_ascii_digit) {
+            position += 1;
+        }
+        if position == fraction_start {
+            return false;
+        }
+    }
+
+    if matches!(bytes.get(position), Some(b'e' | b'E')) {
+        position += 1;
+        if matches!(bytes.get(position), Some(b'+' | b'-')) {
+            position += 1;
+        }
+        let exponent_start = position;
+        while bytes.get(position).is_some_and(u8::is_ascii_digit) {
+            position += 1;
+        }
+        if position == exponent_start {
+            return false;
+        }
+    }
+
+    position == bytes.len()
 }
 
-pub fn is_equal_sign(chr: char) -> bool {
-    chr == '='
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn is_delimiter(chr: char) -> bool {
-    chr == '[' || chr == ']' || chr == '$'
+    #[test]
+    fn deeply_nested_literal_is_rejected_without_recursion() {
+        let input = format!("{}0{}", "[".repeat(10_000), "]".repeat(10_000));
+        let handle = std::thread::Builder::new()
+            .stack_size(64 * 1024)
+            .spawn(move || parse_prop_value_literal(&input).map(|_| ()))
+            .unwrap();
+        assert!(handle.join().unwrap().is_err());
+    }
 }

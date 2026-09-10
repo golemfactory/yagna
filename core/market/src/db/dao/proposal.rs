@@ -1,4 +1,4 @@
-use diesel::expression::dsl::now as sql_now;
+use diesel::dsl::now as sql_now;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 
@@ -193,7 +193,10 @@ impl ProposalDao<'_> {
     }
 }
 
-pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) -> DbResult<bool> {
+pub(super) fn has_counter_proposal(
+    conn: &mut ConnType,
+    proposal_id: &ProposalId,
+) -> DbResult<bool> {
     let proposal: Option<DbProposal> = dsl::market_proposal
         .filter(dsl::prev_proposal_id.eq(&proposal_id))
         .first(conn)
@@ -202,7 +205,7 @@ pub(super) fn has_counter_proposal(conn: &ConnType, proposal_id: &ProposalId) ->
 }
 
 pub(super) fn update_proposal_state(
-    conn: &ConnType,
+    conn: &mut ConnType,
     proposal_id: &ProposalId,
     new_state: ProposalState,
 ) -> DbResult<()> {

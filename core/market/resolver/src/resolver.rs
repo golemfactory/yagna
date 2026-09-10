@@ -1,3 +1,4 @@
+pub mod constraint_parser;
 pub mod error;
 pub mod expression;
 pub mod ldap_parser;

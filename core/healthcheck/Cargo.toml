@@ -3,7 +3,7 @@ name = "ya-healthcheck"
 version = "0.1.0"
 description = "Node health monitoring"
 authors = ["Golem Factory <contact@golem.network>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 ya-service-api-web.workspace = true

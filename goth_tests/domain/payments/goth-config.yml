@@ -53,7 +53,6 @@ node-types:
       - "DEBIT_NOTE_INTERVAL=3s"
       - "PAYMENT_TIMEOUT=5s"
       - "ERC20_CONFIRMATION_INTERVAL_SECS=1"
-      - "YA_TRANSFER_ALLOWED_IPS=172.19.0.1/32"
 
 nodes:
   - name: "requestor"

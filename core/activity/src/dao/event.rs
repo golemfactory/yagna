@@ -131,7 +131,7 @@ impl EventDao<'_> {
                 )));
             }
 
-            let event_id = diesel::select(super::last_insert_rowid).first(conn)?;
+            let event_id = diesel::select(super::last_insert_rowid()).first(conn)?;
             log::trace!("event inserted: {}", event_id);
 
             Ok(event_id)
@@ -257,7 +257,7 @@ mod tests {
 
     async fn test_db(name: &str) -> DbExecutor {
         let db = DbExecutor::in_memory(&format!("{name}-{}", uuid::Uuid::new_v4())).unwrap();
-        db.apply_migration(migrations::run_with_output).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
         db
     }
 

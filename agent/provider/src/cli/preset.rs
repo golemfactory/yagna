@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::{anyhow, bail, Result};
+use bigdecimal::BigDecimal;
 use dialoguer::{Input, Select};
 use structopt::StructOpt;
 
@@ -131,19 +132,19 @@ impl PresetUpdater {
 
     pub fn update_metrics(&mut self, config: &ProviderConfig) -> Result<()> {
         let registry = config.registry()?;
-        let mut usage_coeffs: BTreeMap<String, f64> = Default::default();
+        let mut usage_coeffs: BTreeMap<String, BigDecimal> = Default::default();
         let exe_unit_desc = registry.find_exeunit(&self.preset.exeunit_name)?;
 
-        fn get_usage(m: &BTreeMap<String, f64>, k1: &str, k2: &str) -> f64 {
+        fn get_usage(m: &BTreeMap<String, BigDecimal>, k1: &str, k2: &str) -> BigDecimal {
             m.get(k1)
                 .cloned()
-                .unwrap_or_else(|| m.get(k2).cloned().unwrap_or(0.))
+                .unwrap_or_else(|| m.get(k2).cloned().unwrap_or_else(|| BigDecimal::from(0)))
         }
 
         for (prop_name, counter) in exe_unit_desc.coefficients() {
             if counter.price {
                 let prev_price = get_usage(&self.preset.usage_coeffs, &prop_name, &counter.name);
-                let price = Input::<f64>::new()
+                let price = Input::<BigDecimal>::new()
                     .with_prompt(&format!("{} (GLM)", &counter.description))
                     .default(prev_price)
                     .show_default(true)
@@ -226,11 +227,11 @@ pub fn create(config: ProviderConfig, params: PresetNoInteractive) -> anyhow::Re
 
     for (name, price) in params.price.iter() {
         if is_initial_coefficient_name(name) {
-            preset.initial_price = *price;
+            preset.initial_price = price.clone();
         } else {
             let usage_coefficient = exe_unit_desc.resolve_coefficient(name)?;
 
-            preset.usage_coeffs.insert(usage_coefficient, *price);
+            preset.usage_coeffs.insert(usage_coefficient, price.clone());
         }
     }
 
@@ -319,11 +320,11 @@ fn update_presets(
 
             for (name, price) in params.price.iter() {
                 if is_initial_coefficient_name(name) {
-                    preset.initial_price = *price;
+                    preset.initial_price = price.clone();
                 } else {
                     preset
                         .usage_coeffs
-                        .insert(exe_unit_desc.resolve_coefficient(name)?, *price);
+                        .insert(exe_unit_desc.resolve_coefficient(name)?, price.clone());
                 }
             }
 

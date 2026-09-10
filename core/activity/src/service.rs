@@ -15,7 +15,7 @@ impl Activity {
     ) -> anyhow::Result<()> {
         let db: DbExecutor = ctx.component();
         let tracker_ref: TrackerRef = ctx.component();
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::MIGRATIONS)?;
         provider::service::bind_gsb(&db, tracker_ref);
         Ok(())
     }

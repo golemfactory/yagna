@@ -134,10 +134,10 @@ impl Drop for ProcLock {
             }
         }
 
-        if let Some(p) = pid_path {
-            if let Err(e) = std::fs::remove_file(p) {
-                eprintln!("cannot remove pid file: {}", e);
-            }
+        if let Some(p) = pid_path
+            && let Err(e) = std::fs::remove_file(p)
+        {
+            eprintln!("cannot remove pid file: {}", e);
         }
     }
 }

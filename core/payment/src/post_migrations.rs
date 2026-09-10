@@ -33,21 +33,21 @@ pub async fn process_post_migration_jobs(
 
     #[derive(QueryableByName, PartialEq, Debug)]
     struct JobRecord {
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         job: String,
     }
 
     #[derive(QueryableByName, PartialEq, Debug)]
     struct AgreementActivityRecord {
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         agreement_id: String,
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         owner_id: String,
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         role: String,
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         total_amount_paid_agreement: String,
-        #[sql_type = "Text"]
+        #[diesel(sql_type = Text)]
         total_amount_paid_activity: String,
     }
 
@@ -113,7 +113,10 @@ pub async fn process_post_migration_jobs(
                                     AND role = $4
                             "#,
                         )
-                        .bind::<Text, _>(current_sum.to_string())
+                        // `to_plain_string`, not `to_string`: bigdecimal 0.4 `Display` switches
+                        // to scientific notation for small amounts, and this column is
+                        // persisted TEXT read back as `BigDecimalField`.
+                        .bind::<Text, _>(current_sum.to_plain_string())
                         .bind::<Text, _>(current_agreement_id)
                         .bind::<Text, _>(&record.owner_id)
                         .bind::<Text, _>(&record.role)
@@ -148,4 +151,69 @@ pub async fn process_post_migration_jobs(
         Ok(())
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::migrations;
+    use diesel::connection::SimpleConnection;
+    use uuid::Uuid;
+
+    #[derive(QueryableByName, Debug)]
+    struct AmountRecord {
+        #[diesel(sql_type = Text)]
+        total_amount_paid: String,
+    }
+
+    /// Amounts live in TEXT columns, so the post-migration sum has to be written in the same
+    /// plain notation every other writer uses -- bigdecimal 0.4 `Display` would render this
+    /// sum as `5E-8`.
+    #[actix_rt::test]
+    async fn summed_amount_is_written_in_plain_notation() {
+        let db = DbExecutor::in_memory(&format!("post-migrations-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        db.with_transaction("seed_agreement_and_activity", move |conn| {
+            conn.batch_execute(
+                "INSERT INTO pay_agreement
+                    (id, owner_id, role, peer_id, payee_addr, payer_addr, payment_platform,
+                     total_amount_due, total_amount_accepted, total_amount_scheduled,
+                     total_amount_paid)
+                 VALUES
+                    ('agreement-1', 'owner', 'R', 'peer', 'payee', 'payer', 'erc20-holesky-tglm',
+                     '0', '0', '0', '0.00000002');
+                 INSERT INTO pay_activity
+                    (id, owner_id, role, agreement_id, total_amount_due, total_amount_accepted,
+                     total_amount_scheduled, total_amount_paid)
+                 VALUES
+                    ('activity-1', 'owner', 'R', 'agreement-1', '0', '0', '0', '0.00000003');",
+            )?;
+            Ok::<_, crate::error::DbError>(())
+        })
+        .await
+        .unwrap();
+
+        process_post_migration_jobs(Arc::new(tokio::sync::Mutex::new(db.clone())))
+            .await
+            .unwrap();
+
+        let amounts = db
+            .with_transaction("read_agreement_amount", move |conn| {
+                Ok::<_, crate::error::DbError>(
+                    diesel::sql_query("SELECT total_amount_paid FROM pay_agreement WHERE id = ?")
+                        .bind::<Text, _>("agreement-1")
+                        .load::<AmountRecord>(conn)?,
+                )
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(amounts.len(), 1);
+        assert_eq!(amounts[0].total_amount_paid, "0.00000005");
+        assert_eq!(
+            BigDecimal::from_str(&amounts[0].total_amount_paid).unwrap(),
+            BigDecimal::from_str("0.00000005").unwrap()
+        );
+    }
 }

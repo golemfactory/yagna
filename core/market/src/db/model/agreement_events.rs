@@ -1,5 +1,4 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use diesel::sql_types::Text;
 use std::fmt;
 use std::fmt::Debug;
 
@@ -18,7 +17,6 @@ use ya_persistence::types::{AdaptTimestamp, TimestampAdapter};
     DbTextField,
     strum_macros::EnumString,
     derive_more::Display,
-    AsExpression,
     FromSqlRow,
     PartialEq,
     Eq,
@@ -26,16 +24,20 @@ use ya_persistence::types::{AdaptTimestamp, TimestampAdapter};
     Clone,
     Copy,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum AgreementEventType {
     Approved,
     Rejected,
     Cancelled,
     Terminated,
+    /// Provider announced its intention to terminate the Agreement.
+    /// The Agreement stays `Approved`; at most one such event exists
+    /// per Agreement (`UNIQUE(agreement_id, event_type)`).
+    TerminationNotice,
 }
 
-#[derive(DbTextField, Debug, Clone, AsExpression, FromSqlRow)]
-#[sql_type = "Text"]
+#[derive(DbTextField, Debug, Clone, FromSqlRow)]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub struct DbReason(pub Reason);
 
 #[derive(Clone, Debug, Queryable)]
@@ -47,16 +49,18 @@ pub struct AgreementEvent {
     pub issuer: Owner,
     pub reason: Option<DbReason>,
     pub signature: Option<String>,
+    pub termination_deadline: Option<NaiveDateTime>,
 }
 
 #[derive(Clone, Debug, Insertable)]
-#[table_name = "market_agreement_event"]
+#[diesel(table_name = market_agreement_event)]
 pub struct NewAgreementEvent {
     pub agreement_id: AgreementId,
     pub event_type: AgreementEventType,
     pub timestamp: TimestampAdapter,
     pub issuer: Owner,
     pub reason: Option<DbReason>,
+    pub termination_deadline: Option<TimestampAdapter>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -95,6 +99,7 @@ impl NewAgreementEvent {
             timestamp: Utc::now().adapt(),
             issuer: terminator,
             reason: reason.map(DbReason),
+            termination_deadline: None,
         })
     }
 }
@@ -136,6 +141,25 @@ impl AgreementEvent {
                         "".to_string()
                     }),
                 }
+            },
+            AgreementEventType::TerminationNotice => ClientEvent {
+                agreement_id,
+                event_date,
+                event_type: ClientEventType::AgreementTerminationNoticeEvent {
+                    termination_deadline: match self.termination_deadline {
+                        Some(deadline) => Utc.from_utc_datetime(&deadline),
+                        None => {
+                            // The deadline column is required for this event type;
+                            // a missing value means a corrupted row.
+                            log::error!(
+                                "TerminationNotice event without deadline in database. \
+                                 Falling back to the event timestamp."
+                            );
+                            event_date
+                        }
+                    },
+                    reason,
+                },
             },
         }
     }

@@ -13,7 +13,7 @@ from goth.address import (
 )
 from goth.configuration import load_yaml, Override
 from goth.node import node_environment
-from goth.runner import Runner
+from goth_tests.helpers.runner import Runner
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.activity import wasi_exe_script, wasi_task_package

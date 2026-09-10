@@ -1,14 +1,16 @@
-use chrono::NaiveDateTime;
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, RunQueryDsl};
+use chrono::{NaiveDateTime, Utc};
+use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 
 use ya_client::model::market::Reason;
 use ya_client::model::NodeId;
 use ya_persistence::executor::PoolType;
-use ya_persistence::executor::{readonly_transaction, ConnType};
+use ya_persistence::executor::{do_with_transaction, readonly_transaction, ConnType};
 use ya_persistence::types::AdaptTimestamp;
 
 use crate::db::dao::AgreementDaoError;
-use crate::db::model::{Agreement, AgreementEvent, AgreementId, NewAgreementEvent};
+use crate::db::model::{
+    Agreement, AgreementEvent, AgreementEventType, AgreementId, DbReason, NewAgreementEvent,
+};
 use crate::db::model::{AppSessionId, Owner};
 use crate::db::schema::market_agreement::dsl as agreement;
 use crate::db::schema::market_agreement::dsl::market_agreement;
@@ -82,10 +84,101 @@ impl AgreementEventsDao<'_> {
         )
         .await
     }
+
+    pub async fn select_termination_notice(
+        &self,
+        agreement_id: &AgreementId,
+    ) -> DbResult<Option<AgreementEvent>> {
+        let agreement_id = agreement_id.clone();
+        readonly_transaction(
+            self.pool,
+            "agreement_events_dao_select_termination_notice",
+            move |conn| Ok(query_termination_notice(conn, &agreement_id)?),
+        )
+        .await
+    }
+
+    /// Records the termination notice for an Agreement. At most one notice
+    /// may exist per Agreement and its payload is immutable: a repeated call
+    /// with the same payload is reported as `AlreadyRecorded`, a call with a
+    /// different payload as `Conflict`.
+    pub async fn create_termination_notice(
+        &self,
+        agreement_id: &AgreementId,
+        termination_deadline: NaiveDateTime,
+        reason: Option<Reason>,
+    ) -> DbResult<TerminationNoticeOutcome> {
+        let agreement_id = agreement_id.clone();
+        do_with_transaction(
+            self.pool,
+            "agreement_events_dao_create_termination_notice",
+            move |conn| {
+                if let Some(existing) = query_termination_notice(conn, &agreement_id)? {
+                    let same_deadline = existing
+                        .termination_deadline
+                        .map(|deadline| deadline.adapt().format())
+                        == Some(termination_deadline.adapt().format());
+                    let same_reason = same_reason(&existing.reason, &reason);
+
+                    return Ok(match same_deadline && same_reason {
+                        true => TerminationNoticeOutcome::AlreadyRecorded,
+                        false => TerminationNoticeOutcome::Conflict,
+                    });
+                }
+
+                let event = NewAgreementEvent {
+                    agreement_id,
+                    event_type: AgreementEventType::TerminationNotice,
+                    timestamp: Utc::now().adapt(),
+                    issuer: Owner::Provider,
+                    reason: reason.map(DbReason),
+                    termination_deadline: Some(termination_deadline.adapt()),
+                };
+
+                diesel::insert_into(market_agreement_event)
+                    .values(&event)
+                    .execute(conn)?;
+                Ok(TerminationNoticeOutcome::Recorded)
+            },
+        )
+        .await
+    }
+}
+
+/// Result of an attempt to record a termination notice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TerminationNoticeOutcome {
+    /// The notice was recorded now.
+    Recorded,
+    /// A notice with the same payload was recorded before.
+    AlreadyRecorded,
+    /// A notice with a different payload is already recorded.
+    Conflict,
+}
+
+fn query_termination_notice(
+    conn: &mut ConnType,
+    agreement_id: &AgreementId,
+) -> Result<Option<AgreementEvent>, diesel::result::Error> {
+    market_agreement_event
+        .filter(event::agreement_id.eq(agreement_id))
+        .filter(event::event_type.eq(AgreementEventType::TerminationNotice))
+        .first::<AgreementEvent>(conn)
+        .optional()
+}
+
+/// Compares Reasons in their serialized form. Structural equality doesn't
+/// survive a database round-trip: `Reason::extra` deserializes an absent
+/// `extra` as an empty object even when it started as `Null`.
+pub(crate) fn same_reason(recorded: &Option<DbReason>, incoming: &Option<Reason>) -> bool {
+    recorded.as_ref().map(|reason| reason.to_string())
+        == incoming
+            .as_ref()
+            .map(|reason| DbReason(reason.clone()).to_string())
 }
 
 pub(crate) fn create_event(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &Agreement,
     reason: Option<Reason>,
     terminator: Owner,

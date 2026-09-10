@@ -37,10 +37,11 @@ tokio = { version = "1", features = ["time"] }
 tokio-stream = "0.1.6"
 uuid = { version = "0.8", features = ["v4"] }
 
-[lints]
-workspace = true
-
 [features]
+# Add log for outgoing and incoming packets for VPN RAW
+# It includes transport bypassing smalltcp stack
+trace-raw-packets = []
+# Trace for VPN packets
 packet-trace-enable = ["ya-packet-trace/enable"]
 default = []
 
@@ -52,3 +53,6 @@ structopt = "0.3"
 tokio = { version = "1", features = ["time", "fs"] }
 url = "2.1"
 uuid = { version = "0.8", features = ["v4"] }
+
+[lints]
+workspace = true

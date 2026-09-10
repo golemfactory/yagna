@@ -18,7 +18,7 @@ pub fn create(
     debit_note_id: String,
     owner_id: NodeId,
     event_type: DebitNoteEventType,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let event = WriteObj::new(debit_note_id, owner_id, event_type)?;
     diesel::insert_into(write_dsl::pay_debit_note_event)

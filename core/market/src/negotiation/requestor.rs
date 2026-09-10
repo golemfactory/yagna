@@ -22,7 +22,7 @@ use crate::protocol::negotiation::{error::*, messages::*, requestor::Negotiation
 
 use super::{common::*, error::*, notifier::NotifierError, EventNotifier};
 use crate::config::Config;
-use crate::db::dao::AgreementEventsDao;
+use crate::db::dao::{AgreementEventsDao, TerminationNoticeOutcome};
 use crate::db::model::ProposalState;
 use crate::utils::display::EnableDisplay;
 
@@ -57,6 +57,7 @@ impl RequestorBroker {
         let broker3 = broker.clone();
         let broker_proposal_reject = broker.clone();
         let broker_terminated = broker.clone();
+        let broker_notice = broker.clone();
 
         let api = NegotiationApi::new(
             move |caller: String, msg: ProposalReceived| {
@@ -80,6 +81,9 @@ impl RequestorBroker {
                     .clone()
                     .on_agreement_terminated(msg, caller, Owner::Provider)
             },
+            move |caller: String, msg: AgreementTerminationNotice| {
+                on_termination_notice(broker_notice.clone(), caller, msg)
+            },
         );
 
         let engine = RequestorBroker {
@@ -98,6 +102,7 @@ impl RequestorBroker {
         counter!("market.agreements.requestor.terminated", 0);
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "NotSpecified");
         counter!("market.agreements.requestor.terminated.reason", 0, "reason" => "Success");
+        counter!("market.agreements.requestor.termination-notice", 0);
         counter!("market.agreements.requestor.committing", 0);
         counter!("market.events.requestor.queried", 0);
         counter!("market.proposals.requestor.countered", 0);
@@ -732,6 +737,84 @@ async fn agreement_rejected(
     );
 
     Ok(())
+}
+
+async fn on_termination_notice(
+    broker: CommonBroker,
+    caller: String,
+    msg: AgreementTerminationNotice,
+) -> Result<(), TerminationNoticeError> {
+    let caller_id = CommonBroker::parse_caller(&caller)?;
+    Ok(termination_notice_received(broker, caller_id, msg).await?)
+}
+
+/// Records the Provider's termination notice and exposes it to the Requestor
+/// agent as an `AgreementTerminationNoticeEvent`. The Agreement state doesn't
+/// change. At most one notice is kept per Agreement: a repeated notice with
+/// the same payload is acknowledged idempotently, a different one is rejected.
+///
+/// Note: no Agreement lock is taken here. The insert itself is transactional
+/// and this handler can run while our own `terminate_agreement` holds the
+/// lock during its network round-trip - taking the lock here could deadlock
+/// with a Provider waiting for this acknowledgement.
+async fn termination_notice_received(
+    broker: CommonBroker,
+    caller_id: NodeId,
+    msg: AgreementTerminationNotice,
+) -> Result<(), RemoteTerminationNoticeError> {
+    let agreement_id = msg.agreement_id.clone();
+    let agreement = broker
+        .db
+        .as_dao::<AgreementDao>()
+        .select(&agreement_id, None, Utc::now().naive_utc())
+        .await
+        .map_err(|_e| RemoteTerminationNoticeError::NotFound(agreement_id.clone()))?
+        .ok_or_else(|| RemoteTerminationNoticeError::NotFound(agreement_id.clone()))?;
+
+    if agreement.provider_id != caller_id {
+        // Don't reveal, that we know this Agreement id.
+        Err(RemoteTerminationNoticeError::NotFound(agreement_id.clone()))?
+    }
+
+    if agreement.state != AgreementState::Approved {
+        Err(RemoteTerminationNoticeError::InvalidState(
+            agreement_id.clone(),
+            agreement.state,
+        ))?
+    }
+
+    match broker
+        .db
+        .as_dao::<AgreementEventsDao>()
+        .create_termination_notice(&agreement.id, msg.termination_deadline, msg.reason.clone())
+        .await
+        .map_err(|e| {
+            log::warn!(
+                "Couldn't record termination notice for Agreement [{}]. Error: {}",
+                agreement_id,
+                e
+            );
+            RemoteTerminationNoticeError::InternalError(agreement_id.clone())
+        })? {
+        TerminationNoticeOutcome::Recorded => {
+            broker.notify_agreement(&agreement).await;
+
+            counter!("market.agreements.requestor.termination-notice", 1);
+            log::info!(
+                "Received termination notice for Agreement [{}] from [{}]. Deadline: {} UTC. Reason: {}",
+                &agreement_id,
+                &caller_id,
+                &msg.termination_deadline,
+                msg.reason.display(),
+            );
+            Ok(())
+        }
+        // Repeated notice with the same payload - acknowledge again.
+        TerminationNoticeOutcome::AlreadyRecorded => Ok(()),
+        TerminationNoticeOutcome::Conflict => {
+            Err(RemoteTerminationNoticeError::Conflict(agreement_id))
+        }
+    }
 }
 
 pub async fn proposal_receiver_thread(

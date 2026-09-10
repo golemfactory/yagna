@@ -3,10 +3,8 @@ use ya_market_resolver::resolver::properties::*;
 // #region List type
 #[test]
 fn equals_for_list_contains_true() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(prop_value.equals("abc"));
     assert!(prop_value.equals("def"));
@@ -14,80 +12,79 @@ fn equals_for_list_contains_true() {
 
 #[test]
 fn equals_for_list_contains_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.equals("fds"));
 }
 
 #[test]
 fn equals_for_list_list_equals_true() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(prop_value.equals("[abc,def]"));
 }
 
 #[test]
 fn equals_for_list_list_different_length_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.equals("[abc,def,xyz]"));
 }
 
 #[test]
 fn equals_for_list_list_different_items_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.equals("[abc,xyz]"));
 }
 
 #[test]
+fn equals_for_list_respects_duplicate_items() {
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
+
+    assert!(!prop_value.equals("[abc,abc]"));
+}
+
+#[test]
+fn equals_for_list_backtracks_over_overlapping_wildcards() {
+    let prop_value = PropertyValue::List(vec![PropertyValue::Str("a"), PropertyValue::Str("ab")]);
+
+    assert!(prop_value.equals("[a*,a]"));
+}
+
+#[test]
 fn greater_for_list_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.greater("abc"));
 }
 
 #[test]
 fn greater_equal_for_list_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.greater_equal("abc"));
 }
 
 #[test]
 fn less_for_list_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.less("abc"));
 }
 
 #[test]
 fn less_equal_for_list_false() {
-    let prop_value = PropertyValue::List(vec![
-        Box::new(PropertyValue::Str("abc")),
-        Box::new(PropertyValue::Str("def")),
-    ]);
+    let prop_value =
+        PropertyValue::List(vec![PropertyValue::Str("abc"), PropertyValue::Str("def")]);
 
     assert!(!prop_value.less_equal("abc"));
 }

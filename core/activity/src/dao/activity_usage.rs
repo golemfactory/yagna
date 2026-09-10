@@ -1,5 +1,5 @@
 use chrono::Utc;
-use diesel::expression::dsl::exists;
+use diesel::dsl::exists;
 use diesel::prelude::*;
 
 use std::convert::TryInto;

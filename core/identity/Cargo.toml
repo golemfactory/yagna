@@ -21,9 +21,9 @@ anyhow = "1.0"
 appdirs = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
 ctrlc = "3.2"
-diesel = { version = "1.4", features = ["sqlite", "r2d2", "chrono"] }
-diesel_migrations = "1.4"
-ethsign = "0.8"
+diesel.workspace = true
+diesel_migrations.workspace = true
+ethsign = "0.9"
 futures = "0.3"
 hex.workspace = true
 log = "0.4"

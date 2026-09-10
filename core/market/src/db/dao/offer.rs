@@ -1,5 +1,5 @@
 use chrono::NaiveDateTime;
-use diesel::expression::dsl::now as sql_now;
+use diesel::dsl::now as sql_now;
 use diesel::sqlite::Sqlite;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use ya_client::model::NodeId;
@@ -113,10 +113,12 @@ impl OfferDao<'_> {
                 active_market_offers(expiry_validation_ts).order_by(offer::creation_ts.asc());
 
             if let Some(ids) = ids {
+                let ids: Vec<String> = ids.into_iter().map(|id| id.to_string()).collect();
                 query = query.filter(offer::id.eq_any(ids));
             };
 
             if let Some(ids) = node_ids {
+                let ids: Vec<String> = ids.into_iter().map(|id| id.to_string()).collect();
                 query = query.filter(offer::node_id.eq_any(ids));
             };
 
@@ -184,6 +186,7 @@ impl OfferDao<'_> {
                 .into_boxed();
 
             if let Some(ids) = node_ids {
+                let ids: Vec<String> = ids.into_iter().map(|id| id.to_string()).collect();
                 query = query.filter(offer::node_id.eq_any(ids));
             };
 
@@ -205,6 +208,7 @@ impl OfferDao<'_> {
                 .into_boxed();
 
             if let Some(ids) = node_ids {
+                let ids: Vec<String> = ids.into_iter().map(|id| id.to_string()).collect();
                 query = query.filter(unsubscribed::node_id.eq_any(ids));
             };
 
@@ -217,16 +221,21 @@ impl OfferDao<'_> {
     /// or in `market_offer_unsubscribed` table.
     pub async fn get_known_ids(&self, ids: Vec<SubscriptionId>) -> DbResult<Vec<SubscriptionId>> {
         readonly_transaction(self.pool, "offer_dao_get_known_ids", move |conn| {
+            let ids: Vec<String> = ids.into_iter().map(|id| id.to_string()).collect();
             let known_unsubscribed_ids = market_offer_unsubscribed
                 .select(unsubscribed::id)
                 .filter(unsubscribed::id.eq_any(&ids))
                 .load::<SubscriptionId>(conn)?;
+            let known_unsubscribed_id_values: Vec<String> = known_unsubscribed_ids
+                .iter()
+                .map(|id| id.to_string())
+                .collect();
 
             // diesel does not support UNION operator
             let mut known_ids = market_offer
                 .select(offer::id)
                 .filter(offer::id.eq_any(&ids))
-                .filter(offer::id.ne_all(&known_unsubscribed_ids))
+                .filter(offer::id.ne_all(&known_unsubscribed_id_values))
                 .load::<SubscriptionId>(conn)?;
             known_ids.extend(known_unsubscribed_ids);
             Ok(known_ids)
@@ -345,7 +354,7 @@ impl OfferDao<'_> {
 }
 
 pub(super) fn query_state(
-    conn: &ConnType,
+    conn: &mut ConnType,
     id: &SubscriptionId,
     expiry_validation_ts: &NaiveDateTime,
 ) -> DbResult<OfferState> {
@@ -368,14 +377,14 @@ fn active_or_expired(offer: Offer, expiry_validation_ts: &NaiveDateTime) -> Offe
     }
 }
 
-fn query_offer(conn: &ConnType, id: &SubscriptionId) -> DbResult<Option<Offer>> {
+fn query_offer(conn: &mut ConnType, id: &SubscriptionId) -> DbResult<Option<Offer>> {
     Ok(market_offer
         .filter(offer::id.eq(&id))
         .first(conn)
         .optional()?)
 }
 
-pub(super) fn is_unsubscribed(conn: &ConnType, id: &SubscriptionId) -> DbResult<bool> {
+pub(super) fn is_unsubscribed(conn: &mut ConnType, id: &SubscriptionId) -> DbResult<bool> {
     Ok(market_offer_unsubscribed
         .filter(unsubscribed::id.eq(&id))
         .first::<OfferUnsubscribed>(conn)

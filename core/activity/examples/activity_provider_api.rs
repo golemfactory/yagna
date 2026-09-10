@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     let db = DbExecutor::new(":memory:")?;
-    db.apply_migration(migrations::run_with_output)?;
+    db.apply_migration(migrations::MIGRATIONS)?;
     ya_sb_router::bind_gsb_router(None).await?;
 
     let context = ServiceContext {

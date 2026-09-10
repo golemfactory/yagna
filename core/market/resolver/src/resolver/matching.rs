@@ -3,20 +3,17 @@ use super::expression::{Expression, ResolveResult};
 use super::prepare::{PreparedDemand, PreparedOffer};
 use super::properties::PropertyRef;
 
-// Matching relation result enum
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchResult<'a> {
     True,
-    False(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>), // Unresolved properties in Offer and Demand respectively
+    False(Vec<&'a PropertyRef>, Vec<&'a PropertyRef>),
     Undefined(
         (Vec<&'a PropertyRef>, Expression),
         (Vec<&'a PropertyRef>, Expression),
-    ), // Unresolved properties, unreduced expression - in Offer and Demand respectively
+    ),
     Err(MatchError),
 }
 
-// Weak match relation
-//
 pub fn match_weak<'a>(
     demand: &'a PreparedDemand,
     offer: &'a PreparedOffer,
@@ -24,75 +21,69 @@ pub fn match_weak<'a>(
     log::trace!("Demand: {:?}", demand);
     log::trace!("Offer: {:?}", offer);
 
-    let result1 = demand.constraints.resolve(&offer.properties);
-    let result2 = offer.constraints.resolve(&demand.properties);
+    // Demand constraints reference Offer properties and vice versa. Naming
+    // each normalized result after the side that supplies the properties keeps
+    // the public mismatch tuple symmetric and unambiguous.
+    let from_offer = normalize(
+        demand.constraints.resolve(&offer.properties),
+        "Demand constraints",
+    )?;
+    let from_demand = normalize(
+        offer.constraints.resolve(&demand.properties),
+        "Offer constraints",
+    )?;
 
-    log::trace!("Demand constraints with Offer properties: {:?}", result1);
-    log::trace!("Offer constraints with Demand properties: {:?}", result2);
+    log::trace!("Demand constraints with Offer properties: {:?}", from_offer);
+    log::trace!(
+        "Offer constraints with Demand properties: {:?}",
+        from_demand
+    );
 
-    let mut un_props1 = vec![]; // undefined properties in result 1
-    let mut un_props2 = vec![]; // undefined properties in result 2
-
-    let mut result1_binary = false;
-    let mut result2_binary = false;
-    let mut result1_undefined = false;
-    let mut result2_undefined = false;
-
-    let mut result1_unres_expr = Expression::Empty(true);
-    let mut result2_unres_expr = Expression::Empty(true);
-
-    match result1 {
-        ResolveResult::True => {
-            result1_binary = true;
-        }
-        ResolveResult::False(mut un_props, unresolved_expr) => {
-            result1_binary = false;
-            un_props1.append(&mut un_props);
-            result1_unres_expr = unresolved_expr;
-        }
-        ResolveResult::Undefined(mut un_props, unresolved_expr) => {
-            result1_undefined = true;
-            un_props1.append(&mut un_props);
-            result1_unres_expr = unresolved_expr;
-        }
-        ResolveResult::Err(error) => {
-            return Err(MatchError::new(&format!(
-                "Error resolving Demand constraints: {}",
-                error
-            )));
-        }
-    };
-
-    match result2 {
-        ResolveResult::True => {
-            result2_binary = true;
-        }
-        ResolveResult::False(mut un_props, unresolved_expr) => {
-            result2_binary = false;
-            un_props2.append(&mut un_props);
-            result2_unres_expr = unresolved_expr;
-        }
-        ResolveResult::Undefined(mut un_props, unresolved_expr) => {
-            result2_undefined = true;
-            un_props2.append(&mut un_props);
-            result2_unres_expr = unresolved_expr;
-        }
-        ResolveResult::Err(error) => {
-            return Err(MatchError::new(&format!(
-                "Error resolving Offer constraints: {}",
-                error
-            )));
-        }
-    };
-
-    if result1_undefined || result2_undefined {
+    if from_offer.undefined || from_demand.undefined {
         Ok(MatchResult::Undefined(
-            (un_props1, result1_unres_expr),
-            (un_props2, result2_unres_expr),
+            (from_offer.refs, from_offer.residual),
+            (from_demand.refs, from_demand.residual),
         ))
-    } else if result1_binary && result2_binary {
+    } else if from_offer.value && from_demand.value {
         Ok(MatchResult::True)
     } else {
-        Ok(MatchResult::False(un_props1, un_props2))
+        Ok(MatchResult::False(from_offer.refs, from_demand.refs))
+    }
+}
+
+#[derive(Debug)]
+struct NormalizedResult<'a> {
+    value: bool,
+    undefined: bool,
+    refs: Vec<&'a PropertyRef>,
+    residual: Expression,
+}
+
+fn normalize<'a>(
+    result: ResolveResult<'a>,
+    constraint_side: &str,
+) -> Result<NormalizedResult<'a>, MatchError> {
+    match result {
+        ResolveResult::True => Ok(NormalizedResult {
+            value: true,
+            undefined: false,
+            refs: Vec::new(),
+            residual: Expression::Empty(true),
+        }),
+        ResolveResult::False(refs, residual) => Ok(NormalizedResult {
+            value: false,
+            undefined: false,
+            refs,
+            residual,
+        }),
+        ResolveResult::Undefined(refs, residual) => Ok(NormalizedResult {
+            value: false,
+            undefined: true,
+            refs,
+            residual,
+        }),
+        ResolveResult::Err(error) => Err(MatchError::new(format!(
+            "Error resolving {constraint_side}: {error}"
+        ))),
     }
 }

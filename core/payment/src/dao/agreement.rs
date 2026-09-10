@@ -24,7 +24,7 @@ pub fn increase_amount_due(
     agreement_id: &String,
     owner_id: &NodeId,
     amount: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -40,7 +40,7 @@ pub fn set_amount_due(
     agreement_id: &String,
     owner_id: &NodeId,
     total_amount_due: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -58,7 +58,7 @@ pub fn set_amount_due(
 pub fn compute_amount_due(
     agreement_id: &String,
     owner_id: &NodeId,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -79,7 +79,7 @@ pub fn increase_amount_accepted(
     agreement_id: &String,
     owner_id: &NodeId,
     amount: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -95,7 +95,7 @@ pub fn increase_amount_scheduled(
     agreement_id: &String,
     owner_id: &NodeId,
     amount: &BigDecimal,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -112,7 +112,7 @@ pub fn set_amount_accepted(
     agreement_id: &String,
     owner_id: NodeId,
     total_amount_accepted: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let agreement: ReadObj = dsl::pay_agreement
         .find((agreement_id, owner_id))
@@ -147,7 +147,7 @@ pub fn increase_amount_paid(
     agreement_id: &String,
     owner_id: NodeId,
     amount: &BigDecimalField,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let total_amount_paid: BigDecimalField = dsl::pay_agreement
         .find((agreement_id, owner_id))

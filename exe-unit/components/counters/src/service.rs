@@ -195,12 +195,11 @@ impl CounterProvider {
 
 impl CounterProvider {
     fn report(&mut self) -> CounterReport {
-        if let Ok(data) = self.counter.peak() {
-            if let Some(limit) = &self.usage_limit {
-                if data > *limit {
-                    return CounterReport::LimitExceeded(data);
-                }
-            }
+        if let Ok(data) = self.counter.peak()
+            && let Some(limit) = &self.usage_limit
+            && data > *limit
+        {
+            return CounterReport::LimitExceeded(data);
         }
 
         match self.counter.frame() {
@@ -211,10 +210,10 @@ impl CounterProvider {
 
     fn log_report(&mut self, report: CounterReport) {
         let mut backlog = self.backlog.lock().unwrap();
-        if let Some(limit) = self.backlog_limit {
-            if backlog.len() == limit {
-                backlog.pop_back();
-            }
+        if let Some(limit) = self.backlog_limit
+            && backlog.len() == limit
+        {
+            backlog.pop_back();
         }
         backlog.push_front((Utc::now(), report));
     }

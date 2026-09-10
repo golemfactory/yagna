@@ -39,7 +39,7 @@ fn match_simple_error() {
         Ok(_) => panic!("Demand content error was not caught!"),
         Err(prep_error) => assert_eq!(
             prep_error,
-            PrepareError::new("Error parsing Demand constraints: Parsing error: Alternative")
+            PrepareError::new("Error parsing Demand constraints: expected '(' at byte 0")
         ),
     }
 }

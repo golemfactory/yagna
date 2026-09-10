@@ -12,12 +12,12 @@ use crate::db::model::{Agreement, Owner, Proposal};
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
     AgreementProtocolError, CounterProposalError, GsbAgreementError, GsbProposalError,
-    NegotiationApiInitError, TerminateAgreementError,
+    NegotiationApiInitError, TerminateAgreementError, TerminationNoticeError,
 };
 use super::messages::{
     provider, requestor, AgreementApproved, AgreementCancelled, AgreementCommitted,
-    AgreementReceived, AgreementRejected, AgreementTerminated, InitialProposalReceived,
-    ProposalContent, ProposalReceived, ProposalRejected,
+    AgreementReceived, AgreementRejected, AgreementTerminated, AgreementTerminationNotice,
+    InitialProposalReceived, ProposalContent, ProposalReceived, ProposalRejected,
 };
 use crate::protocol::negotiation::error::{
     CommitAgreementError, ProposeAgreementError, RejectProposalError,
@@ -136,6 +136,35 @@ impl NegotiationApi {
             .await
             .map_err(|_| AgreementProtocolError::Timeout(id.clone()))?
             .map_err(|e| GsbAgreementError(e.to_string(), id.clone()))??;
+        Ok(())
+    }
+
+    /// Sent to Requestor, when Provider announces its intention to terminate
+    /// the Agreement. Waits (up to `timeout` seconds) until the Requestor's
+    /// node acknowledges recording the notice.
+    pub async fn send_termination_notice(
+        &self,
+        agreement: &Agreement,
+        termination_deadline: NaiveDateTime,
+        reason: Option<Reason>,
+        timeout: f32,
+    ) -> Result<(), TerminationNoticeError> {
+        let timeout = Duration::from_secs_f32(timeout.max(0.0));
+        let id = agreement.id.clone();
+
+        let msg = AgreementTerminationNotice {
+            agreement_id: id.clone(),
+            termination_deadline,
+            reason,
+        };
+        let net_send_fut = net::from(agreement.provider_id)
+            .to(agreement.requestor_id)
+            .service(&requestor::agreement_addr(BUS_ID))
+            .send(msg);
+        tokio::time::timeout(timeout, net_send_fut)
+            .await
+            .map_err(|_| TerminationNoticeError::Timeout(id.clone()))?
+            .map_err(|e| GsbAgreementError(e.to_string(), id))??;
         Ok(())
     }
 

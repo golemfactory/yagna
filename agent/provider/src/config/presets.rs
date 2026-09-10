@@ -1,8 +1,11 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
+use std::str::FromStr;
 
 use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
+use bigdecimal::BigDecimal;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::value::RawValue;
 
 use ya_utils_path::SwapSave;
 
@@ -14,7 +17,124 @@ pub struct PresetV0 {
     pub name: String,
     pub exeunit_name: String,
     pub pricing_model: String,
-    pub usage_coeffs: BTreeMap<String, f64>,
+    #[serde(with = "prices_serde")]
+    pub usage_coeffs: BTreeMap<String, BigDecimal>,
+}
+
+#[derive(Deserialize)]
+struct PresetsFileV0 {
+    active: Vec<String>,
+    presets: Vec<PresetV0>,
+}
+
+#[derive(Deserialize)]
+struct PresetsFileV1 {
+    active: Vec<String>,
+    presets: Vec<Preset>,
+}
+
+/// Exact decimal representation used at JSON boundaries.
+///
+/// `bigdecimal/serde-json` cannot be used here because it enables
+/// `serde_json/arbitrary_precision` for the whole process. That feature changes
+/// how every `serde_json::Number` is serialized by non-JSON serializers.
+pub mod json_decimal {
+    use super::*;
+
+    pub fn serialize<S>(value: &BigDecimal, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let raw =
+            RawValue::from_string(value.to_plain_string()).map_err(serde::ser::Error::custom)?;
+        raw.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BigDecimal, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = Box::<RawValue>::deserialize(deserializer)?;
+        let value = if raw.get().starts_with('"') {
+            serde_json::from_str::<String>(raw.get()).map_err(serde::de::Error::custom)?
+        } else {
+            raw.get().to_string()
+        };
+
+        BigDecimal::from_str(&value).map_err(serde::de::Error::custom)
+    }
+
+    pub fn from_value(value: &serde_json::Value) -> Result<BigDecimal, String> {
+        let value = match value {
+            serde_json::Value::Number(number) => number.to_string(),
+            serde_json::Value::String(value) => value.clone(),
+            value => return Err(format!("expected a JSON number or string, got {value}")),
+        };
+
+        BigDecimal::from_str(&value).map_err(|error| error.to_string())
+    }
+
+    pub fn vec_from_value(value: &serde_json::Value) -> Result<Vec<BigDecimal>, String> {
+        value
+            .as_array()
+            .ok_or_else(|| format!("expected a JSON array, got {value}"))?
+            .iter()
+            .map(from_value)
+            .collect()
+    }
+}
+
+pub mod prices_serde {
+    use super::*;
+    use serde::ser::SerializeMap;
+
+    struct JsonDecimalRef<'a>(&'a BigDecimal);
+
+    impl Serialize for JsonDecimalRef<'_> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            json_decimal::serialize(self.0, serializer)
+        }
+    }
+
+    struct JsonDecimal(BigDecimal);
+
+    impl<'de> Deserialize<'de> for JsonDecimal {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            json_decimal::deserialize(deserializer).map(Self)
+        }
+    }
+
+    pub fn serialize<S>(
+        prices: &BTreeMap<String, BigDecimal>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(prices.len()))?;
+        for (name, price) in prices {
+            map.serialize_entry(name, &JsonDecimalRef(price))?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<String, BigDecimal>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        BTreeMap::<String, JsonDecimal>::deserialize(deserializer).map(|prices| {
+            prices
+                .into_iter()
+                .map(|(name, price)| (name, price.0))
+                .collect()
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -25,7 +145,7 @@ pub struct Presets {
     pub presets: BTreeMap<String, Preset>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 #[serde(tag = "ver")]
 enum PresetsFile {
     V0 {
@@ -43,14 +163,24 @@ impl Presets {
         let path = presets_file.as_ref();
         log::debug!("Loading presets from: {}", path.display());
         let json = std::fs::read_to_string(path)?;
-        let mut val: serde_json::Value = serde_json::from_str(&json)?;
-        if let Some(obj) = val.as_object_mut() {
-            if !obj.contains_key("ver") {
-                obj.insert("ver".into(), "V0".into());
+        let header: serde_json::Value = serde_json::from_str(&json)?;
+        let presets_file = match header.get("ver").and_then(serde_json::Value::as_str) {
+            Some("V1") => {
+                serde_json::from_str::<PresetsFileV1>(&json).map(|file| PresetsFile::V1 {
+                    active: file.active,
+                    presets: file.presets,
+                })
             }
-        }
+            None | Some("V0") => {
+                serde_json::from_str::<PresetsFileV0>(&json).map(|legacy| PresetsFile::V0 {
+                    active: legacy.active,
+                    presets: legacy.presets,
+                })
+            }
+            Some(version) => return Err(anyhow!("Unsupported presets file version: {version}")),
+        };
 
-        let presets: Presets = serde_json::from_value::<PresetsFile>(val)
+        let presets: Presets = presets_file
             .map_err(|e| anyhow!("Can't deserialize Presets from file {:?}: {}", path, e))?
             .into();
 
@@ -141,7 +271,7 @@ impl From<PresetV0> for Preset {
                 .usage_coeffs
                 .get("initial")
                 .cloned()
-                .unwrap_or(0f64),
+                .unwrap_or_else(|| BigDecimal::from(0)),
             usage_coeffs: old_preset
                 .usage_coeffs
                 .into_iter()
@@ -152,5 +282,92 @@ impl From<PresetV0> for Preset {
                 })
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    fn load(json: &str) -> Presets {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("presets.json");
+        std::fs::write(&path, json).unwrap();
+        Presets::load_from_file(path).unwrap()
+    }
+
+    #[test]
+    fn loads_legacy_v0_numeric_prices_exactly() {
+        let presets = load(
+            r#"{
+                "active": ["vm"],
+                "presets": [{
+                    "name": "vm",
+                    "exeunit-name": "vm",
+                    "pricing-model": "linear",
+                    "usage-coeffs": {
+                        "initial": 0.2,
+                        "duration": 0.0001,
+                        "cpu": 0.0002
+                    }
+                }]
+            }"#,
+        );
+
+        let preset = presets.presets.get("vm").unwrap();
+        assert_eq!(preset.initial_price, BigDecimal::from_str("0.2").unwrap());
+        assert_eq!(
+            preset.usage_coeffs["golem.usage.duration_sec"],
+            BigDecimal::from_str("0.0001").unwrap()
+        );
+        assert_eq!(
+            preset.usage_coeffs["golem.usage.cpu_sec"],
+            BigDecimal::from_str("0.0002").unwrap()
+        );
+    }
+
+    #[test]
+    fn loads_and_saves_v1_prices_as_exact_json_numbers() {
+        let presets = load(
+            r#"{
+                "ver": "V1",
+                "active": ["vm"],
+                "presets": [{
+                    "name": "vm",
+                    "exeunit-name": "vm",
+                    "pricing-model": "linear",
+                    "initial-price": 0.12345678901234567890123456789,
+                    "usage-coeffs": {
+                        "golem.usage.duration_sec": 0.000000000000000001,
+                        "golem.usage.cpu_sec": 0.0002
+                    }
+                }]
+            }"#,
+        );
+
+        let preset = presets.presets.get("vm").unwrap();
+        assert_eq!(
+            preset.initial_price,
+            BigDecimal::from_str("0.12345678901234567890123456789").unwrap()
+        );
+        assert_eq!(
+            preset.usage_coeffs["golem.usage.duration_sec"],
+            BigDecimal::from_str("0.000000000000000001").unwrap()
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("presets.json");
+        presets.save_to_file(&path).unwrap();
+        let saved = std::fs::read_to_string(path).unwrap();
+        assert!(saved.contains("\"initial-price\": 0.12345678901234567890123456789"));
+        let saved_json: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        assert!(saved_json["presets"][0]["initial-price"].is_number());
+        assert!(saved_json["presets"][0]["usage-coeffs"]["golem.usage.duration_sec"].is_number());
+
+        let reloaded = load(&saved);
+        let reloaded_preset = reloaded.presets.get("vm").unwrap();
+        assert_eq!(reloaded_preset.initial_price, preset.initial_price);
+        assert_eq!(reloaded_preset.usage_coeffs, preset.usage_coeffs);
     }
 }

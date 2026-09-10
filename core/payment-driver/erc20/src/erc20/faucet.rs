@@ -3,7 +3,7 @@
 */
 
 // External crates
-use bigdecimal::{BigDecimal, FromPrimitive};
+use bigdecimal::BigDecimal;
 use chrono::{Duration, Utc};
 use lazy_static::lazy_static;
 use std::{env, time};
@@ -26,7 +26,7 @@ const MAX_FAUCET_REQUESTS: u32 = 6;
 lazy_static! {
     static ref MIN_GLM_BALANCE: U256 = utils::big_dec_to_u256(&BigDecimal::from(50));
     static ref MIN_ETH_BALANCE: U256 =
-        utils::big_dec_to_u256(&BigDecimal::from_f64(0.005).unwrap());
+        utils::big_dec_to_u256(&"0.005".parse::<BigDecimal>().unwrap());
     static ref MAX_WAIT: Duration = Duration::minutes(1);
 }
 

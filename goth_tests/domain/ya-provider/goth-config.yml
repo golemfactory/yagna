@@ -50,7 +50,6 @@ node-types:
       - "IDLE_AGREEMENT_TIMEOUT=5s"
       - "DEBIT_NOTE_ACCEPTANCE_DEADLINE=8s"
       - "DEBIT_NOTE_INTERVAL=6s"
-      - "YA_TRANSFER_ALLOWED_IPS=172.19.0.1/32"
 
 nodes:
   - name: "requestor"

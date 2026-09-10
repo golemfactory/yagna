@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,6 +13,7 @@ use humantime;
 use log;
 use serde_json::json;
 use structopt::StructOpt;
+use tokio::sync::watch;
 use ya_client::activity::ActivityProviderApi;
 use ya_client::model::payment::{DebitNote, Invoice, NewDebitNote, NewInvoice};
 use ya_client::model::payment::{DebitNoteEvent, DebitNoteEventType, InvoiceEventType};
@@ -72,6 +73,11 @@ struct SendInvoice {
     invoice_id: String,
 }
 
+/// Waits until all issued Invoices have been delivered to their Requestors.
+#[derive(Message)]
+#[rtype(result = "Result<()>")]
+pub struct WaitForInvoiceDelivery;
+
 /// Message sent when invoice is accepted.
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
@@ -122,6 +128,8 @@ pub struct PaymentsConfig {
     pub get_events_error_timeout: Duration,
     #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "5s")]
     pub invoice_reissue_interval: Duration,
+    #[structopt(long, env, parse(try_from_str = humantime::parse_duration), default_value = "2min")]
+    pub invoice_send_timeout: Duration,
     #[structopt(skip = "you-forgot-to-set-session-id")]
     pub session_id: String,
 }
@@ -144,6 +152,10 @@ pub struct Payments {
     invoices_to_pay: Vec<Invoice>,
     earnings: BigDecimal,
 
+    pending_invoice_deliveries: HashSet<String>,
+    invoice_delivery_sender: watch::Sender<usize>,
+    invoice_delivery_receiver: watch::Receiver<usize>,
+
     break_agreement_signal: SignalSlot<BreakAgreement>,
 }
 
@@ -155,6 +167,7 @@ impl Payments {
         payment_api: PaymentApi,
         config: PaymentsConfig,
     ) -> Payments {
+        let (invoice_delivery_sender, invoice_delivery_receiver) = watch::channel(0);
         let provider_ctx = ProviderCtx {
             activity_api: Arc::new(activity_api),
             payment_api: Arc::new(payment_api),
@@ -168,6 +181,9 @@ impl Payments {
             context: Arc::new(provider_ctx),
             invoices_to_pay: vec![],
             earnings: BigDecimal::zero(),
+            pending_invoice_deliveries: HashSet::new(),
+            invoice_delivery_sender,
+            invoice_delivery_receiver,
             break_agreement_signal: SignalSlot::<BreakAgreement>::default(),
         }
     }
@@ -778,9 +794,8 @@ impl Handler<AgreementClosed> for Payments {
                         payment_timeout,
                     })
                     .await??;
-                // We do not want to wait for sending Invoice, as we are eager to start new
-                // negotiations. Waiting for invoice to be sent to Requestor could result in
-                // hanging Provider waiting for Requestor to appear in the net and receive the Invoice
+                // Delivery stays asynchronous during normal operation. Graceful shutdown
+                // observes SendInvoice's pending/sent state separately.
                 let invoice_id = invoice.invoice_id;
                 myself.do_send(SendInvoice { invoice_id });
 
@@ -842,18 +857,25 @@ impl Handler<IssueInvoice> for Payments {
 }
 
 impl Handler<SendInvoice> for Payments {
-    type Result = ResponseFuture<Result<(), Error>>;
+    type Result = ActorResponse<Self, Result<(), Error>>;
 
     fn handle(&mut self, msg: SendInvoice, _ctx: &mut Context<Self>) -> Self::Result {
+        let invoice_id = msg.invoice_id;
+        self.pending_invoice_deliveries.insert(invoice_id.clone());
+        self.invoice_delivery_sender
+            .send(self.pending_invoice_deliveries.len())
+            .unwrap_or_default();
+
         let provider_ctx = self.context.clone();
-        async move {
-            log::info!("Sending invoice [{}] to requestor...", msg.invoice_id);
+        let completed_invoice_id = invoice_id.clone();
+        let future = async move {
+            log::info!("Sending invoice [{}] to requestor...", invoice_id);
 
             let mut repeats = get_backoff();
             loop {
-                match provider_ctx.payment_api.send_invoice(&msg.invoice_id).await {
+                match provider_ctx.payment_api.send_invoice(&invoice_id).await {
                     Ok(_) => {
-                        log::info!("Invoice [{}] sent.", msg.invoice_id);
+                        log::info!("Invoice [{}] sent.", invoice_id);
                         return Ok(());
                     }
                     Err(e) => {
@@ -863,6 +885,54 @@ impl Handler<SendInvoice> for Payments {
                     }
                 }
             }
+        }
+        .into_actor(self)
+        .map(move |result, myself, _| {
+            if result.is_ok() {
+                myself
+                    .pending_invoice_deliveries
+                    .remove(&completed_invoice_id);
+                myself
+                    .invoice_delivery_sender
+                    .send(myself.pending_invoice_deliveries.len())
+                    .unwrap_or_default();
+            }
+            result
+        });
+
+        ActorResponse::r#async(future)
+    }
+}
+
+impl Handler<WaitForInvoiceDelivery> for Payments {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, _: WaitForInvoiceDelivery, _ctx: &mut Context<Self>) -> Self::Result {
+        let mut delivery_receiver = self.invoice_delivery_receiver.clone();
+        delivery_receiver.borrow_and_update();
+        let timeout = self.context.config.invoice_send_timeout;
+
+        async move {
+            let pending = *delivery_receiver.borrow();
+            if pending == 0 {
+                return Ok(());
+            }
+
+            log::info!("Waiting for {pending} Invoice(s) to be delivered...");
+            tokio::time::timeout(timeout, async move {
+                loop {
+                    delivery_receiver.changed().await.map_err(|_| {
+                        anyhow!("Stopped waiting for Invoice delivery notification.")
+                    })?;
+                    let pending = *delivery_receiver.borrow_and_update();
+                    if pending == 0 {
+                        return Ok(());
+                    }
+                    log::info!("Waiting for {pending} Invoice(s) to be delivered...");
+                }
+            })
+            .await
+            .map_err(|_| anyhow!("Invoice delivery timed out after {timeout:?}."))?
         }
         .boxed_local()
     }

@@ -16,7 +16,7 @@ impl Service for VersionService {
 impl VersionService {
     pub async fn gsb<C: Provider<Self, DbExecutor>>(ctx: &C) -> anyhow::Result<()> {
         let db = ctx.component();
-        db.apply_migration(migrations::run_with_output)?;
+        db.apply_migration(migrations::MIGRATIONS)?;
         crate::notifier::on_start(&db).await?;
         gsb::bind_gsb(&db);
 

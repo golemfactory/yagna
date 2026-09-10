@@ -4,9 +4,6 @@
 
 #[macro_use]
 extern crate diesel;
-#[macro_use]
-extern crate diesel_migrations;
-
 pub use ya_client_model::activity::ACTIVITY_API_PATH;
 
 mod common;

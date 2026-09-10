@@ -4,8 +4,9 @@ import json
 import os
 from pathlib import Path
 
-from goth.runner import Runner
 from goth.runner.probe import ProviderProbe, RequestorProbe
+
+from goth_tests.helpers.runner import Runner
 
 
 wasi_task_package: str = (
@@ -109,6 +110,8 @@ def wasi_exe_script(runner: Runner, output_file: str = "upload_file"):
             }
         },
     ]
+
+
 def vm_exe_script_outbound(runner: Runner, output_file: str = "output.txt"):
     """VM exe script builder."""
     """Create a VM exe script for running a outbound task."""

@@ -3,24 +3,87 @@ pub use crate::timestamp::{AdaptTimestamp, TimestampAdapter};
 use bigdecimal::{BigDecimal, Zero};
 use diesel::backend::Backend;
 use diesel::deserialize::{FromSql, Result as DeserializeResult};
+use diesel::expression::AsExpression;
 use diesel::serialize::{Output, Result as SerializeResult, ToSql};
 use diesel::sql_types::Text;
 use serde::Serialize;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::io::Write;
 use std::ops::{Add, Sub};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, AsExpression, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
-#[sql_type = "Text"]
+macro_rules! impl_text_as_expression {
+    ($type:ty) => {
+        impl AsExpression<Text> for $type {
+            type Expression = <String as AsExpression<Text>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<Text>>::as_expression(self.to_string())
+            }
+        }
+
+        impl AsExpression<diesel::sql_types::Nullable<Text>> for $type {
+            type Expression =
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::as_expression(
+                    self.to_string(),
+                )
+            }
+        }
+
+        impl AsExpression<Text> for &$type {
+            type Expression = <String as AsExpression<Text>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<Text>>::as_expression(self.to_string())
+            }
+        }
+
+        impl AsExpression<diesel::sql_types::Nullable<Text>> for &$type {
+            type Expression =
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::as_expression(
+                    self.to_string(),
+                )
+            }
+        }
+
+        impl AsExpression<Text> for &&$type {
+            type Expression = <String as AsExpression<Text>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<Text>>::as_expression(self.to_string())
+            }
+        }
+
+        impl AsExpression<diesel::sql_types::Nullable<Text>> for &&$type {
+            type Expression =
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::Expression;
+
+            fn as_expression(self) -> Self::Expression {
+                <String as AsExpression<diesel::sql_types::Nullable<Text>>>::as_expression(
+                    self.to_string(),
+                )
+            }
+        }
+    };
+}
+
+#[derive(Debug, Clone, FromSqlRow, Default, PartialEq, PartialOrd, Eq, Ord)]
+#[diesel(sql_type = Text)]
 pub struct BigDecimalField(pub BigDecimal);
+
+impl_text_as_expression!(BigDecimalField);
 
 impl Serialize for BigDecimalField {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        self.0.to_string().serialize(serializer)
+        self.0.to_plain_string().serialize(serializer)
     }
 }
 
@@ -38,7 +101,9 @@ impl From<BigDecimal> for BigDecimalField {
 
 impl Display for BigDecimalField {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{}", self.0)
+        // BigDecimal 0.4 may use scientific notation for small values. Amounts
+        // are persisted as TEXT, so retain the plain format used by 0.2.
+        f.write_str(&self.0.to_plain_string())
     }
 }
 
@@ -90,23 +155,12 @@ impl<'b> Sub<&'b BigDecimalField> for &BigDecimalField {
     }
 }
 
-impl<DB> ToSql<Text, DB> for BigDecimalField
-where
-    DB: Backend,
-    String: ToSql<Text, DB>,
-{
-    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        let s = self.0.to_string();
-        s.to_sql(out)
-    }
-}
-
 impl<DB> FromSql<Text, DB> for BigDecimalField
 where
     DB: Backend,
     String: FromSql<Text, DB>,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
+    fn from_sql(bytes: DB::RawValue<'_>) -> DeserializeResult<Self> {
         let s = String::from_sql(bytes)?;
         match BigDecimal::from_str(&s) {
             Ok(x) => Ok(BigDecimalField(x)),
@@ -132,7 +186,7 @@ where
 }
 
 #[derive(Debug, Clone, Ord, Eq, PartialOrd, PartialEq, AsExpression, FromSqlRow)]
-#[sql_type = "Text"]
+#[diesel(sql_type = Text)]
 pub enum Role {
     Provider,
     Requestor,
@@ -152,9 +206,15 @@ pub struct RoleParseError(pub String);
 
 impl Display for Role {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Role {
+    fn as_str(&self) -> &'static str {
         match self {
-            Role::Provider => write!(f, "P"),
-            Role::Requestor => write!(f, "R"),
+            Role::Provider => "P",
+            Role::Requestor => "R",
         }
     }
 }
@@ -174,11 +234,10 @@ impl FromStr for Role {
 impl<DB> ToSql<Text, DB> for Role
 where
     DB: Backend,
-    String: ToSql<Text, DB>,
+    str: ToSql<Text, DB>,
 {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> SerializeResult {
-        let s = self.to_string();
-        s.to_sql(out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> SerializeResult {
+        <str as ToSql<Text, DB>>::to_sql(self.as_str(), out)
     }
 }
 
@@ -187,11 +246,37 @@ where
     DB: Backend,
     String: FromSql<Text, DB>,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> DeserializeResult<Self> {
+    fn from_sql(bytes: DB::RawValue<'_>) -> DeserializeResult<Self> {
         let s = String::from_sql(bytes)?;
         match Role::from_str(&s) {
             Ok(x) => Ok(x),
             Err(e) => Err(e.into()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn big_decimal_field_formats_small_values_plainly() {
+        let field = BigDecimalField(BigDecimal::from_str("0.00000005").unwrap());
+
+        assert_eq!(field.to_string(), "0.00000005");
+        assert_eq!(serde_json::to_string(&field).unwrap(), "\"0.00000005\"");
+    }
+
+    #[test]
+    fn big_decimal_field_formats_regular_values_plainly() {
+        for value in ["0", "1", "123.45678", "1000000000000000000", "0.1"] {
+            let field = BigDecimalField(BigDecimal::from_str(value).unwrap());
+
+            assert_eq!(field.to_string(), value);
+            assert_eq!(
+                serde_json::to_string(&field).unwrap(),
+                format!("\"{value}\"")
+            );
         }
     }
 }

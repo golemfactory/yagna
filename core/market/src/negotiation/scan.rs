@@ -21,8 +21,8 @@ use tracing::{event, Level};
 use ya_core_model::net;
 use ya_core_model::net::RemoteEndpoint;
 use ya_market_resolver::flatten::flatten_properties;
-use ya_market_resolver::resolver::expression::{build_expression, ResolveResult};
-use ya_market_resolver::resolver::{ldap_parser, Expression, PropertySet};
+use ya_market_resolver::resolver::expression::ResolveResult;
+use ya_market_resolver::resolver::{constraint_parser, Expression, PropertySet};
 use ya_persistence::executor::DbMixedExecutor;
 use ya_service_bus::timeout::IntoTimeoutFuture;
 
@@ -96,13 +96,11 @@ impl Scanner {
         let last_ts = None;
 
         let constraints = if let Some(constraints) = new_scan.constraints.as_ref() {
-            let tags = ldap_parser::parse(constraints)
-                .map_err(|reason| ScanError::InvalidConstraint { reason })?;
-            Some(
-                build_expression(&tags).map_err(|e| ScanError::InvalidConstraint {
-                    reason: e.to_string(),
-                })?,
-            )
+            Some(constraint_parser::parse(constraints).map_err(|error| {
+                ScanError::InvalidConstraint {
+                    reason: error.to_string(),
+                }
+            })?)
         } else {
             None
         };
@@ -160,7 +158,7 @@ impl Scanner {
                 .filter_map(|o| {
                     if let Some(constraints) = &self.constraints {
                         let props = flatten_properties(&o.properties).ok()?;
-                        let property_set = PropertySet::from_flat_props(&props);
+                        let property_set = PropertySet::from_flat_props(&props).ok()?;
                         if matches!(constraints.resolve(&property_set), ResolveResult::True) {
                             o.into_client_offer().ok()
                         } else {

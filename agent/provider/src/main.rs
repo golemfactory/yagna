@@ -4,6 +4,7 @@ use structopt::{clap, StructOpt};
 use ya_provider::signal::SignalMonitor;
 
 use ya_provider::provider_agent::{Initialize, ProviderAgent, Shutdown};
+use ya_provider::shutdown::ShutdownManager;
 use ya_provider::startup_config::{Commands, StartupConfig};
 use ya_utils_process::lock::ProcLock;
 
@@ -28,16 +29,29 @@ async fn main() -> anyhow::Result<()> {
     config.presets_file = data_dir.join(config.presets_file);
     config.hardware_file = data_dir.join(config.hardware_file);
     config.rules_file = data_dir.join(config.rules_file);
+    config.shutdown_file = data_dir.join(config.shutdown_file);
 
     match cli_args.commands {
         Commands::Run(args) => {
             let app_name = clap::crate_name!();
             let _lock = ProcLock::new(app_name, &data_dir)?.lock(std::process::id())?;
-            let agent = ProviderAgent::new(args, config).await?.start();
+            // Reset stale requests immediately after becoming the running
+            // Provider. Requests made after this point belong to this process
+            // and must not be wiped later during initialization.
+            ShutdownManager::reset(&config.shutdown_file)?;
+            let mut agent = ProviderAgent::new(args, config).await?;
+            let shutdown_finished = agent.shutdown_finished_receiver();
+            let agent = agent.start();
             agent.send(Initialize).await??;
 
-            let signal = SignalMonitor::default().recv().await?;
-            log::info!("{} received, Shutting down {}...", signal, app_name);
+            tokio::select! {
+                signal = SignalMonitor::default().recv() => {
+                    log::info!("{} received, Shutting down {}...", signal?, app_name);
+                }
+                _ = shutdown_finished => {
+                    log::info!("Graceful shutdown finished, stopping {}...", app_name);
+                }
+            }
 
             agent.send(Shutdown).await??;
 
@@ -58,5 +72,6 @@ async fn main() -> anyhow::Result<()> {
         Commands::Whitelist(whitelist_cmd) => whitelist_cmd.run(config),
         Commands::Clean(clean_cmd) => clean_cmd.run(config),
         Commands::Rule(outbound_cmd) => outbound_cmd.run(config),
+        Commands::Shutdown(shutdown_cmd) => shutdown_cmd.run(config),
     }
 }

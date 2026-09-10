@@ -204,6 +204,19 @@ impl TasksStates {
         }
     }
 
+    /// Agreement has completed its final transition, including cleanup.
+    fn is_agreement_finished(&self, agreement_id: &str) -> bool {
+        if let Ok(task_state) = self.get_state(agreement_id) {
+            matches!(
+                task_state.state,
+                Transition(AgreementState::Closed, None)
+                    | Transition(AgreementState::Broken { .. }, None)
+            )
+        } else {
+            false
+        }
+    }
+
     /// No Activity has been created for this Agreement
     pub fn not_active(&self, agreement_id: &str) -> bool {
         if let Ok(task_state) = self.get_state(agreement_id) {
@@ -275,9 +288,25 @@ impl TasksStates {
             .cloned()
             .collect()
     }
+
+    /// Agreements whose final cleanup has not completed yet.
+    pub(crate) fn list_unfinished(&self) -> Vec<String> {
+        self.tasks
+            .keys()
+            .filter(|id| !self.is_agreement_finished(id))
+            .cloned()
+            .collect()
+    }
 }
 
 impl StateWaiter {
+    /// Marks the current state as seen, so `transition_finished` will wake up
+    /// only on changes that happen after this call. Without it a fresh waiter
+    /// returns immediately with the last finished transition.
+    pub fn mark_seen(&mut self) {
+        self.changed_receiver.borrow_and_update();
+    }
+
     /// Returns final state of Agreement.
     pub async fn transition_finished(&mut self) -> anyhow::Result<AgreementState> {
         while let Ok(change) = self
@@ -305,7 +334,74 @@ impl fmt::Display for Transition {
 
 #[cfg(test)]
 mod test {
-    use crate::tasks::task_state::{AgreementState, BreakReason};
+    use crate::tasks::task_state::{AgreementState, BreakReason, TasksStates};
+    use std::time::Duration;
+
+    #[test]
+    fn active_and_unfinished_have_distinct_finalization_semantics() {
+        let mut tasks = TasksStates::new();
+        tasks.new_agreement("closing").unwrap();
+        tasks.new_agreement("breaking").unwrap();
+        assert_eq!(tasks.list_active().len(), 2);
+        assert_eq!(tasks.list_unfinished().len(), 2);
+
+        tasks
+            .start_transition("closing", AgreementState::Closed)
+            .unwrap();
+        let broken = AgreementState::Broken {
+            reason: BreakReason::Shutdown,
+        };
+        tasks.start_transition("breaking", broken.clone()).unwrap();
+        // Regular shutdown must not try to break Agreements that are already
+        // finalizing. Graceful shutdown still waits for their cleanup.
+        assert!(tasks.list_active().is_empty());
+        assert_eq!(tasks.list_unfinished().len(), 2);
+
+        tasks
+            .finish_transition("closing", AgreementState::Closed)
+            .unwrap();
+        tasks.finish_transition("breaking", broken).unwrap();
+        assert!(tasks.list_unfinished().is_empty());
+    }
+
+    #[tokio::test]
+    async fn marked_waiter_wakes_only_on_new_transitions() {
+        let mut tasks = TasksStates::new();
+        tasks.new_agreement("agreement").unwrap();
+        tasks
+            .start_transition("agreement", AgreementState::Initialized)
+            .unwrap();
+        tasks
+            .finish_transition("agreement", AgreementState::Initialized)
+            .unwrap();
+
+        // A fresh waiter sees the past transition...
+        let mut stale = tasks.changes_listener("agreement").unwrap();
+        assert_eq!(
+            stale.transition_finished().await.unwrap(),
+            AgreementState::Initialized
+        );
+
+        // ...while a marked waiter blocks until the next one.
+        let mut marked = tasks.changes_listener("agreement").unwrap();
+        marked.mark_seen();
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), marked.transition_finished())
+                .await
+                .is_err()
+        );
+
+        tasks
+            .start_transition("agreement", AgreementState::Closed)
+            .unwrap();
+        tasks
+            .finish_transition("agreement", AgreementState::Closed)
+            .unwrap();
+        assert_eq!(
+            marked.transition_finished().await.unwrap(),
+            AgreementState::Closed
+        );
+    }
 
     #[test]
     #[ignore]

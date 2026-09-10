@@ -1,5 +1,4 @@
 use chrono::NaiveDateTime;
-use diesel::sql_types::Text;
 use digest::Digest;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
@@ -30,11 +29,9 @@ pub enum SubscriptionParseError {
 #[error("Subscription id [{0}] doesn't match content hash [{1}].")]
 pub struct SubscriptionValidationError(SubscriptionId, String);
 
-#[derive(
-    DbTextField, derive_more::Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq,
-)]
+#[derive(DbTextField, derive_more::Display, Debug, Clone, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", random_id, hash)]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub struct SubscriptionId {
     random_id: String,
     hash: String,

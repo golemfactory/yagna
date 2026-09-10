@@ -25,7 +25,7 @@ struct DummyKeyState {
 ///
 /// This key is to be used in two steps -- first one invokes `sign_transaction`
 /// to capture the payload for signing. Then the payload has to be signed using
-/// the identitiy API. Afterwards the signed message can be injected into the state,
+/// the identity API. Afterwards the signed message can be injected into the state,
 /// and `sign_transaction` can be invoked again -- this time returning the pre-computed
 /// signature.
 ///

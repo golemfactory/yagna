@@ -75,7 +75,7 @@ lazy_static! {
 }
 
 fn get_or_insert_default_entry_private(
-    conn: &ConnType,
+    conn: &mut ConnType,
     node_id: NodeId,
     platform: String,
 ) -> DbResult<DbPayBatchCycle> {

@@ -33,18 +33,12 @@ fn parse_prop_ref_with_aspect_no_aspect_impl_type() {
 
 #[test]
 fn parse_prop_ref_with_aspect_syntax_error_1() {
-    assert_eq!(
-        parse_prop_ref_with_aspect("prop$asda"),
-        Err("Parsing no aspect no type error: unexpected text $asda".to_string())
-    );
+    assert!(parse_prop_ref_with_aspect("prop$asda").is_err());
 }
 
 #[test]
 fn parse_prop_ref_with_aspect_syntax_error_2() {
-    assert_eq!(
-        parse_prop_ref_with_aspect("prop[[asda]"),
-        Err("Parsing no aspect no type error: unexpected text [[asda]".to_string())
-    );
+    assert!(parse_prop_ref_with_aspect("prop[[asda]").is_err());
 }
 
 #[test]
@@ -83,18 +77,12 @@ fn parse_prop_ref_as_list_empty_ok() {
 
 #[test]
 fn parse_prop_ref_as_list_syntax_error() {
-    assert_eq!(
-        parse_prop_ref_as_list("[prop"),
-        Err(String::from("Parsing error: Char"))
-    );
+    assert!(parse_prop_ref_as_list("[prop").is_err());
 }
 
 #[test]
 fn parse_prop_ref_as_list_syntax_error2() {
-    assert_eq!(
-        parse_prop_ref_as_list("asdas[prop,prop2]"),
-        Err(String::from("Parsing error: Char"))
-    );
+    assert!(parse_prop_ref_as_list("asdas[prop,prop2]").is_err());
 }
 
 #[test]
@@ -110,6 +98,14 @@ fn parse_prop_value_from_literal_string_with_quotes() {
     assert_eq!(
         parse_prop_value_literal(r#""one \"two\" \tthree\n""#),
         Ok(Literal::Str(r#"one \"two\" \tthree\n"#))
+    );
+}
+
+#[test]
+fn parse_prop_value_from_literal_string_with_json_escapes() {
+    assert_eq!(
+        parse_prop_value_literal(r#""line\r\u0041\/""#),
+        Ok(Literal::Str(r#"line\r\u0041\/"#))
     );
 }
 
@@ -174,10 +170,7 @@ fn parse_prop_value_from_literal_number_int() {
 
 #[test]
 fn parse_prop_value_from_literal_number_error() {
-    assert_eq!(
-        parse_prop_value_literal("124asdas234"),
-        Err(String::from("Unknown literal type: 124asdas234"))
-    );
+    assert!(parse_prop_value_literal("124asdas234").is_err());
 }
 
 #[test]
@@ -185,20 +178,15 @@ fn parse_prop_value_from_literal_list_string() {
     assert_eq!(
         parse_prop_value_literal("[\"abc\",\"def\"]"),
         Ok(Literal::List(vec![
-            Box::new(Literal::Str("abc")),
-            Box::new(Literal::Str("def"))
+            Literal::Str("abc"),
+            Literal::Str("def")
         ]))
     );
 }
 
 #[test]
 fn parse_prop_value_from_literal_list_error() {
-    assert_eq!(
-        parse_prop_value_literal("[\"abc\",asda33]"),
-        Err(String::from(
-            "Parsing error: Alternative in text '[\"abc\",asda33]'"
-        ))
-    );
+    assert!(parse_prop_value_literal("[\"abc\",asda33]").is_err());
 }
 
 #[test]
@@ -210,6 +198,6 @@ fn parse_prop_value_from_literal_list_empty() {
 fn parse_prop_value_from_literal_list_single_string() {
     assert_eq!(
         parse_prop_value_literal("[\"abc\"]"),
-        Ok(Literal::List(vec![Box::new(Literal::Str("abc"))]))
+        Ok(Literal::List(vec![Literal::Str("abc")]))
     );
 }

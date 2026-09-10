@@ -3,14 +3,13 @@
 use super::schema::*;
 use chrono::NaiveDateTime;
 use diesel::backend::Backend;
-use diesel::deserialize;
-use diesel::serialize::Output;
+use diesel::deserialize::{self, FromSql};
+use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::Integer;
-use diesel::types::{FromSql, ToSql};
 use std::convert::TryFrom;
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "activity"]
+#[diesel(table_name = activity)]
 pub struct Activity {
     pub id: i32,
     pub natural_id: String,
@@ -20,7 +19,7 @@ pub struct Activity {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "activity_event"]
+#[diesel(table_name = activity_event)]
 pub struct ActivityEvent {
     pub id: i32,
     pub activity_id: i32,
@@ -30,7 +29,7 @@ pub struct ActivityEvent {
 }
 
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 pub enum ActivityEventType {
     CreateActivity = 1,
     DestroyActivity = 2,
@@ -40,8 +39,12 @@ impl<DB: Backend> ToSql<Integer, DB> for ActivityEventType
 where
     i32: ToSql<Integer, DB>,
 {
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> diesel::serialize::Result {
+        let value = match self {
+            Self::CreateActivity => &1,
+            Self::DestroyActivity => &2,
+        };
+        <i32 as ToSql<Integer, DB>>::to_sql(value, out)
     }
 }
 
@@ -50,8 +53,8 @@ where
     i32: FromSql<Integer, DB>,
     DB: Backend,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        Ok(match i32::from_sql(bytes)? {
+    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match <i32 as FromSql<Integer, DB>>::from_sql(bytes)? {
             1 => ActivityEventType::CreateActivity,
             2 => ActivityEventType::DestroyActivity,
             _ => return Err(anyhow::anyhow!("invalid value").into()),
@@ -60,7 +63,7 @@ where
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "activity_state"]
+#[diesel(table_name = activity_state)]
 pub struct ActivityState {
     pub id: i32,
     pub name: String,
@@ -82,7 +85,7 @@ impl TryFrom<ActivityState> for ya_client_model::activity::ActivityState {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "activity_usage"]
+#[diesel(table_name = activity_usage)]
 pub struct ActivityUsage {
     pub id: i32,
     pub vector_json: Option<String>,
@@ -104,7 +107,7 @@ impl TryFrom<ActivityUsage> for ya_client_model::activity::ActivityUsage {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "runtime_event"]
+#[diesel(table_name = runtime_event)]
 pub struct RuntimeEvent {
     pub id: i32,
     pub activity_id: i32,
@@ -118,7 +121,7 @@ pub struct RuntimeEvent {
 }
 
 #[derive(AsExpression, FromSqlRow, PartialEq, Debug, Clone, Copy)]
-#[sql_type = "Integer"]
+#[diesel(sql_type = Integer)]
 pub enum RuntimeEventType {
     Started = 1,
     Finished = 2,
@@ -130,8 +133,14 @@ impl<DB: Backend> ToSql<Integer, DB> for RuntimeEventType
 where
     i32: ToSql<Integer, DB>,
 {
-    fn to_sql<W: std::io::Write>(&self, out: &mut Output<W, DB>) -> diesel::serialize::Result {
-        (*self as i32).to_sql(out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, DB>) -> diesel::serialize::Result {
+        let value = match self {
+            Self::Started => &1,
+            Self::Finished => &2,
+            Self::StdOut => &3,
+            Self::StdErr => &4,
+        };
+        <i32 as ToSql<Integer, DB>>::to_sql(value, out)
     }
 }
 
@@ -140,8 +149,8 @@ where
     i32: FromSql<Integer, DB>,
     DB: Backend,
 {
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
-        Ok(match i32::from_sql(bytes)? {
+    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+        Ok(match <i32 as FromSql<Integer, DB>>::from_sql(bytes)? {
             1 => RuntimeEventType::Started,
             2 => RuntimeEventType::Finished,
             3 => RuntimeEventType::StdOut,
@@ -152,8 +161,8 @@ where
 }
 
 #[derive(Queryable, Debug, Clone, Identifiable, Insertable, AsChangeset)]
-#[table_name = "activity_credentials"]
-#[primary_key(activity_id)]
+#[diesel(table_name = activity_credentials)]
+#[diesel(primary_key(activity_id))]
 pub struct ActivityCredentials {
     pub activity_id: String,
     pub credentials: String,

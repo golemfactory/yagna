@@ -10,7 +10,9 @@ use crate::protocol::negotiation::error::{
 };
 
 use super::super::callback::CallbackMessage;
-use super::error::{AgreementProtocolError, CounterProposalError, TerminateAgreementError};
+use super::error::{
+    AgreementProtocolError, CounterProposalError, TerminateAgreementError, TerminationNoticeError,
+};
 
 pub mod provider {
     pub fn proposal_addr(prefix: &str) -> String {
@@ -191,6 +193,23 @@ impl RpcMessage for AgreementTerminated {
     type Error = TerminateAgreementError;
 }
 
+/// Provider's announcement of its intention to terminate the Agreement.
+/// Advisory: the Agreement stays `Approved`, but the Requestor is expected
+/// to finish its work and terminate the Agreement by `termination_deadline`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgreementTerminationNotice {
+    pub agreement_id: AgreementId,
+    pub termination_deadline: NaiveDateTime,
+    pub reason: Option<Reason>,
+}
+
+impl RpcMessage for AgreementTerminationNotice {
+    const ID: &'static str = "AgreementTerminationNotice";
+    type Item = ();
+    type Error = TerminationNoticeError;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgreementCommitted {
@@ -275,6 +294,13 @@ impl AgreementReceived {
 }
 
 impl AgreementTerminated {
+    pub fn translate(mut self, owner: Owner) -> Self {
+        self.agreement_id = self.agreement_id.translate(owner);
+        self
+    }
+}
+
+impl AgreementTerminationNotice {
     pub fn translate(mut self, owner: Owner) -> Self {
         self.agreement_id = self.agreement_id.translate(owner);
         self

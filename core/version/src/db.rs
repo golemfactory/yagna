@@ -4,6 +4,6 @@ pub(crate) mod schema;
 
 #[allow(dead_code)]
 pub(crate) mod migrations {
-    #[derive(EmbedMigrations)]
-    struct _Dummy;
+    pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!();
 }

@@ -13,6 +13,14 @@ fn flatten_empty() {
 }
 
 #[test]
+fn flatten_ignores_empty_objects_at_every_depth() {
+    assert_eq!(
+        flatten_properties(r#"{"golem":{"empty":{},"nested":{"empty":{}},"value":1}}"#).unwrap(),
+        ["golem.value=1"]
+    );
+}
+
+#[test]
 fn flatten_key_digit() {
     assert_eq_without_order!(flatten_properties(r#"{"key":1}"#).unwrap(), ["key=1"]);
 }

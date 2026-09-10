@@ -89,6 +89,10 @@ This path will depend either on the shell environment or the operating system on
 
 ## Running tests locally
 
+### Disable UFW (if applicable)
+
+UFW firewall blocks some of the traffic between containers, so it is required to disable it while running the tests
+
 ### Building yagna binaries
 
 Build yagna workspace and copy binaries used by tests to temp directory (can be skipped when using `release-tag` property).

@@ -150,13 +150,12 @@ impl AgreementDao<'_> {
         let id = AgreementId::from_client(client_agreement_id, Owner::Requestor)?;
         let id_swapped = id.clone().swap_owner();
         do_with_transaction(self.pool, "agreement_dao_select_by_node", move |conn| {
-            let query = market_agreement
-                .filter(agreement::id.eq_any(vec![id, id_swapped]))
-                .filter(
-                    agreement::provider_id
-                        .eq(node_id)
-                        .or(agreement::requestor_id.eq(node_id)),
-                );
+            let ids = vec![id.to_string(), id_swapped.to_string()];
+            let query = market_agreement.filter(agreement::id.eq_any(ids)).filter(
+                agreement::provider_id
+                    .eq(node_id)
+                    .or(agreement::requestor_id.eq(node_id)),
+            );
             Ok(match query.first::<Agreement>(conn).optional()? {
                 Some(mut agreement) => {
                     if agreement.valid_to < validation_ts {
@@ -415,7 +414,7 @@ impl AgreementDao<'_> {
 }
 
 fn find_agreement_for_proposal(
-    conn: &ConnType,
+    conn: &mut ConnType,
     proposal_id: &ProposalId,
 ) -> DbResult<Option<Agreement>> {
     Ok(market_agreement
@@ -437,7 +436,7 @@ impl<ErrorType: Into<DbError>> From<ErrorType> for SaveAgreementError {
 }
 
 fn update_state(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     to_state: AgreementState,
 ) -> Result<bool, AgreementDaoError> {
@@ -454,7 +453,7 @@ fn update_state(
 }
 
 fn update_proposed_signature(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     signature: String,
 ) -> Result<bool, AgreementDaoError> {
@@ -469,7 +468,7 @@ fn update_proposed_signature(
 }
 
 fn update_approved_signature(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     signature: String,
 ) -> Result<bool, AgreementDaoError> {
@@ -484,7 +483,7 @@ fn update_approved_signature(
 }
 
 fn update_committed_signature(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     signature: String,
 ) -> Result<bool, AgreementDaoError> {
@@ -499,7 +498,7 @@ fn update_committed_signature(
 }
 
 fn update_approve_timestamp(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     timestamp: NaiveDateTime,
 ) -> Result<bool, AgreementDaoError> {
@@ -513,7 +512,7 @@ fn update_approve_timestamp(
 }
 
 fn update_session(
-    conn: &ConnType,
+    conn: &mut ConnType,
     agreement: &mut Agreement,
     session_id: String,
 ) -> Result<bool, AgreementDaoError> {

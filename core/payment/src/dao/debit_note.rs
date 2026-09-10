@@ -4,7 +4,7 @@ use crate::models::debit_note::{DebitNoteForApi, ReadObj, WriteObj};
 use crate::schema::pay_activity::dsl as activity_dsl;
 use crate::schema::pay_agreement::dsl as agreement_dsl;
 use crate::schema::pay_debit_note::dsl;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, Zero};
 use chrono::NaiveDateTime;
 use diesel::{
     self, BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl,
@@ -68,7 +68,7 @@ pub fn update_status(
     debit_note_ids: &Vec<String>,
     owner_id: NodeId,
     status: DocumentStatus,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     diesel::update(
         dsl::pay_debit_note
@@ -83,7 +83,7 @@ pub fn update_status(
 pub fn get_paid_amount_per_activity(
     debit_note_ids: &Vec<String>,
     owner_id: &NodeId,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<HashMap<String, BigDecimalField>> {
     // This method is equivalent to the following query:
     // SELECT (activity_id, MAX(amount))
@@ -305,7 +305,7 @@ impl DebitNoteDao<'_> {
             let mut events = vec![DebitNoteEventType::DebitNoteAcceptedEvent];
 
             // Zero-amount debit notes should be settled immediately.
-            let status = if amount.0 == BigDecimal::from(0) {
+            let status = if amount.0.is_zero() {
                 events.push(DebitNoteEventType::DebitNoteSettledEvent);
                 DocumentStatus::Settled
             } else {

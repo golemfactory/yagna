@@ -2,7 +2,7 @@ use actix_web::web::{Data, Json, Path, Query};
 use actix_web::{HttpResponse, Responder, Scope};
 use std::sync::Arc;
 
-use ya_client::model::market::{NewOffer, NewProposal, Reason};
+use ya_client::model::market::{AgreementTerminationNotice, NewOffer, NewProposal, Reason};
 use ya_service_api_web::middleware::Identity;
 use ya_std_utils::LogErr;
 
@@ -11,7 +11,7 @@ use crate::market::MarketService;
 
 use super::{PathAgreement, PathSubscription, PathSubscriptionProposal, QueryTimeoutMaxEvents};
 use crate::negotiation::ApprovalResult;
-use crate::rest_api::QueryTimeoutAppSessionId;
+use crate::rest_api::{QueryTimeout, QueryTimeoutAppSessionId};
 use ya_client::model::ErrorMessage;
 
 pub fn register_endpoints(scope: Scope) -> Scope {
@@ -25,6 +25,7 @@ pub fn register_endpoints(scope: Scope) -> Scope {
         .service(reject_proposal)
         .service(approve_agreement)
         .service(reject_agreement)
+        .service(post_termination_notice)
 }
 
 #[actix_web::post("/offers")]
@@ -159,6 +160,27 @@ async fn approve_agreement(
             ApprovalResult::Approved => HttpResponse::NoContent().finish(),
             _ => HttpResponse::Gone().json(ErrorMessage::new(result)),
         })
+}
+
+#[actix_web::post("/agreements/{agreement_id}/terminationNotice")]
+async fn post_termination_notice(
+    market: Data<Arc<MarketService>>,
+    path: Path<PathAgreement>,
+    query: Query<QueryTimeout>,
+    id: Identity,
+    body: Json<AgreementTerminationNotice>,
+) -> impl Responder {
+    market
+        .provider_engine
+        .post_termination_notice(
+            id,
+            path.into_inner().agreement_id,
+            body.into_inner(),
+            query.timeout,
+        )
+        .await
+        .log_err()
+        .map(|_| HttpResponse::NoContent().finish())
 }
 
 #[actix_web::post("/agreements/{agreement_id}/reject")]

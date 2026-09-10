@@ -1,11 +1,10 @@
 use diesel::backend::Backend;
-use diesel::deserialize::{FromSql, FromSqlRow};
-use diesel::serialize::{Output, ToSql};
+use diesel::deserialize::FromSql;
+use diesel::serialize::{IsNull, Output, ToSql};
 use diesel::sql_types::Text;
 use diesel::sqlite::Sqlite;
-use diesel::{deserialize, serialize, Queryable};
+use diesel::{deserialize, serialize};
 use serde::Serialize;
-use std::io::Write;
 
 pub trait AdaptDuration {
     fn adapt(self) -> DurationAdapter;
@@ -20,8 +19,8 @@ pub trait AdaptDuration {
 /// Check description of related issues:
 /// https://github.com/golemfactory/yagna/issues/2145
 /// https://github.com/golemfactory/yagna/pull/2086
-#[derive(Clone, Debug, AsExpression)]
-#[sql_type = "Text"]
+#[derive(Clone, Debug, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Text)]
 pub struct DurationAdapter(pub chrono::Duration);
 
 impl Serialize for DurationAdapter {
@@ -35,32 +34,12 @@ impl Serialize for DurationAdapter {
     }
 }
 
-impl<DB> FromSqlRow<Text, DB> for DurationAdapter
+impl<DB> FromSql<Text, DB> for DurationAdapter
 where
     DB: Backend,
     String: FromSql<Text, DB>,
 {
-    fn build_from_row<R: diesel::row::Row<DB>>(row: &mut R) -> deserialize::Result<Self> {
-        let value = String::build_from_row(row)?;
-        let chrono_duration = chrono::Duration::from_std(humantime::parse_duration(&value)?)?;
-        Ok(DurationAdapter(chrono_duration))
-    }
-}
-
-impl Queryable<Text, Sqlite> for DurationAdapter {
-    type Row = DurationAdapter;
-
-    fn build(row: Self::Row) -> Self {
-        row
-    }
-}
-
-impl<DB> FromSql<String, DB> for DurationAdapter
-where
-    DB: Backend,
-    String: FromSql<Text, DB>,
-{
-    fn from_sql(bytes: Option<&DB::RawValue>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
         let value = String::from_sql(bytes)?;
 
         let chrono_duration = chrono::Duration::from_std(humantime::parse_duration(&value)?)?;
@@ -70,9 +49,9 @@ where
 }
 
 impl ToSql<Text, Sqlite> for DurationAdapter {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Sqlite>) -> serialize::Result {
-        let f = humantime::format_duration(self.0.to_std().unwrap_or_default()).to_string();
-        ToSql::<Text, Sqlite>::to_sql(&f, out)
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
+        out.set_value(humantime::format_duration(self.0.to_std().unwrap_or_default()).to_string());
+        Ok(IsNull::No)
     }
 }
 

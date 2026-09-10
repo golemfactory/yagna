@@ -12,12 +12,12 @@ use crate::db::model::{Agreement, Owner, Proposal};
 use super::super::callback::{CallbackHandler, HandlerSlot};
 use super::error::{
     AgreementProtocolError, CounterProposalError, GsbAgreementError, GsbProposalError,
-    NegotiationApiInitError, TerminateAgreementError,
+    NegotiationApiInitError, TerminateAgreementError, TerminationNoticeError,
 };
 use super::messages::{
     provider, requestor, AgreementApproved, AgreementCancelled, AgreementReceived,
-    AgreementRejected, AgreementTerminated, InitialProposalReceived, ProposalContent,
-    ProposalReceived, ProposalRejected,
+    AgreementRejected, AgreementTerminated, AgreementTerminationNotice, InitialProposalReceived,
+    ProposalContent, ProposalReceived, ProposalRejected,
 };
 use crate::protocol::negotiation::error::{
     CommitAgreementError, ProposeAgreementError, RejectProposalError,
@@ -39,6 +39,7 @@ struct NegotiationImpl {
     agreement_approved: HandlerSlot<AgreementApproved>,
     agreement_rejected: HandlerSlot<AgreementRejected>,
     agreement_terminated: HandlerSlot<AgreementTerminated>,
+    termination_notice_received: HandlerSlot<AgreementTerminationNotice>,
 }
 
 // TODO: Most of these functions don't need to be members of NegotiationApi.
@@ -51,6 +52,7 @@ impl NegotiationApi {
         agreement_approved: impl CallbackHandler<AgreementApproved>,
         agreement_rejected: impl CallbackHandler<AgreementRejected>,
         agreement_terminated: impl CallbackHandler<AgreementTerminated>,
+        termination_notice_received: impl CallbackHandler<AgreementTerminationNotice>,
     ) -> NegotiationApi {
         let negotiation_impl = NegotiationImpl {
             proposal_received: HandlerSlot::new(proposal_received),
@@ -58,6 +60,7 @@ impl NegotiationApi {
             agreement_approved: HandlerSlot::new(agreement_approved),
             agreement_rejected: HandlerSlot::new(agreement_rejected),
             agreement_terminated: HandlerSlot::new(agreement_terminated),
+            termination_notice_received: HandlerSlot::new(termination_notice_received),
         };
         NegotiationApi {
             inner: Arc::new(negotiation_impl),
@@ -288,6 +291,22 @@ impl NegotiationApi {
             .await
     }
 
+    async fn on_termination_notice_received(
+        self,
+        caller: String,
+        msg: AgreementTerminationNotice,
+    ) -> Result<(), TerminationNoticeError> {
+        log::debug!(
+            "Negotiation API: termination notice for Agreement [{}] from [{}].",
+            &msg.agreement_id,
+            &caller
+        );
+        self.inner
+            .termination_notice_received
+            .call(caller, msg.translate(Owner::Requestor))
+            .await
+    }
+
     pub async fn bind_gsb(
         &self,
         public_prefix: &str,
@@ -317,7 +336,13 @@ impl NegotiationApi {
             .bind_with_processor(move |_, myself, caller: String, msg: AgreementTerminated| {
                 let myself = myself;
                 myself.on_agreement_terminated(caller, msg)
-            });
+            })
+            .bind_with_processor(
+                move |_, myself, caller: String, msg: AgreementTerminationNotice| {
+                    let myself = myself;
+                    myself.on_termination_notice_received(caller, msg)
+                },
+            );
         Ok(())
     }
 }

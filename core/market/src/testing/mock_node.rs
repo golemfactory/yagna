@@ -328,6 +328,7 @@ impl MarketsNetwork {
             req_agreement_approved,
             req_agreement_rejected,
             req_agreement_terminated,
+            default::empty_on_termination_notice,
         );
 
         let identity_api = MockIdentity::new(name);
@@ -481,10 +482,10 @@ impl MarketsNetwork {
         let db = self.create_database(name);
 
         db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)
+            .apply_migration(crate::db::migrations::MIGRATIONS)
             .unwrap();
         db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)
+            .apply_migration(crate::db::migrations::MIGRATIONS)
             .unwrap();
         db
     }
@@ -599,7 +600,7 @@ pub mod default {
     use super::*;
     use crate::protocol::negotiation::error::{
         AgreementProtocolError, CommitAgreementError, CounterProposalError, ProposeAgreementError,
-        RejectProposalError, TerminateAgreementError,
+        RejectProposalError, TerminateAgreementError, TerminationNoticeError,
     };
 
     pub async fn empty_on_offers_retrieved(
@@ -690,6 +691,13 @@ pub mod default {
         _caller: String,
         _msg: AgreementCommitted,
     ) -> Result<(), CommitAgreementError> {
+        Ok(())
+    }
+
+    pub async fn empty_on_termination_notice(
+        _caller: String,
+        _msg: AgreementTerminationNotice,
+    ) -> Result<(), TerminationNoticeError> {
         Ok(())
     }
 

@@ -11,7 +11,7 @@ from goth.address import (
     YAGNA_REST_URL,
 )
 from goth.configuration import load_yaml, Override
-from goth.runner import Runner
+from goth_tests.helpers.runner import Runner
 from goth.runner.probe import RequestorProbe
 
 

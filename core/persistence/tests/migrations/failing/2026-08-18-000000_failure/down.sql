@@ -1,0 +1,1 @@
+-- The migration is intentionally invalid and can never be reverted.

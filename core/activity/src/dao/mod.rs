@@ -13,7 +13,9 @@ use thiserror::Error;
 
 type Result<T> = std::result::Result<T, DaoError>;
 
-no_arg_sql_function!(last_insert_rowid, diesel::sql_types::Integer);
+diesel::define_sql_function! {
+    fn last_insert_rowid() -> diesel::sql_types::Integer;
+}
 
 #[derive(Error, Debug)]
 pub enum DaoError {

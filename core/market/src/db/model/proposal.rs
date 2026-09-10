@@ -1,5 +1,4 @@
 use chrono::{NaiveDateTime, TimeZone, Utc};
-use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 
 use ya_client::model::market::proposal::{Proposal as ClientProposal, State};
@@ -22,7 +21,6 @@ use crate::protocol::negotiation::messages::ProposalContent;
     strum_macros::EnumString,
     DbTextField,
     derive_more::Display,
-    AsExpression,
     FromSqlRow,
     PartialEq,
     Eq,
@@ -32,7 +30,7 @@ use crate::protocol::negotiation::messages::ProposalContent;
     Serialize,
     Deserialize,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum ProposalState {
     /// Proposal arrived from the market as response to subscription
     Initial,
@@ -50,7 +48,6 @@ pub enum ProposalState {
     DbTextField,
     strum_macros::EnumString,
     derive_more::Display,
-    AsExpression,
     FromSqlRow,
     PartialEq,
     Eq,
@@ -58,7 +55,7 @@ pub enum ProposalState {
     Clone,
     Copy,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum Issuer {
     Us = 0,
     Them = 1,
@@ -75,7 +72,7 @@ pub enum Issuer {
 /// can be removed from our database (after expiration for example)
 /// and we still will be able to know, who negotiated with whom.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
-#[table_name = "market_negotiation"]
+#[diesel(table_name = market_negotiation)]
 pub struct Negotiation {
     pub id: String,
     pub subscription_id: SubscriptionId,
@@ -103,7 +100,7 @@ pub struct Negotiation {
 /// Proposal id to, be unique, must be generated from Provider and Requestor
 /// subscription ids and creation timestamp.
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable)]
-#[table_name = "market_proposal"]
+#[diesel(table_name = market_proposal)]
 pub struct DbProposal {
     pub id: ProposalId,
     pub prev_proposal_id: Option<ProposalId>,

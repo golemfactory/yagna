@@ -1,5 +1,7 @@
 use anyhow::Context;
+use bigdecimal::{BigDecimal, Context as DecimalContext, RoundingMode};
 use serde::Deserialize;
+use std::num::NonZeroU64;
 use std::{collections::BTreeMap, process::Stdio};
 use tokio::process::{Child, Command};
 
@@ -19,11 +21,24 @@ pub struct YaProviderCommand {
 pub struct Preset {
     pub name: String,
     pub exeunit_name: String,
-    pub initial_price: f64,
+    #[serde(with = "ya_provider::config::presets::json_decimal")]
+    pub initial_price: BigDecimal,
+    #[serde(with = "ya_provider::config::presets::prices_serde")]
     pub usage_coeffs: UsageDef,
 }
 
-pub type UsageDef = BTreeMap<String, f64>;
+pub type UsageDef = BTreeMap<String, BigDecimal>;
+
+/// Convert an hourly price to a protocol coefficient expressed per second.
+///
+/// Keep 18 decimal places available for transferable token amounts and another
+/// 18 guard digits for repeating divisions such as `price / 3600`.
+pub fn price_per_hour_to_second(price: BigDecimal) -> BigDecimal {
+    let context = DecimalContext::new(NonZeroU64::new(36).unwrap(), RoundingMode::HalfUp);
+    let seconds_per_hour = BigDecimal::from(3600);
+    let seconds_per_hour_inverse = context.invert(&seconds_per_hour);
+    context.multiply(&price, &seconds_per_hour_inverse)
+}
 
 #[derive(Deserialize)]
 pub struct RuntimeInfo {
@@ -168,9 +183,9 @@ impl YaProviderCommand {
 
     pub async fn update_classic_presets(
         mut self,
-        starting_fee: Option<f64>,
-        env_per_sec: Option<f64>,
-        cpu_per_sec: Option<f64>,
+        starting_fee: Option<BigDecimal>,
+        env_per_sec: Option<BigDecimal>,
+        cpu_per_sec: Option<BigDecimal>,
     ) -> anyhow::Result<()> {
         let cmd = &mut self.cmd;
         cmd.args(["preset", "update", "--no-interactive"]);
@@ -269,6 +284,30 @@ impl YaProviderCommand {
                 String::from_utf8_lossy(&output.stderr)
             ))
             .with_context(|| format!("activating profile {:?}", profile_name))?
+        }
+    }
+
+    /// Requests graceful shutdown of a running provider through the
+    /// shutdown-status file watched by the provider.
+    pub async fn request_shutdown(self) -> anyhow::Result<()> {
+        let mut cmd = self.cmd;
+
+        let output = cmd
+            .args(["shutdown"])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::null())
+            .stdin(Stdio::null())
+            .output()
+            .await
+            .context("requesting provider shutdown")?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            ))
+            .context("requesting provider shutdown")?
         }
     }
 
@@ -388,5 +427,29 @@ fn preset_command<'a, 'b>(
     for (usage_name, usage_value) in usage_coeffs {
         cmd.arg("--price")
             .arg(format!("{}={}", &usage_name, &usage_value));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn hourly_price_conversion_keeps_wei_precision() {
+        let hourly = BigDecimal::from_str("0.025").unwrap();
+        let per_second = price_per_hour_to_second(hourly.clone());
+        let reconstructed =
+            (per_second * BigDecimal::from(3600)).with_scale_round(18, RoundingMode::HalfUp);
+
+        assert_eq!(reconstructed, hourly);
+    }
+
+    #[test]
+    fn serde_json_numbers_remain_yaml_scalars() {
+        let output = serde_yaml::to_string(&serde_json::json!({ "sessions": 29 })).unwrap();
+
+        assert_eq!(output, "sessions: 29\n");
+        assert!(!output.contains("$serde_json::private::Number"));
     }
 }

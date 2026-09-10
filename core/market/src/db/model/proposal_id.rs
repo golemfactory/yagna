@@ -1,6 +1,5 @@
 use chrono::NaiveDateTime;
 use derive_more::Display;
-use diesel::sql_types::Text;
 use digest::Digest;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::Sha3_256;
@@ -18,14 +17,13 @@ use crate::db::model::SubscriptionId;
     Clone,
     Copy,
     PartialEq,
-    AsExpression,
     FromSqlRow,
     Eq,
     Serialize,
     Deserialize,
     Hash,
 )]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub enum Owner {
     #[display(fmt = "P")]
     Provider,
@@ -60,9 +58,9 @@ pub enum ProposalIdParseError {
 #[error("Proposal id [{0}] has unexpected hash [{1}].")]
 pub struct ProposalIdValidationError(ProposalId, String);
 
-#[derive(DbTextField, Display, Debug, Clone, AsExpression, FromSqlRow, Hash, PartialEq, Eq)]
+#[derive(DbTextField, Display, Debug, Clone, FromSqlRow, Hash, PartialEq, Eq)]
 #[display(fmt = "{}-{}", owner, id)]
-#[sql_type = "Text"]
+#[diesel(sql_type = diesel::sql_types::Text)]
 pub struct ProposalId {
     id: String,
     owner: Owner,

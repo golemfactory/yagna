@@ -1,4 +1,5 @@
 max_width = 100
+style_edition = "2021"
 hard_tabs = false
 tab_spaces = 4
 newline_style = "Auto"

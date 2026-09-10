@@ -25,7 +25,7 @@ impl<'a> AsDao<'a> for AppKeyDao<'a> {
 impl AppKeyDao<'_> {
     pub async fn with_connection<R: Send + 'static, F>(&self, f: F) -> Result<R>
     where
-        F: Send + 'static + FnOnce(&ConnType) -> Result<R>,
+        F: Send + 'static + FnOnce(&mut ConnType) -> Result<R>,
     {
         readonly_transaction(self.pool, "app_key_dao_with_connection", f).await
     }
@@ -33,7 +33,7 @@ impl AppKeyDao<'_> {
     #[inline]
     async fn with_transaction<
         R: Send + 'static,
-        F: FnOnce(&ConnType) -> Result<R> + Send + 'static,
+        F: FnOnce(&mut ConnType) -> Result<R> + Send + 'static,
     >(
         &self,
         label: &'static str,
@@ -146,7 +146,7 @@ impl AppKeyDao<'_> {
 
             // TODO: use DB INSERT / DELETE triggers and internal counters in place of count
             let total: i64 = app_key_dsl::table
-                .select(diesel::expression::dsl::count(app_key_dsl::id))
+                .select(diesel::dsl::count(app_key_dsl::id))
                 .first(conn)?;
             let pages = (total as f64 / per_page as f64).ceil() as u32;
 

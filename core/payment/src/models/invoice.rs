@@ -8,7 +8,7 @@ use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
 
 #[derive(Debug, Insertable)]
-#[table_name = "pay_invoice"]
+#[diesel(table_name = pay_invoice)]
 pub struct WriteObj {
     pub id: String,
     pub owner_id: NodeId,
@@ -46,8 +46,8 @@ impl WriteObj {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "pay_invoice"]
-#[primary_key(id, owner_id)]
+#[diesel(table_name = pay_invoice)]
+#[diesel(primary_key(id, owner_id))]
 pub struct ReadObj {
     pub id: String,
     pub owner_id: NodeId,
@@ -98,8 +98,8 @@ impl ReadObj {
 }
 
 #[derive(Queryable, Debug, Identifiable, Insertable)]
-#[table_name = "pay_invoice_x_activity"]
-#[primary_key(invoice_id, activity_id, owner_id)]
+#[diesel(table_name = pay_invoice_x_activity)]
+#[diesel(primary_key(invoice_id, activity_id, owner_id))]
 pub struct InvoiceXActivity {
     pub invoice_id: String,
     pub activity_id: String,

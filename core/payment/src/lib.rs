@@ -37,8 +37,8 @@ mod wallet;
 pub use batch::send_batch_payments;
 
 pub mod migrations {
-    #[derive(diesel_migrations::EmbedMigrations)]
-    struct _Dummy;
+    pub const MIGRATIONS: diesel_migrations::EmbeddedMigrations =
+        diesel_migrations::embed_migrations!();
 }
 
 use crate::alloc_release_task::get_allocation_release_tasks;
@@ -62,7 +62,7 @@ impl Service for PaymentService {
 impl PaymentService {
     pub async fn gsb<Context: Provider<Self, DbExecutor>>(context: &Context) -> anyhow::Result<()> {
         let db = context.component();
-        db.apply_migration(migrations::run_with_output)
+        db.apply_migration(migrations::MIGRATIONS)
             .map_err(|e| anyhow::anyhow!("Failed to apply payment service migrations: {}", e))?;
 
         let config = Arc::new(Config::from_env()?);

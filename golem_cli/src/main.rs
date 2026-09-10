@@ -23,7 +23,7 @@ mod utils;
 #[derive(StructOpt, Debug)]
 enum SettingsCommand {
     /// Change settings
-    Set(settings::Settings),
+    Set(Box<settings::Settings>),
     /// Show current settings
     Show,
 }
@@ -40,8 +40,8 @@ enum Commands {
     /// Run the golem provider
     Run(setup::RunConfig),
 
-    /// Stop the golem provider
-    Stop,
+    /// Stop ya-provider; `golemsp run` then stops its supervised yagna service
+    Stop(service::StopConfig),
 
     /// Manage settings
     Settings(SettingsCommand),
@@ -95,9 +95,9 @@ async fn my_main() -> Result</*exit code*/ i32> {
     match cli_args.commands {
         Commands::Setup(run_config) => setup::setup(&run_config, true).await,
         Commands::Run(run_config) => service::run(run_config).await,
-        Commands::Stop => service::stop().await,
+        Commands::Stop(config) => service::stop(config).await,
         Commands::Settings(command) => match command {
-            SettingsCommand::Set(set) => settings::run(set).await,
+            SettingsCommand::Set(set) => settings::run(*set).await,
             SettingsCommand::Show => settings_show::run().await,
         },
         Commands::Status => status::run().await,

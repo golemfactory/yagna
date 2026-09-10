@@ -108,21 +108,20 @@ impl NegotiationEventsDao<'_> {
                 //  priority.
                 let basic_query =
                     dsl::market_negotiation_event.filter(dsl::subscription_id.eq(&subscription_id));
+                let proposal_event_types = vec![
+                    EventType::ProviderNewProposal.to_string(),
+                    EventType::RequestorNewProposal.to_string(),
+                ];
                 let mut events = basic_query
-                    .filter(dsl::event_type.ne_all(vec![
-                        EventType::ProviderNewProposal,
-                        EventType::RequestorNewProposal,
-                    ]))
+                    .clone()
+                    .filter(dsl::event_type.ne_all(&proposal_event_types))
                     .order_by(dsl::timestamp.asc())
                     .limit(max_events as i64)
                     .load::<MarketEvent>(conn)?;
                 if (events.len() as i32) < max_events {
                     let limit_left: i32 = max_events - (events.len() as i32);
                     let proposal_events = basic_query
-                        .filter(dsl::event_type.eq_any(vec![
-                            EventType::ProviderNewProposal,
-                            EventType::RequestorNewProposal,
-                        ]))
+                        .filter(dsl::event_type.eq_any(proposal_event_types))
                         .order_by(sql::<sql_types::Bool>("RANDOM()"))
                         .limit(limit_left as i64)
                         .load::<MarketEvent>(conn)?;
@@ -180,7 +179,7 @@ impl NegotiationEventsDao<'_> {
 }
 
 fn validate_subscription(
-    conn: &ConnType,
+    conn: &mut ConnType,
     subscription_id: &SubscriptionId,
     owner: Owner,
 ) -> Result<(), TakeEventsError> {

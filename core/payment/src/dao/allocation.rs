@@ -33,7 +33,7 @@ pub struct SpendFromAllocationArgs {
     pub amount: BigDecimal,
 }
 
-pub fn spend_from_allocation(conn: &ConnType, args: SpendFromAllocationArgs) -> DbResult<()> {
+pub fn spend_from_allocation(conn: &mut ConnType, args: SpendFromAllocationArgs) -> DbResult<()> {
     let allocation: ReadObj = dsl::pay_allocation
         .find((args.owner_id, args.allocation_id.clone()))
         .first(conn)?;

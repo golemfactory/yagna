@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 use bigdecimal::BigDecimal;
 use serde_json::json;
-use std::convert::TryFrom;
+use std::str::FromStr;
 
 use ya_agreement_utils::ComInfo;
 use ya_client::model::{payment::Account, NodeId};
@@ -28,12 +28,12 @@ impl From<Account> for AccountView {
 }
 
 pub trait PricingOffer {
-    fn prices(&self, preset: &Preset) -> Vec<(String, f64)>;
+    fn prices(&self, preset: &Preset) -> Vec<(String, BigDecimal)>;
     fn build(
         &self,
         accounts: &[AccountView],
-        initial_price: f64,
-        prices: Vec<(String, f64)>,
+        initial_price: BigDecimal,
+        prices: Vec<(String, BigDecimal)>,
     ) -> Result<ComInfo>;
 }
 
@@ -42,12 +42,23 @@ pub struct LinearPricing {
     usage_coeffs: Vec<BigDecimal>,
 }
 
+fn usage_decimal_from_f64(
+    value: f64,
+) -> std::result::Result<BigDecimal, bigdecimal::ParseBigDecimalError> {
+    // Preserve the conversion precision used by BigDecimal 0.2. Its 0.4
+    // conversion keeps the exact binary float value instead.
+    BigDecimal::from_str(&format!(
+        "{value:.precision$e}",
+        precision = f64::DIGITS as usize
+    ))
+}
+
 impl PaymentModel for LinearPricing {
     fn compute_cost(&self, usage: &[f64]) -> Result<BigDecimal> {
         let usage: Vec<BigDecimal> = usage
             .iter()
             .cloned()
-            .map(BigDecimal::try_from)
+            .map(usage_decimal_from_f64)
             .collect::<std::result::Result<_, _>>()
             .map_err(|e| anyhow!("Failed to convert usage to BigDecimal: {e}"))?;
 
@@ -69,18 +80,13 @@ impl PaymentModel for LinearPricing {
 
 impl LinearPricing {
     pub fn new<'a>(commercials: &'a PaymentDescription<'a>) -> Result<LinearPricing> {
-        let usage: Vec<BigDecimal> = commercials
-            .get_usage_coefficients()?
-            .into_iter()
-            .map(BigDecimal::try_from)
-            .collect::<std::result::Result<_, _>>()
-            .map_err(|e| anyhow!("Failed to convert usage coefficients to BigDecimal: {e}"))?;
+        let usage_coeffs = commercials.get_usage_coefficients()?;
 
-        log::info!("Creating LinearPricing payment model. Usage coefficients vector: {usage:?}.");
+        log::info!(
+            "Creating LinearPricing payment model. Usage coefficients vector: {usage_coeffs:?}."
+        );
 
-        Ok(LinearPricing {
-            usage_coeffs: usage,
-        })
+        Ok(LinearPricing { usage_coeffs })
     }
 }
 
@@ -104,15 +110,15 @@ impl LinearPricingOffer {
 }
 
 impl PricingOffer for LinearPricingOffer {
-    fn prices(&self, preset: &Preset) -> Vec<(String, f64)> {
+    fn prices(&self, preset: &Preset) -> Vec<(String, BigDecimal)> {
         preset.usage_coeffs.clone().into_iter().collect()
     }
 
     fn build(
         &self,
         accounts: &[AccountView],
-        initial_price: f64,
-        prices: Vec<(String, f64)>,
+        initial_price: BigDecimal,
+        prices: Vec<(String, BigDecimal)>,
     ) -> Result<ComInfo> {
         let mut usage_vector = Vec::new();
         let coefficients = prices
@@ -122,7 +128,20 @@ impl PricingOffer for LinearPricingOffer {
                 v
             })
             .chain(std::iter::once(initial_price))
-            .collect::<Vec<_>>();
+            .map(|value| {
+                // Market pricing coefficients are part of the public offer
+                // protocol and requestors (including yapapi) require floats.
+                // Keep BigDecimal in presets and payment calculations, but
+                // deliberately convert at this protocol boundary.
+                let value = value
+                    .to_plain_string()
+                    .parse::<f64>()
+                    .map_err(|e| anyhow!("Failed to convert price coefficient to float: {e}"))?;
+                serde_json::Number::from_f64(value)
+                    .map(serde_json::Value::Number)
+                    .ok_or_else(|| anyhow!("Price coefficient is not a finite float"))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let mut params = json!({
             "scheme": "payu".to_string(),
@@ -159,7 +178,7 @@ mod tests {
     use test_case::test_case;
 
     use crate::payments::model::{PaymentDescription, PaymentModel};
-    use crate::payments::LinearPricing;
+    use crate::payments::{LinearPricing, LinearPricingOffer, PricingOffer};
 
     use ya_agreement_utils::agreement::try_from_json;
     use ya_agreement_utils::AgreementView;
@@ -203,6 +222,27 @@ mod tests {
 }
 "#;
 
+    #[test]
+    fn pricing_offer_serializes_wire_compatible_numeric_coefficients() {
+        let exact = BigDecimal::from_str("0.12345678901234567890123456789").unwrap();
+        let offer = LinearPricingOffer::default()
+            .build(&[], BigDecimal::from(0), vec![("counter".into(), exact)])
+            .unwrap();
+        let properties = ya_agreement_utils::agreement::flatten_value(serde_json::json!({
+            "golem": { "com": offer.params }
+        }));
+        let coefficients = properties
+            .get("golem.com.pricing.model.linear.coeffs")
+            .unwrap();
+
+        assert_eq!(coefficients.to_string(), "[0.12345678901234568,0.0]");
+        assert!(coefficients
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(serde_json::Value::is_f64));
+    }
+
     #[test_case(
         "0.0001, 0.00005, 0.0",
         &[44.017951, 103.002864998],
@@ -220,6 +260,12 @@ mod tests {
         &[24.141030488, 0.0],
         BigDecimal::from_str("0.048282060976").unwrap();
         "Check underflowing example"
+    )]
+    #[test_case(
+        "0, 0, 0.12345678901234567890123456789",
+        &[0.0, 0.0],
+        BigDecimal::from_str("0.12345678901234568").unwrap();
+        "Use the exact decimal representation carried by agreement JSON"
     )]
     fn test_linear_payment_model_cost(coeffs: &str, usage: &[f64], expected: BigDecimal) {
         let agreement = AgreementView::try_from(

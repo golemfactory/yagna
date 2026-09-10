@@ -10,7 +10,7 @@ fn run_resolve_test(expr: &str, props: &Vec<&str>, expect_result: ResolveResult)
         properties.push(prop.to_string());
     }
 
-    let property_set = PropertySet::from_flat_props(&properties);
+    let property_set = PropertySet::from_flat_props(&properties).unwrap();
 
     assert_eq!(expression.resolve(&property_set), expect_result);
 }

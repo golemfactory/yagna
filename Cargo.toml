@@ -7,10 +7,10 @@ license = "GPL-3.0"
 name = "yagna"
 readme = "README.md"
 repository = "https://github.com/golemfactory/yagna"
-version = "0.17.10"
+version = "0.18.0"
 
 [features]
-default = ['erc20-driver', 'gftp/bin']
+default = ['erc20-driver', 'gftp/bin', 'encryption']
 dashboard = ['rust-embed', 'mime_guess']
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
@@ -24,6 +24,8 @@ system-test = [
 ]
 # Temporary to make goth integration tests work
 central-net = ['ya-net/central-net']
+encryption = ['ya-net/encryption']
+encryption-strict = ['encryption', 'ya-net/encryption-strict']
 packet-trace-enable = [
   "ya-vpn/packet-trace-enable",
   "ya-file-logging/packet-trace-enable",
@@ -214,6 +216,7 @@ useless_conversion = "allow"
 mismatched_lifetime_syntaxes = "allow"
 
 [workspace]
+resolver = "1"
 members = [
   "agent/provider",
   "core/activity",
@@ -267,15 +270,14 @@ members = [
 ]
 
 [workspace.dependencies]
-# this entry is needed to make sqlx version >=0.5.9 work with diesel 1.4.*
-# diesel 1.4.* supports up to 0.23.0, but sqlx 0.5.9 requires 0.22.0
-# sqlx 0.5.10 need 0.23.2, so 0.5.9 is last version possible
 actix-rt = "2.7"
 actix-service = "2"
 actix-web = "4"
 actix = { version = "0.13", default-features = false }
 
 derive_more = "0.99.11"
+diesel = { version = "2.3", features = ["sqlite", "r2d2", "chrono"] }
+diesel_migrations = "2.3"
 erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "8cd601fa14fef3c62d31f9c0682a703d97d20d75" }
 erc20_processor = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "8cd601fa14fef3c62d31f9c0682a703d97d20d75" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
@@ -295,7 +297,7 @@ url = "2.3.1"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-exe-unit.path = "./exe-unit"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "e03a93d2abda8a18bd6bc88b284dca9a83e173ad" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "7cbe72a74ad5e1b099829937c4faa5aa20fefd59" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking", default-features = false }
@@ -308,8 +310,8 @@ ya-sb-proto = { version = "0.6.2" }
 ya-sb-util = { version = "0.5.1" }
 parking_lot = "0.12.3"
 mime = "0.3.17"
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "41e7d99048dc04f8e3de4a8b86273926d71872c9" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "41e7d99048dc04f8e3de4a8b86273926d71872c9" }
 
 ya-compile-time-utils.path = "utils/compile-time-utils"
 ya-manifest-utils = { path = "utils/manifest-utils" }
@@ -351,12 +353,11 @@ ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", r
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
 ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
 ya-sb-util = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
-ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
-ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "b4bf2aab46181d594dcba5b6956c03172ee1f2ea" }
+ya-client = { git = "https://github.com/golemfactory/ya-client.git", rev = "41e7d99048dc04f8e3de4a8b86273926d71872c9" }
+ya-client-model = { git = "https://github.com/golemfactory/ya-client.git", rev = "41e7d99048dc04f8e3de4a8b86273926d71872c9" }
 golem-certificate = { git = "https://github.com/golemfactory/golem-certificate.git", rev = "f2d7514c18fc066e9cfb796090b90f5b27cfe1c6" }
 ethereum-tx-sign = { git = "https://github.com/golemfactory/ethereum-tx-sign.git", rev = "1164c74187a9e2947faeaea7dde104c3cdec4195" }
 graphene-sgx = { git = " https://github.com/golemfactory/graphene-rust.git", rev = "dbd993ebad7f9190410ea390a589348479af6407" }
-diesel = { git = "https://github.com/golemfactory/yagna-diesel-patch.git", rev = "a512c66d520a9066dd9a4d1416f9109019b39563" }
 
 # Speed up builds on macOS (will be default in next rust version probably)
 # https://jakedeichert.com/blog/reducing-rust-incremental-compilation-times-on-macos-by-70-percent/

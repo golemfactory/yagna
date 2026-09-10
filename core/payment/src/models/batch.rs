@@ -59,7 +59,7 @@ pub struct BatchPayment {
 }
 
 #[derive(Queryable, Debug, Serialize, Identifiable, Insertable)]
-#[table_name = "pay_batch_order"]
+#[diesel(table_name = pay_batch_order)]
 #[serde(rename_all = "camelCase")]
 pub struct DbBatchOrder {
     pub id: String,
@@ -73,7 +73,7 @@ pub struct DbBatchOrder {
 }
 
 #[derive(Queryable, Debug, Serialize, Insertable)]
-#[table_name = "pay_batch_order_item"]
+#[diesel(table_name = pay_batch_order_item)]
 #[serde(rename_all = "camelCase")]
 pub struct DbBatchOrderItem {
     pub order_id: String,
@@ -117,7 +117,7 @@ pub struct DbAgreementBatchOrderItem {
 }
 
 #[derive(Queryable, Debug, Insertable)]
-#[table_name = "pay_batch_order_item_document"]
+#[diesel(table_name = pay_batch_order_item_document)]
 pub struct DbBatchOrderItemAgreement {
     pub order_id: String,
     pub owner_id: NodeId,

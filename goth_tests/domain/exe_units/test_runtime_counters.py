@@ -7,7 +7,7 @@ from typing import List, Tuple
 import pytest
 
 from goth.configuration import load_yaml, Override, Configuration
-from goth.runner import Runner
+from goth_tests.helpers.runner import Runner
 from goth.runner.probe import RequestorProbe
 
 from goth_tests.helpers.negotiation import negotiate_agreements, DemandBuilder
@@ -140,6 +140,7 @@ async def test_custom_runtime_counter(
         }
 
         await requestor.destroy_activity(activity_id)
+
         await provider.wait_for_exeunit_finished()
 
         logger.info("waiting for final debit note to be received")

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::future::Future;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
@@ -8,8 +9,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
 use std::task::Poll;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context as AnyhowContext};
+use ethsign::PublicKey;
 use futures::channel::{mpsc, oneshot};
 use futures::stream::LocalBoxStream;
 use futures::{FutureExt, SinkExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
@@ -27,7 +30,7 @@ use ya_core_model::{identity, net, NodeId};
 use ya_relay_client::channels::{ForwardReceiver, ForwardSender, PrefixedStream};
 use ya_relay_client::crypto::CryptoProvider;
 use ya_relay_client::model::{Payload, TransportType};
-use ya_relay_client::{Client, ClientBuilder, FailFast};
+use ya_relay_client::{AuthenticatedIdentities, Client, ClientBuilder, FailFast};
 use ya_sb_proto::codec::GsbMessage;
 use ya_sb_proto::CallReplyCode;
 use ya_sb_util::RevPrefixes;
@@ -51,6 +54,28 @@ type BusReceiver = mpsc::Receiver<ResponseChunk>;
 type NetSender = mpsc::Sender<Payload>;
 type NetSinkKind = ForwardSender;
 type NetSinkKey = (NodeId, TransportType);
+
+#[derive(Clone)]
+struct NetRoute {
+    sender: NetSender,
+    authenticated_identities: Rc<RefCell<Option<AuthenticatedIdentities>>>,
+}
+
+impl NetRoute {
+    fn new(sender: NetSender, authenticated_identities: Option<AuthenticatedIdentities>) -> Self {
+        Self {
+            sender,
+            authenticated_identities: Rc::new(RefCell::new(authenticated_identities)),
+        }
+    }
+
+    fn update_authentication(&self, incoming: Option<AuthenticatedIdentities>) {
+        let mut current = self.authenticated_identities.borrow_mut();
+        if current.as_deref() != incoming.as_deref() {
+            current.take();
+        }
+    }
+}
 
 lazy_static::lazy_static! {
     pub(crate) static ref BCAST: BCastService = Default::default();
@@ -754,17 +779,21 @@ fn forward_handler(
             let client = client.clone();
             async move {
                 let key = (fwd.node_id, fwd.transport);
-                let mut tx = match {
+                let route = match {
                     let inner = state.inner.borrow();
                     inner.routes.get(&key).cloned()
                 } {
-                    Some(cached) => cached,
+                    Some(route) => {
+                        route.update_authentication(fwd.authenticated_identities.clone());
+                        route
+                    }
                     None => {
                         let state = state.clone();
                         let (tx, rx) = forward_channel(fwd.transport);
+                        let route = NetRoute::new(tx, fwd.authenticated_identities.clone());
                         {
                             let mut inner = state.inner.borrow_mut();
-                            inner.routes.insert(key, tx.clone());
+                            inner.routes.insert(key, route.clone());
                         }
                         tokio::task::spawn_local(inbound_handler(
                             client.clone(),
@@ -772,10 +801,12 @@ fn forward_handler(
                             fwd.node_id,
                             fwd.transport,
                             state,
+                            route.authenticated_identities.clone(),
                         ));
-                        tx
+                        route
                     }
                 };
+                let mut tx = route.sender;
 
                 log::trace!(
                     "Net: received forward ({}) packet ({} B) from [{}]",
@@ -817,9 +848,11 @@ fn inbound_handler(
     remote_id: NodeId,
     transport: TransportType,
     state: State,
+    authenticated_identities: Rc<RefCell<Option<AuthenticatedIdentities>>>,
 ) -> impl Future<Output = ()> + Unpin + 'static {
     StreamExt::for_each(rx, move |payload| {
         let state = state.clone();
+        let authenticated_identities = authenticated_identities.borrow().clone();
         log::trace!(
             "local bus handler -> inbound message ({} B) from [{remote_id}]",
             payload.len()
@@ -830,17 +863,29 @@ fn inbound_handler(
             match codec::decode_message(payload.as_ref()) {
                 Ok(Some(GsbMessage::CallRequest(request @ ya_sb_proto::CallRequest { .. }))) => {
                     if request.no_reply {
-                        handle_push(request, remote_id, state)
+                        handle_push(client, request, remote_id, state, authenticated_identities)
+                            .await
                     } else {
-                        handle_request(client, request, remote_id, state, transport)
+                        handle_request(
+                            client,
+                            request,
+                            remote_id,
+                            state,
+                            transport,
+                            authenticated_identities,
+                        )
+                        .await
                     }
                 }
                 Ok(Some(GsbMessage::CallReply(reply @ ya_sb_proto::CallReply { .. }))) => {
-                    handle_reply(reply, remote_id, state)
+                    handle_reply(client, reply, remote_id, state, authenticated_identities).await
                 }
                 Ok(Some(GsbMessage::BroadcastRequest(
                     request @ ya_sb_proto::BroadcastRequest { .. },
-                ))) => handle_broadcast(request, remote_id),
+                ))) => {
+                    handle_broadcast(client, request, remote_id, state, authenticated_identities)
+                        .await
+                }
                 Ok(None) => {
                     log::trace!("Received a partial message from {remote_id}");
                     Ok(())
@@ -859,21 +904,26 @@ fn inbound_handler(
 }
 
 /// Forward messages from the network to the local bus
-fn handle_push(
+async fn handle_push(
+    client: Client,
     request: ya_sb_proto::CallRequest,
     remote_id: NodeId,
     state: State,
+    authenticated_identities: Option<AuthenticatedIdentities>,
 ) -> anyhow::Result<()> {
-    let caller_id = NodeId::from_str(&request.caller).ok();
-
-    // FIXME: implement authorization with encryption
-    // if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
-    //     anyhow::bail!("Invalid caller id: {}", request.caller);
-    // }
+    let caller_id = parse_caller_id(&request.caller)?;
+    authorize_published_identity(
+        &client,
+        &state,
+        caller_id,
+        remote_id,
+        "caller",
+        authenticated_identities.as_deref(),
+    )
+    .await?;
 
     let address = request.address;
     let request_id = request.request_id;
-    let caller_id = caller_id.unwrap();
 
     log::debug!("Handle push request {request_id} to {address} from {remote_id}");
 
@@ -898,22 +948,26 @@ fn handle_push(
 }
 
 /// Forward messages from the network to the local bus
-fn handle_request(
+async fn handle_request(
     client: Client,
     request: ya_sb_proto::CallRequest,
     remote_id: NodeId,
     state: State,
     transport: TransportType,
+    authenticated_identities: Option<AuthenticatedIdentities>,
 ) -> anyhow::Result<()> {
-    let caller_id = NodeId::from_str(&request.caller).ok();
-
-    // FIXME: implement authorization with encryption
-    // if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
-    //     anyhow::bail!("Invalid caller id: {}", request.caller);
-    // }
+    let caller_id = parse_caller_id(&request.caller)?;
+    authorize_published_identity(
+        &client,
+        &state,
+        caller_id,
+        remote_id,
+        "caller",
+        authenticated_identities.as_deref(),
+    )
+    .await?;
 
     let address = request.address;
-    let caller_id = caller_id.unwrap();
     let request_id = request.request_id;
     let request_id_chain = request_id.clone();
     let request_id_filter = request_id.clone();
@@ -1000,10 +1054,12 @@ fn handle_request(
 }
 
 /// Forward replies from the network to the local bus
-fn handle_reply(
+async fn handle_reply(
+    client: Client,
     reply: ya_sb_proto::CallReply,
     remote_id: NodeId,
     state: State,
+    authenticated_identities: Option<AuthenticatedIdentities>,
 ) -> anyhow::Result<()> {
     let full = reply.reply_type == ya_sb_proto::CallReplyType::Full as i32;
 
@@ -1018,8 +1074,17 @@ fn handle_reply(
         let inner = state.inner.borrow();
         inner.requests.get(&reply.request_id).cloned()
     } {
-        // FIXME: implement authorization with encryption
         Some(request) => {
+            authorize_published_identity(
+                &client,
+                &state,
+                request.remote_id,
+                remote_id,
+                "reply sender",
+                authenticated_identities.as_deref(),
+            )
+            .await?;
+
             if full {
                 let mut inner = state.inner.borrow_mut();
                 inner.requests.remove(&reply.request_id);
@@ -1051,14 +1116,23 @@ fn handle_reply(
 }
 
 /// Forward broadcasts from the network to the local bus
-fn handle_broadcast(
+async fn handle_broadcast(
+    client: Client,
     request: ya_sb_proto::BroadcastRequest,
     remote_id: NodeId,
+    state: State,
+    authenticated_identities: Option<AuthenticatedIdentities>,
 ) -> anyhow::Result<()> {
-    let caller_id = NodeId::from_str(&request.caller).ok();
-    if !caller_id.map(|id| id == remote_id).unwrap_or(false) {
-        anyhow::bail!("Invalid broadcast caller id: {}", request.caller);
-    }
+    let caller_id = parse_caller_id(&request.caller)?;
+    authorize_published_identity(
+        &client,
+        &state,
+        caller_id,
+        remote_id,
+        "broadcast caller",
+        authenticated_identities.as_deref(),
+    )
+    .await?;
 
     log::trace!(
         "Received broadcast to topic {} from [{}].",
@@ -1066,7 +1140,7 @@ fn handle_broadcast(
         &request.caller
     );
 
-    let caller = caller_id.unwrap().to_string();
+    let caller = caller_id.to_string();
 
     tokio::task::spawn_local(async move {
         let data = request.data;
@@ -1093,6 +1167,133 @@ fn handle_broadcast(
     Ok(())
 }
 
+fn parse_caller_id(caller: &str) -> anyhow::Result<NodeId> {
+    NodeId::from_str(caller).map_err(|e| anyhow!("Invalid caller id: {caller}: {e}"))
+}
+
+async fn authorize_published_identity(
+    client: &Client,
+    state: &State,
+    identity_id: NodeId,
+    remote_id: NodeId,
+    field: &str,
+    authenticated_identities: Option<&[NodeId]>,
+) -> anyhow::Result<()> {
+    authorize_published_identity_with(
+        state,
+        identity_id,
+        remote_id,
+        field,
+        authenticated_identities,
+        |remote_id| async move {
+            let node = client.find_node(remote_id).await.with_context(|| {
+                format!("Unable to resolve identities published by {remote_id}")
+            })?;
+            parse_published_identities(remote_id, node)
+        },
+    )
+    .await
+}
+
+async fn authorize_published_identity_with<F, Fut>(
+    state: &State,
+    identity_id: NodeId,
+    remote_id: NodeId,
+    field: &str,
+    authenticated_identities: Option<&[NodeId]>,
+    resolve: F,
+) -> anyhow::Result<()>
+where
+    F: FnOnce(NodeId) -> Fut,
+    Fut: Future<Output = anyhow::Result<Vec<NodeId>>>,
+{
+    if let Some(identities) = authenticated_identities {
+        let default_id = identities
+            .first()
+            .copied()
+            .ok_or_else(|| anyhow!("Authenticated session for {remote_id} has no identities"))?;
+        if default_id != remote_id {
+            anyhow::bail!(
+                "Authenticated session default identity {default_id} does not match remote {remote_id}"
+            );
+        }
+        if !identities.contains(&identity_id) {
+            if cfg!(feature = "encryption-strict") {
+                anyhow::bail!(
+                    "Invalid {field}: {identity_id} is not authenticated for remote {remote_id}"
+                );
+            }
+        } else {
+            return Ok(());
+        }
+    }
+
+    if cfg!(feature = "encryption-strict") {
+        anyhow::bail!("Missing authenticated identities for remote {remote_id}");
+    }
+
+    if identity_id == remote_id {
+        return Ok(());
+    }
+
+    if let Some(authorized) = state.is_published_identity(remote_id, identity_id) {
+        if authorized {
+            return Ok(());
+        }
+        anyhow::bail!("Invalid {field}: {identity_id} is not published for remote {remote_id}");
+    }
+
+    let identities = resolve(remote_id).await?;
+    let authorized = identities.contains(&identity_id);
+    state.cache_published_identities(remote_id, identities);
+
+    if !authorized {
+        anyhow::bail!("Invalid {field}: {identity_id} is not published for remote {remote_id}");
+    }
+
+    Ok(())
+}
+
+fn parse_published_identities(
+    remote_id: NodeId,
+    node: ya_relay_client::model::Node,
+) -> anyhow::Result<Vec<NodeId>> {
+    let identities = node
+        .identities
+        .into_iter()
+        .map(|identity| {
+            let public_key = PublicKey::from_slice(&identity.public_key)
+                .map_err(|_| anyhow!("Invalid public key published by remote {remote_id}"))?;
+            let node_id = NodeId::from(public_key.address().as_ref());
+            let published_node_id = NodeId::try_from(&identity.node_id)
+                .map_err(|_| anyhow!("Invalid NodeId published by remote {remote_id}"))?;
+
+            if node_id != published_node_id {
+                anyhow::bail!("Mismatched NodeId published by remote {remote_id}");
+            }
+
+            Ok(node_id)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    let default_id = identities
+        .first()
+        .copied()
+        .ok_or_else(|| anyhow!("Remote {remote_id} published no identities"))?;
+    if default_id != remote_id {
+        anyhow::bail!("Remote {remote_id} published a different default identity {default_id}");
+    }
+
+    Ok(identities)
+}
+
+const PUBLISHED_IDENTITIES_TTL: Duration = Duration::from_secs(5 * 60);
+
+struct PublishedIdentities {
+    identities: Vec<NodeId>,
+    valid_until: Instant,
+}
+
 #[derive(Clone)]
 struct State {
     inner: Rc<RefCell<StateInner>>,
@@ -1101,9 +1302,10 @@ struct State {
 #[derive(Default)]
 struct StateInner {
     requests: HashMap<String, Request<BusSender>>,
-    routes: HashMap<NetSinkKey, NetSender>,
+    routes: HashMap<NetSinkKey, NetRoute>,
     ids: HashSet<NodeId>,
     services: HashSet<String>,
+    published_identities: HashMap<NodeId, PublishedIdentities>,
 }
 
 impl State {
@@ -1149,6 +1351,40 @@ impl State {
     fn remove_sink(&self, key: &NetSinkKey) {
         let mut inner = self.inner.borrow_mut();
         inner.routes.remove(key);
+    }
+
+    fn is_published_identity(&self, remote_id: NodeId, identity_id: NodeId) -> Option<bool> {
+        let mut inner = self.inner.borrow_mut();
+        let expired = inner
+            .published_identities
+            .get(&remote_id)
+            .map(|entry| entry.valid_until <= Instant::now())
+            .unwrap_or(false);
+
+        if expired {
+            inner.published_identities.remove(&remote_id);
+            return None;
+        }
+
+        inner
+            .published_identities
+            .get(&remote_id)
+            .map(|entry| entry.identities.contains(&identity_id))
+    }
+
+    fn cache_published_identities(&self, remote_id: NodeId, identities: Vec<NodeId>) {
+        let now = Instant::now();
+        let mut inner = self.inner.borrow_mut();
+        inner
+            .published_identities
+            .retain(|_, entry| entry.valid_until > now);
+        inner.published_identities.insert(
+            remote_id,
+            PublishedIdentities {
+                identities,
+                valid_until: now + PUBLISHED_IDENTITIES_TTL,
+            },
+        );
     }
 }
 
@@ -1372,5 +1608,250 @@ mod tests {
     ]
     fn test_parse_from_to_addr_negative_cases(addr: &str) {
         assert!(parse_from_to_addr(addr).is_err())
+    }
+
+    fn published_node(seeds: &[u8]) -> (ya_relay_client::model::Node, Vec<NodeId>) {
+        use ethsign::SecretKey;
+
+        let mut node = ya_relay_client::model::Node::default();
+        let mut node_ids = Vec::new();
+
+        for seed in seeds {
+            let public_key = SecretKey::from_raw(&[*seed; 32]).unwrap().public();
+            let node_id = NodeId::from(public_key.address().as_ref());
+
+            node.identities.push(Default::default());
+            let identity = node.identities.last_mut().unwrap();
+            identity.node_id = node_id.into_array().to_vec();
+            identity.public_key = public_key.bytes().to_vec();
+            node_ids.push(node_id);
+        }
+
+        (node, node_ids)
+    }
+
+    fn empty_state() -> State {
+        State::new(Vec::<NodeId>::new(), HashSet::new())
+    }
+
+    #[test]
+    fn test_net_route_authentication_can_only_be_downgraded() {
+        let (sender, _receiver) = mpsc::channel(1);
+        let (_node, identities) = published_node(&[1, 2]);
+        let identities: AuthenticatedIdentities = identities.into();
+
+        let authenticated = NetRoute::new(sender.clone(), Some(identities.clone()));
+        authenticated.update_authentication(None);
+        authenticated.update_authentication(Some(identities.clone()));
+        assert!(authenticated.authenticated_identities.borrow().is_none());
+
+        let legacy = NetRoute::new(sender, None);
+        legacy.update_authentication(Some(identities));
+        assert!(legacy.authenticated_identities.borrow().is_none());
+    }
+
+    #[cfg(not(feature = "encryption-strict"))]
+    #[test]
+    fn test_published_identity_allows_exact_remote_without_discovery() {
+        let remote = NodeId::from_str("0x95369fc6fd02afeca110b9c32a21fb8ad899ee0a").unwrap();
+        let state = empty_state();
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            remote,
+            remote,
+            "caller",
+            None,
+            |_| async { unreachable!("exact identity must not trigger discovery") },
+        ));
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reply_sender_allows_default_identity_for_alias_target() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2]);
+        let default_id = identities[0];
+        let alias = identities[1];
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            alias,
+            default_id,
+            "reply sender",
+            Some(&identities),
+            |_| async { unreachable!("authenticated identity must not trigger discovery") },
+        ));
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(not(feature = "encryption-strict"))]
+    #[test]
+    fn test_published_identity_rejects_foreign_alias_and_caches_result() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2, 3]);
+        let default_id = identities[0];
+        let own_alias = identities[1];
+        let foreign_alias = identities[2];
+        let published = vec![default_id, own_alias];
+
+        let first = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            foreign_alias,
+            default_id,
+            "caller",
+            None,
+            move |_| async move { Ok(published) },
+        ));
+        let second = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            foreign_alias,
+            default_id,
+            "caller",
+            None,
+            |_| async { unreachable!("cached rejection must not trigger discovery") },
+        ));
+
+        assert!(first.is_err());
+        assert!(second.is_err());
+    }
+
+    #[cfg(not(feature = "encryption-strict"))]
+    #[test]
+    fn test_expired_published_identity_cache_is_refreshed() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2]);
+        let default_id = identities[0];
+        let alias = identities[1];
+
+        state.inner.borrow_mut().published_identities.insert(
+            default_id,
+            PublishedIdentities {
+                identities: vec![default_id, alias],
+                valid_until: Instant::now() - Duration::from_secs(1),
+            },
+        );
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            alias,
+            default_id,
+            "caller",
+            None,
+            move |_| async move { Ok(vec![default_id]) },
+        ));
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(not(feature = "encryption-strict"))]
+    #[test]
+    fn test_compatibility_mode_resolves_unproved_alias() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2, 3]);
+        let default_id = identities[0];
+        let legacy_alias = identities[2];
+        let authenticated = &identities[..2];
+        let published = identities.clone();
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            legacy_alias,
+            default_id,
+            "caller",
+            Some(authenticated),
+            move |_| async move { Ok(published) },
+        ));
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "encryption-strict")]
+    #[test]
+    fn test_strict_mode_rejects_unproved_alias_without_discovery() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2, 3]);
+        let default_id = identities[0];
+        let unproved_alias = identities[2];
+        let authenticated = &identities[..2];
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            unproved_alias,
+            default_id,
+            "caller",
+            Some(authenticated),
+            |_| async { unreachable!("strict rejection must not trigger discovery") },
+        ));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_authenticated_identities_require_matching_default() {
+        let state = empty_state();
+        let (_node, identities) = published_node(&[1, 2]);
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            identities[0],
+            identities[1],
+            "caller",
+            Some(&identities),
+            |_| async { unreachable!("invalid authentication must not trigger discovery") },
+        ));
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "encryption-strict")]
+    #[test]
+    fn test_strict_mode_rejects_missing_authenticated_identities() {
+        let state = empty_state();
+        let remote = NodeId::from_str("0x95369fc6fd02afeca110b9c32a21fb8ad899ee0a").unwrap();
+
+        let result = futures::executor::block_on(authorize_published_identity_with(
+            &state,
+            remote,
+            remote,
+            "caller",
+            None,
+            |_| async { unreachable!("strict rejection must not trigger discovery") },
+        ));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_published_identities_validates_default_and_aliases() {
+        let (node, identities) = published_node(&[1, 2]);
+
+        let published = parse_published_identities(identities[0], node).unwrap();
+
+        assert_eq!(published, identities);
+    }
+
+    #[test]
+    fn test_parse_published_identities_rejects_wrong_default() {
+        let (node, identities) = published_node(&[1, 2]);
+
+        assert!(parse_published_identities(identities[1], node).is_err());
+    }
+
+    #[test]
+    fn test_parse_published_identities_rejects_mismatched_node_id() {
+        let (mut node, identities) = published_node(&[1, 2]);
+        node.identities[1].node_id = identities[0].into_array().to_vec();
+
+        assert!(parse_published_identities(identities[0], node).is_err());
+    }
+
+    #[test]
+    fn test_parse_published_identities_rejects_empty_response() {
+        let remote = NodeId::from_str("0x95369fc6fd02afeca110b9c32a21fb8ad899ee0a").unwrap();
+
+        assert!(parse_published_identities(remote, Default::default()).is_err());
     }
 }

@@ -6,6 +6,8 @@ use chrono::Utc;
 use futures::future::TryFutureExt;
 use futures_util::FutureExt;
 use std::collections::HashMap;
+use std::time::Duration;
+use tokio::time::Instant;
 
 use ya_std_utils::LogErr;
 use ya_utils_actix::actix_handler::ResultTypeGetter;
@@ -13,11 +15,11 @@ use ya_utils_actix::actix_signal::Subscribe;
 use ya_utils_actix::forward_actix_handler;
 
 use super::task_info::TaskInfo;
-use super::task_state::{AgreementState, TasksStates};
+use super::task_state::{AgreementState, StateWaiter, TasksStates};
 use crate::execution::{ActivityDestroyed, CreateActivity, TaskRunner, TerminateActivity};
 use crate::market::provider_market::{NewAgreement, ProviderMarket};
 use crate::market::termination_reason::BreakReason;
-use crate::payments::Payments;
+use crate::payments::{Payments, WaitForInvoiceDelivery};
 use crate::tasks::config::TaskConfig;
 
 // =========================================== //
@@ -61,6 +63,15 @@ pub struct CloseAgreement {
 #[derive(Message, Clone)]
 #[rtype(result = "Result<()>")]
 pub struct Shutdown {}
+
+/// Resolves when all active Agreements are finalized. Used during graceful
+/// shutdown to wait until running tasks finish naturally until the announced
+/// deadline, then break the Agreements that are still active.
+#[derive(Message, Clone)]
+#[rtype(result = "Result<()>")]
+pub struct WaitForFinish {
+    pub deadline: Instant,
+}
 
 // =========================================== //
 // Output events
@@ -121,6 +132,18 @@ struct FinishUpdateState {
     pub agreement_id: String,
     pub new_state: AgreementState,
 }
+
+/// Returns state-change waiters for all Agreements whose final cleanup has not
+/// completed, marked as seen so they wake up only on later state changes.
+#[derive(Message)]
+#[rtype(result = "Result<Vec<StateWaiter>>")]
+struct ListUnfinishedWaiters {}
+
+/// Breaks Agreements that are still active after their announced graceful
+/// termination deadline. Agreements already finalizing are left untouched.
+#[derive(Message)]
+#[rtype(result = "usize")]
+struct BreakActiveAfterGracePeriod {}
 
 // =========================================== //
 // TaskManager implementation
@@ -572,6 +595,101 @@ impl Handler<CloseAgreement> for TaskManager {
         .map_err(move |error: Error| log::error!("Can't close agreement. Error: {}", error));
 
         ActorResponse::r#async(future.into_actor(self).map(|_, _, _| Ok(())))
+    }
+}
+
+impl Handler<ListUnfinishedWaiters> for TaskManager {
+    type Result = Result<Vec<StateWaiter>>;
+
+    fn handle(&mut self, _: ListUnfinishedWaiters, _: &mut Context<Self>) -> Self::Result {
+        self.tasks
+            .list_unfinished()
+            .iter()
+            .map(|id| {
+                let mut waiter = self.tasks.changes_listener(id)?;
+                waiter.mark_seen();
+                Ok(waiter)
+            })
+            .collect()
+    }
+}
+
+impl Handler<WaitForFinish> for TaskManager {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, msg: WaitForFinish, ctx: &mut Context<Self>) -> Self::Result {
+        const STATE_POLL_INTERVAL: Duration = Duration::from_secs(60);
+        const FORCED_CLEANUP_TIMEOUT: Duration = Duration::from_secs(60);
+
+        let myself = ctx.address();
+        let payments = self.payments.clone();
+        async move {
+            let mut deadline = msg.deadline;
+            let mut forced_cleanup = false;
+
+            loop {
+                let waiters = myself.send(ListUnfinishedWaiters {}).await??;
+                if waiters.is_empty() {
+                    return payments.send(WaitForInvoiceDelivery {}).await?;
+                }
+
+                let now = Instant::now();
+                if now >= deadline {
+                    if forced_cleanup {
+                        anyhow::bail!(
+                            "Agreement cleanup did not finish within {FORCED_CLEANUP_TIMEOUT:?}"
+                        );
+                    }
+
+                    let broken = myself.send(BreakActiveAfterGracePeriod {}).await?;
+                    log::warn!(
+                        "Graceful shutdown deadline reached with {} unfinished Agreement(s). \
+                         Breaking {} Agreement(s) that are still active.",
+                        waiters.len(),
+                        broken
+                    );
+                    forced_cleanup = true;
+                    deadline = Instant::now() + FORCED_CLEANUP_TIMEOUT;
+                    continue;
+                }
+
+                log::info!(
+                    "Waiting for {} unfinished Agreement(s) to finish...",
+                    waiters.len()
+                );
+                let transitions: Vec<_> = waiters
+                    .into_iter()
+                    .map(|mut waiter| {
+                        async move { waiter.transition_finished().await }.boxed_local()
+                    })
+                    .collect();
+                // Wake up on the first state change and re-check the list. The
+                // timeout also reaches the termination deadline even when no
+                // state notification arrives.
+                let _ = tokio::time::timeout(
+                    STATE_POLL_INTERVAL.min(deadline.saturating_duration_since(now)),
+                    futures::future::select_all(transitions),
+                )
+                .await;
+            }
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<BreakActiveAfterGracePeriod> for TaskManager {
+    type Result = usize;
+
+    fn handle(&mut self, _: BreakActiveAfterGracePeriod, ctx: &mut Context<Self>) -> Self::Result {
+        let tasks = self.tasks.list_active();
+        let count = tasks.len();
+        for agreement_id in tasks {
+            ctx.address().do_send(BreakAgreement {
+                agreement_id,
+                reason: BreakReason::Shutdown,
+            });
+        }
+        count
     }
 }
 

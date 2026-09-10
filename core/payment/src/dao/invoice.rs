@@ -59,7 +59,7 @@ pub fn update_status(
     invoice_id: &String,
     owner_id: NodeId,
     status: DocumentStatus,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     diesel::update(
         dsl::pay_invoice

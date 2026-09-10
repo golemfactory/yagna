@@ -6,8 +6,8 @@ use crate::cdn::CdnRelease;
 use crate::db::schema::version_release;
 
 #[derive(Clone, Debug, Identifiable, Insertable, Queryable, Serialize, Deserialize)]
-#[primary_key(version)]
-#[table_name = "version_release"]
+#[diesel(primary_key(version))]
+#[diesel(table_name = version_release)]
 pub struct DBRelease {
     pub version: String,
     pub name: String,

@@ -7,8 +7,8 @@ use ya_client_model::NodeId;
 use ya_persistence::types::{AdaptTimestamp, Role, TimestampAdapter};
 
 #[derive(Debug, Identifiable, Insertable)]
-#[table_name = "pay_debit_note_event"]
-#[primary_key(debit_note_id, event_type)]
+#[diesel(table_name = pay_debit_note_event)]
+#[diesel(primary_key(debit_note_id, event_type))]
 pub struct WriteObj {
     pub debit_note_id: String,
     pub owner_id: NodeId,
@@ -39,8 +39,8 @@ impl WriteObj {
 }
 
 #[derive(Queryable, Debug, Identifiable)]
-#[table_name = "pay_debit_note_event_read"]
-#[primary_key(debit_note_id, event_type)]
+#[diesel(table_name = pay_debit_note_event_read)]
+#[diesel(primary_key(debit_note_id, event_type))]
 pub struct ReadObj {
     pub role: Role,
     pub debit_note_id: String,

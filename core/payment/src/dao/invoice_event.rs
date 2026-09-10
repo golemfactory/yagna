@@ -18,7 +18,7 @@ pub fn create(
     invoice_id: String,
     owner_id: NodeId,
     event_type: InvoiceEventType,
-    conn: &ConnType,
+    conn: &mut ConnType,
 ) -> DbResult<()> {
     let event = WriteObj::new(invoice_id, owner_id, event_type)?;
     diesel::insert_into(write_dsl::pay_invoice_event)

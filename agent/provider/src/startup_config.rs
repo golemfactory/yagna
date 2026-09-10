@@ -6,6 +6,7 @@ use std::str::FromStr;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use bigdecimal::BigDecimal;
 use directories::UserDirs;
 use futures::channel::oneshot;
 use notify::*;
@@ -24,11 +25,13 @@ use crate::cli::pre_install::PreInstallConfig;
 pub use crate::cli::preset::PresetsConfig;
 use crate::cli::profile::ProfileConfig;
 use crate::cli::rule::RuleCommand;
+use crate::cli::shutdown::ShutdownConfig;
 use crate::cli::whitelist::WhitelistConfig;
 pub(crate) use crate::config::globals::GLOBALS_JSON;
 use crate::execution::{ExeUnitsRegistry, TaskRunnerConfig};
 use crate::market::config::MarketConfig;
 use crate::payments::PaymentsConfig;
+pub(crate) use crate::shutdown::SHUTDOWN_STATUS_JSON;
 use crate::tasks::config::TaskConfig;
 
 lazy_static::lazy_static! {
@@ -88,6 +91,8 @@ pub struct ProviderConfig {
     pub hardware_file: PathBuf,
     #[structopt(skip = RULES_JSON)]
     pub rules_file: PathBuf,
+    #[structopt(skip = SHUTDOWN_STATUS_JSON)]
+    pub shutdown_file: PathBuf,
     /// Max number of available CPU cores
     #[structopt(
         long,
@@ -259,7 +264,7 @@ pub struct PresetNoInteractive {
     #[structopt(long)]
     pub pricing: Option<String>,
     #[structopt(long, parse(try_from_str = parse_key_val))]
-    pub price: Vec<(String, f64)>,
+    pub price: Vec<(String, BigDecimal)>,
 }
 
 #[derive(StructOpt, Clone, Debug)]
@@ -310,6 +315,11 @@ pub enum Commands {
     Clean(CleanConfig),
     /// Manage Rule config
     Rule(RuleCommand),
+    /// Request graceful shutdown of a running provider. The provider stops
+    /// offering on the market, waits for current tasks until their announced
+    /// deadlines, finalizes the remaining Agreements, and gives issued Invoices
+    /// a bounded delivery window before exiting.
+    Shutdown(ShutdownConfig),
 }
 
 #[derive(Debug)]

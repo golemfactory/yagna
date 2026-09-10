@@ -8,6 +8,7 @@ use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+use tokio::sync::oneshot;
 use tokio_stream::wrappers::WatchStream;
 
 use ya_agreement_utils::agreement::TypedArrayPointer;
@@ -22,13 +23,16 @@ use crate::dir::clean_provider_dir;
 use crate::events::Event;
 use crate::execution::{ExeUnitDesc, GetExeUnit, GetOfferTemplates, TaskRunner, UpdateActivity};
 use crate::hardware;
-use crate::market::provider_market::{OfferKind, Shutdown as MarketShutdown, Unsubscribe};
+use crate::market::provider_market::{
+    BeginDrain, OfferKind, SendTerminationNotices, Shutdown as MarketShutdown, Unsubscribe,
+};
 use crate::market::{CreateOffer, Preset, PresetManager, ProviderMarket};
 use crate::payments::{AccountView, LinearPricingOffer, Payments, PricingOffer};
 use crate::rules::RulesManager;
+use crate::shutdown::ShutdownManager;
 use crate::startup_config::{FileMonitor, NodeConfig, PaymentPlatform, ProviderConfig, RunConfig};
 use crate::tasks::task_manager::{
-    InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager,
+    InitializeTaskManager, Shutdown as TaskManagerShutdown, TaskManager, WaitForFinish,
 };
 
 struct GlobalsManager {
@@ -84,6 +88,15 @@ pub struct ProviderAgent {
     keystore_monitor: FileMonitor,
     whitelist_monitor: FileMonitor,
     net_api: NetApi,
+    shutdown: ShutdownManager,
+    shutdown_finished_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    termination_notice_grace_period: Duration,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProviderMode {
+    Running,
+    Draining,
 }
 
 impl ProviderAgent {
@@ -125,7 +138,8 @@ impl ProviderAgent {
             .await
             .inspect_err(|err| log::error!("Runtimes test failed: {err}"))?;
 
-        // Generate session id from node name and process id to make sure it's unique.
+        // Include a random suffix so a later process reusing the same pid cannot
+        // claim the previous Provider instance's resources.
         let name = args
             .node
             .node_name
@@ -140,9 +154,15 @@ impl ProviderAgent {
             &cert_dir,
         )?;
 
-        args.market.session_id = format!("{}-{}", name, std::process::id());
+        args.market.session_id = format!(
+            "{}-{}-{:08x}",
+            name,
+            std::process::id(),
+            rand::random::<u32>()
+        );
         args.runner.session_id = args.market.session_id.clone();
         args.payment.session_id = args.market.session_id.clone();
+        let termination_notice_grace_period = args.market.termination_notice_grace_period;
 
         let networks = args.node.account.networks.clone();
         for n in networks.iter() {
@@ -167,6 +187,8 @@ impl ProviderAgent {
         hardware.spawn_monitor(&config.hardware_file)?;
         let (rulestore_monitor, keystore_monitor, whitelist_monitor) =
             rules_manager.spawn_file_monitors()?;
+        let mut shutdown = ShutdownManager::try_new(&config.shutdown_file)?;
+        shutdown.spawn_monitor(&config.shutdown_file)?;
 
         let agent_negotiators_cfg = AgentNegotiatorsConfig { rules_manager };
 
@@ -191,7 +213,18 @@ impl ProviderAgent {
             keystore_monitor,
             whitelist_monitor,
             net_api,
+            shutdown,
+            shutdown_finished_tx: Arc::new(Mutex::new(None)),
+            termination_notice_grace_period,
         })
+    }
+
+    /// Returns a receiver notified after the bounded Agreement-finalization
+    /// and Invoice-delivery waits complete.
+    pub fn shutdown_finished_receiver(&mut self) -> oneshot::Receiver<()> {
+        let (tx, rx) = oneshot::channel();
+        *self.shutdown_finished_tx.lock().unwrap() = Some(tx);
+        rx
     }
 
     async fn create_offers(
@@ -337,7 +370,13 @@ fn get_prices(
     pricing_model: &dyn PricingOffer,
     preset: &Preset,
     offer: &OfferTemplate,
-) -> Result<(f64, Vec<(String, f64)>), Error> {
+) -> Result<
+    (
+        bigdecimal::BigDecimal,
+        Vec<(String, bigdecimal::BigDecimal)>,
+    ),
+    Error,
+> {
     let pointer = offer.property("golem.com.usage.vector");
     let offer_usage_vec = pointer
         .as_typed_array(serde_json::Value::as_str)
@@ -367,7 +406,7 @@ fn get_prices(
     Ok((initial_price, prices))
 }
 
-fn get_usage_vector_value(prices: &[(String, f64)]) -> serde_json::Value {
+fn get_usage_vector_value(prices: &[(String, bigdecimal::BigDecimal)]) -> serde_json::Value {
     let vec = prices
         .iter()
         .map(|(p, _)| serde_json::Value::String(p.clone()))
@@ -404,71 +443,130 @@ impl Handler<Initialize> for ProviderAgent {
 
     fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
         let market = self.market.clone();
-        let agent = ctx.address();
+        let event_agent = ctx.address();
         let preset_state = self.presets.state.clone();
+        let termination_notice_grace_period = self.termination_notice_grace_period;
 
-        let rx = futures::stream::select_all(vec![
+        let mut rx = futures::stream::select_all(vec![
             WatchStream::new(self.hardware.event_receiver()),
             WatchStream::new(self.presets.event_receiver()),
+            WatchStream::new(self.shutdown.event_receiver()),
         ]);
 
-        tokio::task::spawn_local(async move {
-            rx.for_each(|e| async {
-                match e {
-                    Event::HardwareChanged => {
-                        let _ = market
-                            .send(Unsubscribe(OfferKind::Any))
-                            .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
-                            .await;
-                        let _ = agent
-                            .send(CreateOffers(OfferKind::Any))
-                            .map_err(|e| log::error!("Cannot create offers: {}", e))
-                            .await;
-                    }
-                    Event::PresetsChanged {
-                        presets,
-                        updated,
-                        removed,
-                    } => {
-                        let mut new_names = presets.active.clone();
-                        {
-                            let mut state = preset_state.lock().unwrap();
-                            new_names.retain(|n| {
-                                if state.active.contains(n) && !updated.contains(n) {
-                                    return false;
-                                }
-                                true
-                            });
-                            *state = presets;
-                        }
-
-                        let mut to_unsub = updated;
-                        to_unsub.extend(removed);
-
-                        if !to_unsub.is_empty() {
-                            let _ = market
-                                .send(Unsubscribe(OfferKind::WithPresets(to_unsub)))
-                                .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
-                                .await;
-                        }
-                        if !new_names.is_empty() {
-                            let _ = agent
-                                .send(CreateOffers(OfferKind::WithPresets(new_names)))
-                                .map_err(|e| log::error!("Cannot create offers: {}", e))
-                                .await;
-                        }
-                    }
-                    _ => (),
-                }
-            })
-            .await;
-        });
-
-        let agent = ctx.address();
+        let initialize_agent = ctx.address();
         let task_manager = self.task_manager.clone();
         async move {
             task_manager.send(InitializeTaskManager {}).await??;
-            agent.send(CreateOffers(OfferKind::Any)).await??;
+            initialize_agent
+                .send(CreateOffers(OfferKind::Any))
+                .await??;
+
+            // Process file events only after initial Offers exist. This keeps
+            // later Offer changes ordered with the transition to Draining.
+            tokio::task::spawn_local(async move {
+                let mut mode = ProviderMode::Running;
+
+                while let Some(event) = rx.next().await {
+                    match event {
+                        Event::HardwareChanged if mode == ProviderMode::Running => {
+                            let _ = market
+                                .send(Unsubscribe(OfferKind::Any))
+                                .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
+                                .await;
+                            let _ = event_agent
+                                .send(CreateOffers(OfferKind::Any))
+                                .map_err(|e| log::error!("Cannot create offers: {}", e))
+                                .await;
+                        }
+                        Event::PresetsChanged {
+                            presets,
+                            updated,
+                            removed,
+                        } if mode == ProviderMode::Running => {
+                            let mut new_names = presets.active.clone();
+                            {
+                                let mut state = preset_state.lock().unwrap();
+                                new_names.retain(|n| {
+                                    if state.active.contains(n) && !updated.contains(n) {
+                                        return false;
+                                    }
+                                    true
+                                });
+                                *state = presets;
+                            }
+
+                            let mut to_unsub = updated;
+                            to_unsub.extend(removed);
+
+                            if !to_unsub.is_empty() {
+                                let _ = market
+                                    .send(Unsubscribe(OfferKind::WithPresets(to_unsub)))
+                                    .map_err(|e| log::error!("Cannot unsubscribe offers: {}", e))
+                                    .await;
+                            }
+                            if !new_names.is_empty() {
+                                let _ = event_agent
+                                    .send(CreateOffers(OfferKind::WithPresets(new_names)))
+                                    .map_err(|e| log::error!("Cannot create offers: {}", e))
+                                    .await;
+                            }
+                        }
+                        Event::ShutdownChanged { status }
+                            if status.graceful_shutdown_requested
+                                && mode == ProviderMode::Running =>
+                        {
+                            // Set Draining before awaiting another Actor so queued
+                            // file events cannot start Offer creation.
+                            mode = ProviderMode::Draining;
+                            log::info!("Graceful shutdown requested. Unsubscribing all Offers.");
+                            match market.send(BeginDrain).await {
+                                Ok(Ok(())) => (),
+                                Ok(Err(e)) => {
+                                    log::error!(
+                                        "Failed to unsubscribe Offers during graceful shutdown: {e}"
+                                    );
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to request Offer unsubscribe during graceful shutdown: {e}"
+                                    );
+                                }
+                            }
+                            // Tell Requestors to finish their work and close
+                            // the Agreements, before waiting for them below.
+                            let deadline = match market.send(SendTerminationNotices).await {
+                                Ok(Ok(deadline)) => deadline,
+                                Ok(Err(e)) => {
+                                    log::error!(
+                                        "Failed to send Agreement termination notices during graceful shutdown: {e}"
+                                    );
+                                    tokio::time::Instant::now()
+                                        .checked_add(termination_notice_grace_period)
+                                        .unwrap_or_else(tokio::time::Instant::now)
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "Failed to request Agreement termination notices during graceful shutdown: {e}"
+                                    );
+                                    tokio::time::Instant::now()
+                                        .checked_add(termination_notice_grace_period)
+                                        .unwrap_or_else(tokio::time::Instant::now)
+                                }
+                            };
+                            event_agent.do_send(FinishShutdown { deadline });
+                        }
+                        Event::HardwareChanged | Event::PresetsChanged { .. }
+                            if mode == ProviderMode::Draining =>
+                        {
+                            log::debug!(
+                                "Ignoring provider configuration change during graceful shutdown."
+                            );
+                        }
+                        _ => (),
+                    }
+                }
+            });
+
             Ok(())
         }
         .boxed_local()
@@ -491,6 +589,41 @@ impl Handler<Shutdown> for ProviderAgent {
             tasks.send(TaskManagerShutdown {}).await??;
             log_handler.shutdown();
             Ok(())
+        }
+        .boxed_local()
+    }
+}
+
+impl Handler<FinishShutdown> for ProviderAgent {
+    type Result = ResponseFuture<Result<(), Error>>;
+
+    fn handle(&mut self, msg: FinishShutdown, _: &mut Context<Self>) -> Self::Result {
+        let task_manager = self.task_manager.clone();
+        let finished_tx = self.shutdown_finished_tx.clone();
+        async move {
+            let result = task_manager
+                .send(WaitForFinish {
+                    deadline: msg.deadline,
+                })
+                .await?;
+
+            match &result {
+                Ok(()) => {
+                    log::info!(
+                        "Graceful shutdown ready. All Agreements finalized and Invoices delivered."
+                    )
+                }
+                Err(e) => {
+                    log::error!(
+                        "Waiting for Agreements or Invoice delivery failed: {e}. Shutting down anyway."
+                    )
+                }
+            }
+
+            if let Some(tx) = finished_tx.lock().unwrap().take() {
+                let _ = tx.send(());
+            }
+            result
         }
         .boxed_local()
     }
@@ -531,6 +664,13 @@ impl Handler<CreateOffers> for ProviderAgent {
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
 pub struct Initialize;
+
+/// Waits for Agreements and Invoice delivery after Offer draining has completed.
+#[derive(Message)]
+#[rtype(result = "Result<(), Error>")]
+struct FinishShutdown {
+    deadline: tokio::time::Instant,
+}
 
 #[derive(Message)]
 #[rtype(result = "Result<(), Error>")]
@@ -610,7 +750,10 @@ mod tests {
 
         let preset = Preset {
             pricing_model: "linear".to_string(),
-            usage_coeffs: std::collections::BTreeMap::from([("test_coefficient".to_string(), 1.0)]),
+            usage_coeffs: std::collections::BTreeMap::from([(
+                "test_coefficient".to_string(),
+                bigdecimal::BigDecimal::from(1),
+            )]),
             ..Default::default()
         };
 

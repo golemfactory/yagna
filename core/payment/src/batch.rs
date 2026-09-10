@@ -3,7 +3,11 @@ use crate::models::batch::DbBatchOrderItemFullInfo;
 use crate::timeout_lock::MutexTimeoutExt;
 use bigdecimal::{BigDecimal, Zero};
 use lazy_static::lazy_static;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use std::collections::HashMap;
+use std::env;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use ya_client_model::payment::allocation::Deposit;
@@ -80,6 +84,12 @@ async fn send_deposit_payments(
     Ok(())
 }
 
+pub fn get_min_payment_amount() -> Option<BigDecimal> {
+    env::var("MIN_PAYMENT_AMOUNT_GLM")
+        .ok()
+        .and_then(|val| BigDecimal::from_str(&val).ok())
+}
+
 pub async fn send_batch_payments(
     db: Arc<tokio::sync::Mutex<DbExecutor>>,
     owner: NodeId,
@@ -147,6 +157,47 @@ pub async fn send_batch_payments(
             let mut payment_group_amount = BigDecimal::zero();
             for item in &items {
                 payment_group_amount += item.amount.0.clone();
+            }
+
+            if let Some(min_payment_amount) = get_min_payment_amount() {
+                if payment_group_amount <= min_payment_amount {
+                    log::warn!(
+                    "Skipping payment for order_id: {}, amount: {} is below minimum threshold {}",
+                    order_id,
+                    payment_group_amount,
+                    min_payment_amount
+                );
+                    for item in items {
+                        //@todo mark item as skipped payment in db
+
+                        let db_executor = db
+                            .timeout_lock(crate::processor::DB_LOCK_TIMEOUT)
+                            .await
+                            .map_err(|err| {
+                                ProcessPaymentsError::ProcessPaymentsError(format!(
+                                    "Db timeout lock when sending payments {err}"
+                                ))
+                            })?;
+                        db_executor
+                            .as_dao::<BatchDao>()
+                            .batch_order_item_send(
+                                order_id.to_string(),
+                                owner,
+                                key.payee_addr.clone(),
+                                item.allocation_id,
+                                format!(
+                                    "SKIPPED_PAYMENT_{}",
+                                    thread_rng()
+                                        .sample_iter(&Alphanumeric)
+                                        .take(10)
+                                        .map(char::from)
+                                        .collect::<String>()
+                                ),
+                            )
+                            .await?;
+                    }
+                    continue;
+                }
             }
 
             let payment_order_id = bus::service(&bus_id)

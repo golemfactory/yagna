@@ -20,8 +20,8 @@ fn resolve_multistep_with_supplemented_props() {
 
     let expression = build_expression(&parse(f).unwrap()).unwrap();
 
-    let property_set_partial = PropertySet::from_flat_props(&properties_partial);
-    let property_set_full = PropertySet::from_flat_props(&properties_full);
+    let property_set_partial = PropertySet::from_flat_props(&properties_partial).unwrap();
+    let property_set_full = PropertySet::from_flat_props(&properties_full).unwrap();
 
     // run resolve for incomplete props - expect unresolved property refs and a reduced expression
 
@@ -69,8 +69,8 @@ fn resolve_api_with_supplemented_props() {
 
     let expression = build_expression(&parse(f).unwrap()).unwrap();
 
-    let property_set_partial = PropertySet::from_flat_props(&properties_partial);
-    let property_set_full = PropertySet::from_flat_props(&properties_full);
+    let property_set_partial = PropertySet::from_flat_props(&properties_partial).unwrap();
+    let property_set_full = PropertySet::from_flat_props(&properties_full).unwrap();
 
     // run resolve for incomplete props - expect unresolved property refs and a reduced expression
 

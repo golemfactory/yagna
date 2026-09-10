@@ -97,7 +97,15 @@ impl DeadlineChecker {
 
     fn on_deadline_elapsed(&mut self, ctx: &mut Context<Self>, deadline: DateTime<Utc>) {
         let now = Utc::now();
-        assert!(now >= deadline);
+        if now < deadline {
+            log::warn!(
+                "Programming error: Deadline didn't really elapse: {now} < {deadline}.\
+                This was assert! in previous version, which could cause DeadlineChecker's death."
+            );
+            // Treat this as a spurious wakeup: adjust nearest_deadline so that
+            // update_deadline() will re-arm the timer for the true top_deadline.
+            self.nearest_deadline = now;
+        }
 
         let elapsed = self.drain_elapsed(now);
 
@@ -133,7 +141,7 @@ impl DeadlineChecker {
 
         elapsed.sort_by(|dead1, dead2| dead1.deadline.cmp(&dead2.deadline));
 
-        // Remove Agreements with empty lists. Otherwise no longer needed Agreements
+        // Remove Agreements with empty lists. Otherwise, no longer needed Agreements
         // would remain in HashMap for always.
         self.deadlines = self
             .deadlines
@@ -165,12 +173,13 @@ impl Handler<TrackDeadline> for DeadlineChecker {
     type Result = ();
 
     fn handle(&mut self, msg: TrackDeadline, ctx: &mut Context<Self>) -> Self::Result {
-        if !self.deadlines.contains_key(&msg.category) {
-            self.deadlines.insert(msg.category.to_string(), vec![]);
-        }
-
-        let deadlines = self.deadlines.get_mut(&msg.category).unwrap();
-        let idx = match deadlines.binary_search_by(|element| element.deadline.cmp(&msg.deadline)) {
+        let TrackDeadline {
+            category,
+            deadline,
+            id,
+        } = msg;
+        let deadlines = self.deadlines.entry(category).or_default();
+        let idx = match deadlines.binary_search_by(|element| element.deadline.cmp(&deadline)) {
             // Element with this deadline existed. We add new element behind it (order shouldn't matter since timestamps
             // are the same, but it's better to keep order of calls to `track_deadline` function).
             Ok(idx) => idx + 1,
@@ -178,13 +187,7 @@ impl Handler<TrackDeadline> for DeadlineChecker {
             Err(idx) => idx,
         };
 
-        deadlines.insert(
-            idx,
-            DeadlineDesc {
-                deadline: msg.deadline,
-                id: msg.id,
-            },
-        );
+        deadlines.insert(idx, DeadlineDesc { deadline, id });
 
         self.update_deadline(ctx).log_err().ok();
     }

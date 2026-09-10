@@ -9,8 +9,8 @@ use ya_persistence::types::{AdaptDuration, AdaptTimestamp, DurationAdapter, Time
 
 #[derive(Debug, Clone, Queryable, Insertable, AsChangeset, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[primary_key(owner_id)]
-#[table_name = "pay_batch_cycle"]
+#[diesel(primary_key(owner_id))]
+#[diesel(table_name = pay_batch_cycle)]
 pub struct DbPayBatchCycle {
     pub owner_id: NodeId,
     pub platform: String,

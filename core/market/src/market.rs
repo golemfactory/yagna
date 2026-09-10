@@ -87,9 +87,9 @@ impl MarketService {
         counter!("market.demands.expired", 0);
 
         db.ram_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
+            .apply_migration(crate::db::migrations::MIGRATIONS)?;
         db.disk_db
-            .apply_migration(crate::db::migrations::run_with_output)?;
+            .apply_migration(crate::db::migrations::MIGRATIONS)?;
 
         let scan_set = ScannerSet::new(db.clone());
         let store = SubscriptionStore::new(db.clone(), scan_set.clone(), config.clone());
