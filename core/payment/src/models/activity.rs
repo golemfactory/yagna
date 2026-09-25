@@ -57,7 +57,8 @@ pub struct ReadObj {
     pub created_ts: Option<NaiveDateTime>,
     pub updated_ts: Option<NaiveDateTime>,
 
-    pub peer_id: NodeId,    // From Agreement
-    pub payee_addr: String, // From Agreement
-    pub payer_addr: String, // From Agreement
+    pub peer_id: NodeId,          // From Agreement
+    pub payee_addr: String,       // From Agreement
+    pub payer_addr: String,       // From Agreement
+    pub payment_platform: String, // From Agreement
 }

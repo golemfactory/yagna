@@ -182,6 +182,7 @@ impl ActivityDao<'_> {
                     agreement_dsl::peer_id,
                     agreement_dsl::payee_addr,
                     agreement_dsl::payer_addr,
+                    agreement_dsl::payment_platform,
                 ))
                 .filter(dsl::id.eq(&activity_id))
                 .filter(dsl::owner_id.eq(&owner_id))
