@@ -97,6 +97,7 @@ table! {
         amount -> Text,
         payment_id -> Nullable<Text>,
         paid -> Bool,
+        skipped -> Bool,
     }
 }
 

@@ -82,6 +82,9 @@ pub fn resolve_invoices_agreement_part(
     use crate::schema::pay_agreement::dsl as pa;
     use crate::schema::pay_invoice::dsl as iv;
 
+    // `since` is the settlement lookback cutoff (see SETTLEMENT_LOOKBACK in
+    // processor.rs). Accepted invoices older than it are intentionally dropped
+    // rather than carried forward, and are never scheduled by a later run.
     let invoices = iv::pay_invoice
         .inner_join(
             pa::pay_agreement.on(pa::id
@@ -848,6 +851,37 @@ impl BatchDao<'_> {
         }).await
     }
 
+    /// Orders that still have at least one item never handed to a payment driver.
+    /// The scheduled-amount counters are already bumped when an order is created,
+    /// so the resolver will never recreate these debts — dispatch must be retried
+    /// per order instead (see `process_payments_now`).
+    pub async fn get_unsent_order_ids(
+        &self,
+        owner_id: NodeId,
+        platform: String,
+    ) -> DbResult<Vec<String>> {
+        readonly_transaction(self.pool, "get_unsent_order_ids", move |conn| {
+            Ok(oidsl::pay_batch_order_item
+                .inner_join(
+                    dsl::pay_batch_order.on(oidsl::order_id
+                        .eq(dsl::id)
+                        .and(oidsl::owner_id.eq(dsl::owner_id))),
+                )
+                .filter(
+                    dsl::owner_id
+                        .eq(owner_id)
+                        .and(dsl::platform.eq(&platform))
+                        .and(oidsl::payment_id.is_null())
+                        .and(oidsl::paid.eq(false))
+                        .and(oidsl::skipped.eq(false)),
+                )
+                .select(oidsl::order_id)
+                .distinct()
+                .load(conn)?)
+        })
+        .await
+    }
+
     pub async fn get_unsent_batch_items(
         &self,
         owner_id: NodeId,
@@ -878,13 +912,15 @@ impl BatchDao<'_> {
                     oidsl::amount,
                     oidsl::payment_id,
                     oidsl::paid,
+                    oidsl::skipped,
                 ))
                 .filter(
                     oidsl::owner_id
                         .eq(owner_id)
                         .and(oidsl::order_id.eq(&order_id))
                         .and(oidsl::payment_id.is_null())
-                        .and(oidsl::paid.eq(false)),
+                        .and(oidsl::paid.eq(false))
+                        .and(oidsl::skipped.eq(false)),
                 )
                 .load::<DbBatchOrderItemFullInfo>(conn)?)
         })
@@ -978,6 +1014,31 @@ impl BatchDao<'_> {
         .await
     }
 
+    pub async fn batch_order_item_skip(
+        &self,
+        order_id: String,
+        owner_id: NodeId,
+        payee_addr: String,
+        allocation_id: String,
+    ) -> DbResult<usize> {
+        do_with_transaction(self.pool, "batch_order_item_skip", move |conn| {
+            Ok(diesel::update(oidsl::pay_batch_order_item)
+                .filter(
+                    oidsl::order_id
+                        .eq(order_id)
+                        .and(oidsl::payee_addr.eq(payee_addr))
+                        .and(oidsl::allocation_id.eq(allocation_id))
+                        .and(oidsl::owner_id.eq(owner_id))
+                        .and(oidsl::payment_id.is_null())
+                        .and(oidsl::paid.eq(false))
+                        .and(oidsl::skipped.eq(false)),
+                )
+                .set(oidsl::skipped.eq(true))
+                .execute(conn)?)
+        })
+        .await
+    }
+
     pub async fn batch_order_item_paid(
         &self,
         order_id: String,
@@ -1041,9 +1102,341 @@ impl BatchDao<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::migrations;
     use bigdecimal::Zero;
     use chrono::Duration;
+    use diesel::connection::SimpleConnection;
     use ya_persistence::executor::DbExecutor;
+
+    #[actix_rt::test]
+    async fn skipped_item_migration_backfills_legacy_payment_ids() {
+        let db =
+            DbExecutor::in_memory(&format!("batch-skip-migration-{}", Uuid::new_v4())).unwrap();
+
+        db.with_transaction("migrate_legacy_batch_items", move |conn| {
+            conn.batch_execute(
+                "CREATE TABLE pay_batch_order_item(
+                    order_id VARCHAR(50) NOT NULL,
+                    owner_id VARCHAR(50) NOT NULL,
+                    payee_addr VARCHAR(50) NOT NULL,
+                    allocation_id VARCHAR(50) NOT NULL,
+                    amount VARCHAR(32) NOT NULL,
+                    payment_id VARCHAR(50),
+                    paid BOOLEAN NOT NULL DEFAULT FALSE,
+                    PRIMARY KEY (owner_id, order_id, payee_addr, allocation_id)
+                );
+                INSERT INTO pay_batch_order_item VALUES
+                    ('legacy', 'owner', 'payee', 'allocation-1', '1',
+                     'SKIPPED_PAYMENT_1234567890', FALSE),
+                    ('paid', 'owner', 'payee', 'allocation-2', '1',
+                     'SKIPPED_PAYMENT_PAID', TRUE),
+                    ('regular', 'owner', 'payee', 'allocation-3', '1',
+                     'payment-1', FALSE);",
+            )?;
+            conn.batch_execute(include_str!(
+                "../../migrations/2026-03-17-000001_batch_order_item_skipped/up.sql"
+            ))?;
+
+            let items = oidsl::pay_batch_order_item
+                .select((
+                    oidsl::order_id,
+                    oidsl::payment_id,
+                    oidsl::paid,
+                    oidsl::skipped,
+                ))
+                .order_by(oidsl::order_id)
+                .load::<(String, Option<String>, bool, bool)>(conn)?;
+
+            assert_eq!(
+                items,
+                vec![
+                    ("legacy".to_string(), None, false, true),
+                    (
+                        "paid".to_string(),
+                        Some("SKIPPED_PAYMENT_PAID".to_string()),
+                        true,
+                        false,
+                    ),
+                    (
+                        "regular".to_string(),
+                        Some("payment-1".to_string()),
+                        false,
+                        false,
+                    ),
+                ]
+            );
+
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+    }
+
+    #[actix_rt::test]
+    async fn skipped_batch_item_is_not_queued_again() {
+        let db = DbExecutor::in_memory(&format!("batch-skip-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        let owner_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
+        let owner = owner_id.to_string();
+        let order_id = "order-1".to_string();
+        let allocation_id = "allocation-1".to_string();
+        let payee_addr = "0xfeed000000000000000000000000000000000000".to_string();
+        let now = Utc::now().naive_utc();
+
+        let seed_owner = owner.clone();
+        let seed_order_id = order_id.clone();
+        let seed_allocation_id = allocation_id.clone();
+        let seed_payee_addr = payee_addr.clone();
+        db.with_transaction("seed_batch_item", move |conn| {
+            diesel::insert_into(padsl::pay_allocation)
+                .values((
+                    padsl::id.eq(&seed_allocation_id),
+                    padsl::owner_id.eq(&seed_owner),
+                    padsl::payment_platform.eq("erc20-mainnet-glm"),
+                    padsl::address.eq(&seed_owner),
+                    padsl::avail_amount.eq("10"),
+                    padsl::spent_amount.eq("0"),
+                    padsl::created_ts.eq(now),
+                    padsl::updated_ts.eq(now),
+                    padsl::timeout.eq(now),
+                    padsl::released.eq(false),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(dsl::pay_batch_order)
+                .values((
+                    dsl::id.eq(&seed_order_id),
+                    dsl::created_ts.eq(now),
+                    dsl::updated_ts.eq(now),
+                    dsl::owner_id.eq(&seed_owner),
+                    dsl::payer_addr.eq(&seed_owner),
+                    dsl::platform.eq("erc20-mainnet-glm"),
+                    dsl::total_amount.eq("1"),
+                    dsl::paid_amount.eq("0"),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(oidsl::pay_batch_order_item)
+                .values((
+                    oidsl::order_id.eq(&seed_order_id),
+                    oidsl::owner_id.eq(&seed_owner),
+                    oidsl::payee_addr.eq(&seed_payee_addr),
+                    oidsl::allocation_id.eq(&seed_allocation_id),
+                    oidsl::amount.eq("1"),
+                ))
+                .execute(conn)?;
+
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+
+        let dao = db.as_dao::<BatchDao>();
+        let queued = dao
+            .get_unsent_batch_items(owner_id, order_id.clone())
+            .await
+            .unwrap();
+        assert_eq!(queued.len(), 1);
+        assert!(!queued[0].skipped);
+
+        assert_eq!(
+            dao.batch_order_item_send(
+                order_id.clone(),
+                owner_id,
+                payee_addr.clone(),
+                allocation_id.clone(),
+                "payment-1".to_string(),
+            )
+            .await
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            dao.batch_order_item_skip(
+                order_id.clone(),
+                owner_id,
+                payee_addr.clone(),
+                allocation_id.clone(),
+            )
+            .await
+            .unwrap(),
+            0
+        );
+
+        let reset_order_id = order_id.clone();
+        let reset_owner = owner.clone();
+        let reset_payee_addr = payee_addr.clone();
+        let reset_allocation_id = allocation_id.clone();
+        db.with_transaction("mark_batch_item_paid", move |conn| {
+            diesel::update(oidsl::pay_batch_order_item)
+                .filter(
+                    oidsl::order_id
+                        .eq(reset_order_id)
+                        .and(oidsl::owner_id.eq(reset_owner))
+                        .and(oidsl::payee_addr.eq(reset_payee_addr))
+                        .and(oidsl::allocation_id.eq(reset_allocation_id)),
+                )
+                .set((oidsl::payment_id.eq(None::<String>), oidsl::paid.eq(true)))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            dao.batch_order_item_skip(
+                order_id.clone(),
+                owner_id,
+                payee_addr.clone(),
+                allocation_id.clone(),
+            )
+            .await
+            .unwrap(),
+            0
+        );
+
+        let reset_order_id = order_id.clone();
+        let reset_owner = owner;
+        let reset_payee_addr = payee_addr.clone();
+        let reset_allocation_id = allocation_id.clone();
+        db.with_transaction("reset_batch_item", move |conn| {
+            diesel::update(oidsl::pay_batch_order_item)
+                .filter(
+                    oidsl::order_id
+                        .eq(reset_order_id)
+                        .and(oidsl::owner_id.eq(reset_owner))
+                        .and(oidsl::payee_addr.eq(reset_payee_addr))
+                        .and(oidsl::allocation_id.eq(reset_allocation_id)),
+                )
+                .set(oidsl::paid.eq(false))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            dao.batch_order_item_skip(order_id.clone(), owner_id, payee_addr, allocation_id,)
+                .await
+                .unwrap(),
+            1
+        );
+
+        let items = dao
+            .get_batch_order_items(order_id.clone(), owner_id)
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 1);
+        assert!(items[0].skipped);
+        assert_eq!(items[0].payment_id, None);
+        assert!(dao
+            .get_unsent_batch_items(owner_id, order_id)
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn unsent_order_is_listed_until_dispatched_or_skipped() {
+        let db = DbExecutor::in_memory(&format!("batch-unsent-orders-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        let owner_id = NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap();
+        let owner = owner_id.to_string();
+        let platform = "erc20-mainnet-glm".to_string();
+        let order_id = "order-1".to_string();
+        let allocation_id = "allocation-1".to_string();
+        let payee_addr = "0xfeed000000000000000000000000000000000000".to_string();
+        let now = Utc::now().naive_utc();
+
+        let seed_owner = owner.clone();
+        let seed_platform = platform.clone();
+        let seed_order_id = order_id.clone();
+        let seed_allocation_id = allocation_id.clone();
+        let seed_payee_addr = payee_addr.clone();
+        db.with_transaction("seed_unsent_order", move |conn| {
+            diesel::insert_into(padsl::pay_allocation)
+                .values((
+                    padsl::id.eq(&seed_allocation_id),
+                    padsl::owner_id.eq(&seed_owner),
+                    padsl::payment_platform.eq(&seed_platform),
+                    padsl::address.eq(&seed_owner),
+                    padsl::avail_amount.eq("10"),
+                    padsl::spent_amount.eq("0"),
+                    padsl::created_ts.eq(now),
+                    padsl::updated_ts.eq(now),
+                    padsl::timeout.eq(now),
+                    padsl::released.eq(false),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(dsl::pay_batch_order)
+                .values((
+                    dsl::id.eq(&seed_order_id),
+                    dsl::created_ts.eq(now),
+                    dsl::updated_ts.eq(now),
+                    dsl::owner_id.eq(&seed_owner),
+                    dsl::payer_addr.eq(&seed_owner),
+                    dsl::platform.eq(&seed_platform),
+                    dsl::total_amount.eq("1"),
+                    dsl::paid_amount.eq("0"),
+                ))
+                .execute(conn)?;
+
+            diesel::insert_into(oidsl::pay_batch_order_item)
+                .values((
+                    oidsl::order_id.eq(&seed_order_id),
+                    oidsl::owner_id.eq(&seed_owner),
+                    oidsl::payee_addr.eq(&seed_payee_addr),
+                    oidsl::allocation_id.eq(&seed_allocation_id),
+                    oidsl::amount.eq("1"),
+                ))
+                .execute(conn)?;
+
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+
+        let dao = db.as_dao::<BatchDao>();
+
+        // The order stays visible until every item is dispatched, paid or skipped —
+        // this is what lets a failed dispatch be retried on the next cycle.
+        assert_eq!(
+            dao.get_unsent_order_ids(owner_id, platform.clone())
+                .await
+                .unwrap(),
+            vec![order_id.clone()]
+        );
+
+        // Another platform or owner must not pick it up.
+        assert!(dao
+            .get_unsent_order_ids(owner_id, "erc20-holesky-tglm".to_string())
+            .await
+            .unwrap()
+            .is_empty());
+        let other_owner = NodeId::from_str("0xdead000000000000000000000000000000000000").unwrap();
+        assert!(dao
+            .get_unsent_order_ids(other_owner, platform.clone())
+            .await
+            .unwrap()
+            .is_empty());
+
+        dao.batch_order_item_send(
+            order_id.clone(),
+            owner_id,
+            payee_addr,
+            allocation_id,
+            "payment-1".to_string(),
+        )
+        .await
+        .unwrap();
+        assert!(dao
+            .get_unsent_order_ids(owner_id, platform)
+            .await
+            .unwrap()
+            .is_empty());
+    }
 
     const AGREEMENT_ID: &str = "agreement-1";
     const ALLOCATION_ID: &str = "allocation-1";

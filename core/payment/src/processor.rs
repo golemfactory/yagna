@@ -307,6 +307,27 @@ pub(crate) const DB_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 const SCHEDULE_PAYMENT_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
 const REGISTRY_LOCK_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// How far back batch settlement looks for obligations to schedule.
+///
+/// This bound is deliberate, not just a query optimisation: settlement covers a
+/// recent window rather than the whole history, so an accepted obligation that is
+/// not settled within it is dropped rather than carried forward indefinitely. Each
+/// run recomputes the cutoff from the current time, so an obligation that ages out
+/// is never picked up again.
+///
+/// Two consequences follow, both intended:
+///
+/// - Providers must have their obligations settled inside this window. The
+///   debit-note cadence during an agreement exists so payments settle incrementally
+///   instead of accumulating into one end-of-agreement invoice that can age out.
+/// - A deposit backing an obligation that has left the window is no longer reserved
+///   against a live obligation, so `send_close_deposit_after_payments` closing that
+///   deposit and returning the funds to the funder is correct behaviour.
+///
+/// Widening this window would resurrect long-dormant obligations on existing nodes
+/// and cause surprise payments; it should not be changed casually.
+const SETTLEMENT_LOOKBACK: chrono::Duration = chrono::Duration::days(30);
+
 pub struct PaymentProcessor {
     batch_cycle_tasks: Arc<std::sync::Mutex<BatchCycleTaskManager>>,
     db_executor: Arc<Mutex<DbExecutor>>,
@@ -688,7 +709,6 @@ impl PaymentProcessor {
             let operation_start = Instant::now();
 
             let mut resolve_time_ms = 0.0f64;
-            let mut order_id = None;
 
             if !msg.skip_resolve {
                 let db_executor = self
@@ -716,13 +736,20 @@ impl PaymentProcessor {
                         msg.node_id,
                         msg.node_id.to_string(),
                         msg.platform.clone(),
-                        Utc::now().sub(chrono::Duration::days(30)),
+                        Utc::now().sub(SETTLEMENT_LOOKBACK),
                     )
                     .await
                 {
                     Ok(res) => {
                         resolve_time_ms = operation_start.elapsed().as_secs_f64() / 1000.0;
-                        order_id = res;
+                        if let Some(order_id) = res {
+                            log::info!(
+                                "Created batch order {} for {} on {}",
+                                order_id,
+                                msg.node_id,
+                                msg.platform
+                            );
+                        }
                     }
                     Err(err) => {
                         log::error!("Error processing payments: {:?}", err);
@@ -736,16 +763,50 @@ impl PaymentProcessor {
             let send_time_now = Instant::now();
             let mut send_time_ms = 0.0;
             if !msg.skip_send {
-                if let Some(order_id) = order_id {
-                    match self.send_batch_order_payments(msg.node_id, &order_id).await {
-                        Ok(()) => {}
-                        Err(err) => {
-                            log::error!("Error when sending payments {}", err);
-                            return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
-                                "Error when sending payments {}",
+                // Dispatch every order that still has unsent items, not only the one
+                // resolved above. Resolving already committed the scheduled-amount
+                // increments, so an order whose dispatch failed (driver error, restart,
+                // partial send) is invisible to the next resolve pass and would never
+                // be paid unless it is retried here.
+                let unsent_order_ids = {
+                    let db_executor = self
+                        .db_executor
+                        .timeout_lock(DB_LOCK_TIMEOUT)
+                        .await
+                        .map_err(|err| {
+                            ProcessPaymentsError::ProcessPaymentsError(format!(
+                                "Db timeout lock when listing unsent orders {err}"
+                            ))
+                        })?;
+                    db_executor
+                        .as_dao::<BatchDao>()
+                        .get_unsent_order_ids(msg.node_id, msg.platform.clone())
+                        .await
+                        .map_err(|err| {
+                            ProcessPaymentsError::ProcessPaymentsError(format!(
+                                "Db error when listing unsent orders {err}"
+                            ))
+                        })?
+                };
+                if !unsent_order_ids.is_empty() {
+                    let mut dispatch_errors = Vec::new();
+                    for order_id in &unsent_order_ids {
+                        if let Err(err) =
+                            self.send_batch_order_payments(msg.node_id, order_id).await
+                        {
+                            log::error!(
+                                "Error when sending payments for order {}: {}",
+                                order_id,
                                 err
-                            )));
+                            );
+                            dispatch_errors.push(format!("order {order_id}: {err}"));
                         }
+                    }
+                    if !dispatch_errors.is_empty() {
+                        return Err(ProcessPaymentsError::ProcessPaymentsError(format!(
+                            "Error when sending payments {}",
+                            dispatch_errors.join("; ")
+                        )));
                     }
                     match self
                         .send_close_deposit_after_payments(msg.node_id, msg.platform.clone())
