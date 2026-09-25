@@ -47,6 +47,19 @@ use crate::{network::SUPPORTED_NETWORKS, DRIVER_NAME};
 
 mod cli;
 
+/// On-chain identity of a deposit: the lock contract it lives in and its id.
+///
+/// Two `Deposit` values that differ only in fields which don't affect which
+/// on-chain deposit is referenced -- the optional `validate` payload, address
+/// casing, hex zero-padding -- share one identity and must not back separate
+/// allocations.
+fn deposit_identity(deposit: &Deposit) -> Option<(Address, U256)> {
+    Some((
+        Address::from_str(&deposit.contract).ok()?,
+        U256::from_str(&deposit.id).ok()?,
+    ))
+}
+
 pub struct Erc20Driver {
     payment_runtime: PaymentRuntime,
 }
@@ -438,11 +451,23 @@ impl Erc20Driver {
             return Ok(ValidateAllocationResult::MalformedDepositId);
         };
 
+        // Match on the on-chain identity rather than on the whole `Deposit`, so that a
+        // request differing only in e.g. the optional `validate` payload or in address
+        // casing can't create a second allocation against the same deposit. Deposits
+        // that fail to parse fall back to whole-value equality, which is all the
+        // canonical form could have told us about them anyway.
+        let identity = deposit_identity(&deposit);
+        let conflicts_with =
+            |allocation_deposit: &Deposit| match (identity, deposit_identity(allocation_deposit)) {
+                (Some(identity), Some(other_identity)) => identity == other_identity,
+                _ => allocation_deposit == &deposit,
+            };
+
         let conflicting_allocation = msg
             .active_allocations
             .into_iter()
             .chain(msg.past_allocations.into_iter())
-            .find(|allocation| allocation.deposit.as_ref() == Some(&deposit));
+            .find(|allocation| allocation.deposit.as_ref().is_some_and(conflicts_with));
 
         if msg.new_allocation {
             if let Some(allocation) = conflicting_allocation {
@@ -1234,7 +1259,79 @@ fn extract_deposit_id(deposit_id: Option<Deposit>) -> Result<Option<DepositId>, 
 
 #[cfg(test)]
 mod tests {
-    use super::release_deposit_network;
+    use super::*;
+    use ya_client_model::payment::allocation::ValidateDepositCall;
+
+    fn deposit(id: &str, contract: &str, validate: Option<ValidateDepositCall>) -> Deposit {
+        Deposit {
+            id: id.to_string(),
+            contract: contract.to_string(),
+            validate,
+        }
+    }
+
+    #[test]
+    fn deposits_differing_only_in_validate_share_an_identity() {
+        let plain = deposit("0x1", "0xc0ffee0000000000000000000000000000000000", None);
+        let validated = deposit(
+            "0x1",
+            "0xc0ffee0000000000000000000000000000000000",
+            Some(ValidateDepositCall {
+                arguments: [("flatFeeAmount".to_string(), "0".to_string())]
+                    .into_iter()
+                    .collect(),
+            }),
+        );
+
+        assert_ne!(plain, validated, "the two requests are not equal as values");
+        assert_eq!(
+            deposit_identity(&plain),
+            deposit_identity(&validated),
+            "but they name the same on-chain deposit"
+        );
+    }
+
+    #[test]
+    fn deposit_identity_ignores_contract_casing_and_id_padding() {
+        let a = deposit("0x1", "0xc0ffee0000000000000000000000000000000000", None);
+        let b = deposit(
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "0xC0FFEE0000000000000000000000000000000000",
+            None,
+        );
+
+        assert_eq!(deposit_identity(&a), deposit_identity(&b));
+    }
+
+    #[test]
+    fn distinct_deposits_keep_distinct_identities() {
+        let contract = "0xc0ffee0000000000000000000000000000000000";
+        let other_contract = "0xdecaf00000000000000000000000000000000000";
+
+        let base = deposit("0x1", contract, None);
+
+        assert_ne!(
+            deposit_identity(&base),
+            deposit_identity(&deposit("0x2", contract, None)),
+            "different deposit id"
+        );
+        assert_ne!(
+            deposit_identity(&base),
+            deposit_identity(&deposit("0x1", other_contract, None)),
+            "different lock contract"
+        );
+    }
+
+    #[test]
+    fn unparseable_deposits_have_no_identity() {
+        assert!(deposit_identity(&deposit(
+            "not-a-number",
+            "0xc0ffee0000000000000000000000000000000000",
+            None
+        ))
+        .is_none());
+        assert!(deposit_identity(&deposit("0x1", "not-an-address", None)).is_none());
+    }
 
     #[test]
     fn release_deposit_rejects_malformed_platform() {
