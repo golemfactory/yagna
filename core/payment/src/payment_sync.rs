@@ -4,7 +4,7 @@ use std::{collections::HashSet, time::Duration};
 use tokio::sync::Notify;
 
 use ya_client_model::{
-    payment::{Acceptance, InvoiceEventType},
+    payment::{Acceptance, DebitNoteEventType, InvoiceEventType},
     NodeId,
 };
 use ya_core_model::driver::SignPaymentCanonicalized;
@@ -17,7 +17,7 @@ use ya_core_model::{
         local::GenericError,
         public::{
             AcceptDebitNote, AcceptInvoice, PaymentSync, PaymentSyncRequest, PaymentSyncWithBytes,
-            RejectInvoiceV2, SendPayment, SendSignedPayment,
+            RejectDebitNote, RejectInvoiceV2, SendPayment, SendSignedPayment,
         },
     },
 };
@@ -25,7 +25,9 @@ use ya_net::RemoteEndpoint;
 use ya_persistence::executor::DbExecutor;
 use ya_service_bus::{timeout::IntoTimeoutFuture, typed, RpcEndpoint};
 
-use crate::dao::{DebitNoteDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao};
+use crate::dao::{
+    DebitNoteDao, DebitNoteEventDao, InvoiceDao, InvoiceEventDao, PaymentDao, SyncNotifsDao,
+};
 use crate::Config;
 
 const REMOTE_CALL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -38,6 +40,7 @@ async fn payment_sync(
     let payment_dao: PaymentDao = db.as_dao();
     let invoice_dao: InvoiceDao = db.as_dao();
     let debit_note_dao: DebitNoteDao = db.as_dao();
+    let debit_note_event_dao: DebitNoteEventDao = db.as_dao();
     let invoice_event_dao: InvoiceEventDao = db.as_dao();
 
     let mut payments = Vec::default();
@@ -108,18 +111,44 @@ async fn payment_sync(
         ));
     }
 
+    let mut debit_note_rejects = Vec::default();
+    for debit_note in debit_note_dao.unsent_rejected(owner, peer_id).await? {
+        let events = debit_note_event_dao
+            .get_for_debit_note_id(
+                debit_note.debit_note_id.clone(),
+                None,
+                None,
+                None,
+                vec!["REJECTED".into()],
+                vec![],
+            )
+            .await
+            .map_err(GenericError::new)?;
+        if let Some(event) = events.into_iter().last() {
+            if let DebitNoteEventType::DebitNoteRejectedEvent { rejection } = event.event_type {
+                debit_note_rejects.push(RejectDebitNote::new(
+                    debit_note.debit_note_id,
+                    rejection,
+                    peer_id,
+                ));
+            }
+        }
+    }
+
     Ok((
         PaymentSync {
             payments,
             invoice_accepts: invoice_accepts.clone(),
             invoice_rejects: invoice_rejects.clone(),
             debit_note_accepts: debit_note_accepts.clone(),
+            debit_note_rejects: debit_note_rejects.clone(),
         },
         PaymentSyncWithBytes {
             payments: payments_canonicalized,
             invoice_accepts,
             invoice_rejects,
             debit_note_accepts,
+            debit_note_rejects,
         },
     ))
 }
@@ -170,6 +199,17 @@ async fn mark_all_sent(db: &DbExecutor, owner_id: NodeId, msg: PaymentSync) -> a
         );
         debit_note_dao
             .mark_accept_sent(debit_note_accept.debit_note_id, owner_id)
+            .await?;
+    }
+
+    for debit_note_reject in msg.debit_note_rejects {
+        log::info!(
+            "Delivered DebitNote [{}] rejection to [{}]",
+            debit_note_reject.debit_note_id,
+            debit_note_reject.issuer_id
+        );
+        debit_note_dao
+            .mark_reject_sent(debit_note_reject.debit_note_id, owner_id)
             .await?;
     }
 

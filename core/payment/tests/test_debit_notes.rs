@@ -4,7 +4,10 @@ use std::time::Duration;
 use test_context::test_context;
 
 use ya_client_model::payment::allocation::PaymentPlatformEnum;
-use ya_client_model::payment::{Acceptance, DocumentStatus, NewAllocation, NewDebitNote};
+use ya_client_model::payment::{
+    Acceptance, DebitNoteEventType, DocumentStatus, NewAllocation, NewDebitNote, Rejection,
+    RejectionReason,
+};
 use ya_framework_basic::async_drop::DroppableTestContext;
 use ya_framework_basic::log::enable_logs;
 use ya_framework_basic::{resource, temp_dir};
@@ -109,6 +112,43 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         .await?;
     log::info!("Allocation created.");
 
+    log::info!("Rejecting debit note...");
+    let rejection = Rejection {
+        rejection_reason: RejectionReason::IncorrectAmount,
+        total_amount_accepted: BigDecimal::from(0u64),
+        message: Some("amount requires verification".to_owned()),
+    };
+    requestor
+        .reject_debit_note(&debit_note.debit_note_id, &rejection)
+        .await?;
+    assert_eq!(
+        requestor
+            .get_debit_note(&debit_note.debit_note_id)
+            .await?
+            .status,
+        DocumentStatus::Rejected
+    );
+    assert_eq!(
+        provider
+            .get_debit_note(&debit_note.debit_note_id)
+            .await?
+            .status,
+        DocumentStatus::Rejected
+    );
+    let provider_events = provider
+        .get_debit_note_events::<Utc>(
+            Some(&debit_note_date),
+            Some(Duration::from_secs(10)),
+            None,
+            app_session_id.clone(),
+        )
+        .await?;
+    assert!(provider_events.iter().any(|event| matches!(
+        &event.event_type,
+        DebitNoteEventType::DebitNoteRejectedEvent { rejection: event_rejection }
+            if event_rejection == &rejection
+    )));
+
     log::debug!(
         "DEBIT_NOTES1: {:?}",
         requestor.get_debit_notes::<Utc>(None, None).await
@@ -138,6 +178,11 @@ async fn test_debit_note_flow(ctx: &mut DroppableTestContext) -> anyhow::Result<
         )
         .await?;
     log::info!("Debit note accepted.");
+
+    assert!(requestor
+        .reject_debit_note(&debit_note.debit_note_id, &rejection)
+        .await
+        .is_err());
 
     log::info!("Waiting for payment...");
     let mut payments = provider

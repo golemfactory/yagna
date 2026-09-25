@@ -776,10 +776,21 @@ pub mod public {
     pub struct RejectDebitNote {
         pub debit_note_id: String,
         pub rejection: Rejection,
+        pub issuer_id: NodeId,
+    }
+
+    impl RejectDebitNote {
+        pub fn new(debit_note_id: String, rejection: Rejection, issuer_id: NodeId) -> Self {
+            Self {
+                debit_note_id,
+                rejection,
+                issuer_id,
+            }
+        }
     }
 
     impl RpcMessage for RejectDebitNote {
-        const ID: &'static str = "RejectDebitNote";
+        const ID: &'static str = "RejectDebitNoteV2";
         type Item = Ack;
         type Error = AcceptRejectError;
     }
@@ -933,6 +944,9 @@ pub mod public {
         ///
         /// Only last debit note in chain is included per agreement.
         pub debit_note_accepts: Vec<AcceptDebitNote>,
+        /// Debit note rejections.
+        #[serde(default)]
+        pub debit_note_rejects: Vec<RejectDebitNote>,
     }
 
     #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -947,6 +961,9 @@ pub mod public {
         ///
         /// Only last debit note in chain is included per agreement.
         pub debit_note_accepts: Vec<AcceptDebitNote>,
+        /// Debit note rejections.
+        #[serde(default)]
+        pub debit_note_rejects: Vec<RejectDebitNote>,
     }
 
     /// Sync error

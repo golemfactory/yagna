@@ -1004,10 +1004,56 @@ mod public {
 
     async fn reject_debit_note(
         db: DbExecutor,
-        sender: String,
+        sender_id: String,
         msg: RejectDebitNote,
     ) -> Result<Ack, AcceptRejectError> {
-        unimplemented!() // TODO
+        let debit_note_id = msg.debit_note_id;
+        let rejection = msg.rejection;
+        let owner_id = msg.issuer_id;
+
+        log::debug!(
+            "Got RejectDebitNoteV2 [{}] from Node [{}].",
+            debit_note_id,
+            sender_id
+        );
+        counter!("payment.debit_notes.provider.rejected.call", 1);
+
+        let dao: DebitNoteDao = db.as_dao();
+        let debit_note: DebitNote = match dao.get(debit_note_id.clone(), Some(owner_id)).await {
+            Ok(Some(debit_note)) => debit_note,
+            Ok(None) => return Err(AcceptRejectError::ObjectNotFound),
+            Err(e) => return Err(AcceptRejectError::ServiceError(e.to_string())),
+        };
+
+        if sender_id != debit_note.recipient_id.to_string() {
+            return Err(AcceptRejectError::Forbidden);
+        }
+
+        match debit_note.status {
+            DocumentStatus::Accepted | DocumentStatus::Settled | DocumentStatus::Cancelled => {
+                return Err(AcceptRejectError::BadRequest(format!(
+                    "Cannot reject {:?} debit note",
+                    debit_note.status
+                )));
+            }
+            DocumentStatus::Rejected => return Ok(Ack {}),
+            _ => (),
+        }
+
+        match dao.reject(debit_note_id.clone(), owner_id, rejection).await {
+            Ok(()) => {
+                log::info!(
+                    "Node [{}] rejected DebitNote [{}] for Activity [{}].",
+                    sender_id,
+                    debit_note_id,
+                    debit_note.activity_id
+                );
+                counter!("payment.debit_notes.provider.rejected", 1);
+                Ok(Ack {})
+            }
+            Err(DbError::Query(e)) => Err(AcceptRejectError::BadRequest(e)),
+            Err(e) => Err(AcceptRejectError::ServiceError(e.to_string())),
+        }
     }
 
     async fn cancel_debit_note(
@@ -1395,6 +1441,7 @@ mod public {
             msg.invoice_accepts,
             msg.invoice_rejects,
             msg.debit_note_accepts,
+            msg.debit_note_rejects,
         )
         .await
     }
@@ -1414,6 +1461,7 @@ mod public {
             msg.invoice_accepts,
             msg.invoice_rejects,
             msg.debit_note_accepts,
+            msg.debit_note_rejects,
         )
         .await
     }
@@ -1428,6 +1476,7 @@ mod public {
         invoice_accepts: Vec<AcceptInvoice>,
         invoice_rejects: Vec<RejectInvoiceV2>,
         debit_note_accepts: Vec<AcceptDebitNote>,
+        debit_note_rejects: Vec<RejectDebitNote>,
     ) -> Result<Ack, PaymentSyncError>
     where
         PaymentProcessorFunc: Fn(DbExecutor, Arc<PaymentProcessor>, String, PaymentType) -> Fut,
@@ -1465,6 +1514,13 @@ mod public {
 
         for debit_note_accept in debit_note_accepts {
             let result = accept_debit_note(db.clone(), sender_id.clone(), debit_note_accept).await;
+            if let Err(e) = result {
+                errors.accept_errors.push(e);
+            }
+        }
+
+        for debit_note_reject in debit_note_rejects {
+            let result = reject_debit_note(db.clone(), sender_id.clone(), debit_note_reject).await;
             if let Err(e) = result {
                 errors.accept_errors.push(e);
             }

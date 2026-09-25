@@ -8,7 +8,8 @@ use std::time::Instant;
 use metrics::{counter, timing};
 use ya_client_model::payment::*;
 use ya_core_model::payment::public::{
-    AcceptDebitNote, AcceptRejectError, SendDebitNote, SendError, BUS_ID as PUBLIC_SERVICE,
+    AcceptDebitNote, AcceptRejectError, RejectDebitNote, SendDebitNote, SendError,
+    BUS_ID as PUBLIC_SERVICE,
 };
 use ya_core_model::payment::RpcMessageError;
 use ya_net::RemoteEndpoint;
@@ -487,6 +488,7 @@ async fn accept_debit_note(
             Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
                 e,
             ))))) => response::bad_request(&e),
+            Ok(Err(Error::Database(DbError::Query(e)))) => response::bad_request(&e),
             Ok(Err(e)) => response::server_error(&e),
             Err(_) => response::timeout(&"Timeout accepting Debit Note on remote Node."),
         }
@@ -506,6 +508,77 @@ async fn reject_debit_note(
     path: Path<params::DebitNoteId>,
     query: Query<params::Timeout>,
     body: Json<Rejection>,
+    id: Identity,
 ) -> HttpResponse {
-    response::not_implemented() // TODO
+    let start = Instant::now();
+    let debit_note_id = path.debit_note_id.clone();
+    let node_id = id.identity;
+    let rejection = body.into_inner();
+
+    log::debug!("Requested reject DebitNote [{}]", debit_note_id);
+    counter!("payment.debit_notes.requestor.rejected.call", 1);
+
+    let dao: DebitNoteDao = db.as_dao();
+    let sync_dao: SyncNotifsDao = db.as_dao();
+    let debit_note = match dao.get(debit_note_id.clone(), Some(node_id)).await {
+        Ok(Some(debit_note)) => debit_note,
+        Ok(None) => return response::not_found(),
+        Err(e) => return response::server_error(&e),
+    };
+
+    match debit_note.status {
+        DocumentStatus::Received | DocumentStatus::Failed => (),
+        DocumentStatus::Rejected => return response::ok(Null),
+        DocumentStatus::Accepted => return response::bad_request(&"Debit note accepted"),
+        DocumentStatus::Settled => return response::bad_request(&"Debit note settled"),
+        DocumentStatus::Cancelled => return response::bad_request(&"Debit note cancelled"),
+        DocumentStatus::Issued => return response::server_error(&"Illegal status: issued"),
+    }
+
+    let timeout = query.timeout.unwrap_or(params::DEFAULT_ACK_TIMEOUT);
+    let issuer_id = debit_note.issuer_id;
+    let reject_msg = RejectDebitNote::new(debit_note_id.clone(), rejection.clone(), issuer_id);
+    let result = async move {
+        match async move {
+            dao.reject(debit_note_id.clone(), node_id, rejection)
+                .await?;
+
+            let send_result = ya_net::from(node_id)
+                .to(issuer_id)
+                .service(PUBLIC_SERVICE)
+                .call(reject_msg)
+                .await;
+
+            if let Ok(response) = send_result {
+                dao.mark_reject_sent(debit_note_id.clone(), node_id).await?;
+                response?;
+            } else {
+                sync_dao.upsert(issuer_id).await?;
+                SYNC_NOTIFS_NOTIFY.notify_one();
+            }
+            Ok(())
+        }
+        .timeout(Some(timeout))
+        .await
+        {
+            Ok(Ok(())) => {
+                log::info!("DebitNote [{}] rejected.", path.debit_note_id);
+                counter!("payment.debit_notes.requestor.rejected", 1);
+                response::ok(Null)
+            }
+            Ok(Err(Error::Rpc(RpcMessageError::AcceptReject(AcceptRejectError::BadRequest(
+                e,
+            ))))) => response::bad_request(&e),
+            Ok(Err(e)) => response::server_error(&e),
+            Err(_) => response::timeout(&"Timeout rejecting Debit Note on remote Node."),
+        }
+    }
+    .await;
+
+    timing!(
+        "payment.debit_notes.requestor.rejected.time",
+        start,
+        Instant::now()
+    );
+    result
 }

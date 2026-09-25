@@ -12,7 +12,9 @@ use diesel::{
 };
 use std::collections::HashMap;
 use std::convert::TryInto;
-use ya_client_model::payment::{DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote};
+use ya_client_model::payment::{
+    DebitNote, DebitNoteEventType, DocumentStatus, NewDebitNote, Rejection,
+};
 use ya_client_model::NodeId;
 use ya_persistence::executor::{
     do_with_transaction, readonly_transaction, AsDao, ConnType, PoolType,
@@ -404,6 +406,95 @@ impl DebitNoteDao<'_> {
         .await
     }
 
+    pub async fn reject(
+        &self,
+        debit_note_id: String,
+        owner_id: NodeId,
+        rejection: Rejection,
+    ) -> DbResult<()> {
+        do_with_transaction(self.pool, "debit_note_reject", move |conn| {
+            let (role, status): (Role, String) = dsl::pay_debit_note
+                .find((&debit_note_id, &owner_id))
+                .select((dsl::role, dsl::status))
+                .first(conn)?;
+
+            if status == DocumentStatus::Rejected.to_string() {
+                return Ok(());
+            }
+            if status == DocumentStatus::Accepted.to_string()
+                || status == DocumentStatus::Settled.to_string()
+                || status == DocumentStatus::Cancelled.to_string()
+            {
+                return Err(DbError::Query(format!("Cannot reject {status} debit note")));
+            }
+
+            let updated = diesel::update(
+                dsl::pay_debit_note
+                    .filter(dsl::id.eq(debit_note_id.clone()))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .filter(dsl::status.eq(status)),
+            )
+            .set(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+            .execute(conn)?;
+            if updated != 1 {
+                return Err(DbError::Query(
+                    "Debit note status changed while rejecting it".to_owned(),
+                ));
+            }
+
+            if role == Role::Requestor {
+                diesel::update(
+                    dsl::pay_debit_note
+                        .filter(dsl::id.eq(debit_note_id.clone()))
+                        .filter(dsl::owner_id.eq(owner_id)),
+                )
+                .set(dsl::send_reject.eq(true))
+                .execute(conn)?;
+            }
+
+            debit_note_event::create(
+                debit_note_id,
+                owner_id,
+                DebitNoteEventType::DebitNoteRejectedEvent { rejection },
+                conn,
+            )?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_reject_sent(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
+        do_with_transaction(self.pool, "debit_note_mark_reject_sent", move |conn| {
+            diesel::update(
+                dsl::pay_debit_note
+                    .filter(dsl::id.eq(debit_note_id))
+                    .filter(dsl::owner_id.eq(owner_id)),
+            )
+            .set(dsl::send_reject.eq(false))
+            .execute(conn)?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn unsent_rejected(
+        &self,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<Vec<DebitNote>> {
+        readonly_transaction(self.pool, "debit_note_unsent_rejected", move |conn| {
+            let read: Vec<ReadObj> = query!()
+                .filter(dsl::owner_id.eq(owner_id))
+                .filter(dsl::send_reject.eq(true))
+                .filter(dsl::status.eq(DocumentStatus::Rejected.to_string()))
+                .filter(agreement_dsl::peer_id.eq(peer_id))
+                .order_by(dsl::timestamp.desc())
+                .load(conn)?;
+            read.into_iter().map(TryInto::try_into).collect()
+        })
+        .await
+    }
+
     /// All debit notes with status Issued or Accepted and provider role
     pub async fn dangling(&self, owner_id: NodeId) -> DbResult<Vec<DebitNote>> {
         readonly_transaction(self.pool, "debit_note_dangling", move |conn| {
@@ -426,31 +517,4 @@ impl DebitNoteDao<'_> {
         })
         .await
     }
-
-    // TODO: Implement reject debit note
-    // pub async fn reject(&self, debit_note_id: String, owner_id: NodeId) -> DbResult<()> {
-    //     do_with_transaction(self.pool, move |conn| {
-    //         let (activity_id, role): (String, Role) = dsl::pay_debit_note
-    //             .find((&debit_note_id, &owner_id))
-    //             .select((dsl::activity_id, dsl::role))
-    //             .first(conn)?;
-    //         update_status(
-    //             &vec![debit_note_id.clone()],
-    //             &owner_id,
-    //             &DocumentStatus::Rejected,
-    //             conn,
-    //         )?;
-    //         if let Role::Provider = role {
-    //             debit_note_event::create::<()>(
-    //                 debit_note_id,
-    //                 owner_id,
-    //                 DebitNoteEventType::DebitNoteRejectedEvent,
-    //                 None,
-    //                 conn,
-    //             )?;
-    //         }
-    //         Ok(())
-    //     })
-    //     .await
-    // }
 }

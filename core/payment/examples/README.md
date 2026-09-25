@@ -30,6 +30,7 @@ platform.
 | invoice_flow        | platform                                                 | platform=`dummy-glm`                                                                                              |
 | market_decoration   |                                                          | Same as `payment_api`                                                                                             |
 | release_allocation  |                                                          | Same as `payment_api`                                                                                             |
+| reject_debit_note   | debit note ID,<br/>optional allocation ID                 | Rejects an existing debit note and optionally demonstrates acceptance after rejection                            |
 | validate_allocation |                                                          | Same as `payment_api`                                                                                             |
 
 <!-- Generated with https://www.tablesgenerator.com/markdown_tables -->

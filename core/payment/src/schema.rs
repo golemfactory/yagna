@@ -125,6 +125,7 @@ table! {
         timestamp -> Timestamp,
         debit_nonce -> Integer,
         send_accept -> Bool,
+        send_reject -> Bool,
         total_amount_due -> Text,
         usage_counter_vector -> Nullable<Binary>,
         payment_due_date -> Nullable<Timestamp>,

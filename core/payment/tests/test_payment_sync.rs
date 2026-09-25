@@ -5,6 +5,7 @@ use std::time::Duration;
 use test_context::test_context;
 use tokio::sync::mpsc::error::TryRecvError;
 
+use ya_client_model::payment::{Rejection, RejectionReason};
 use ya_core_model::payment::public::{
     AcceptDebitNote, AcceptInvoice, Ack, PaymentSync, PaymentSyncWithBytes, SendDebitNote,
     SendInvoice, SendPayment,
@@ -132,6 +133,20 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .send_as(debit_note.issuer_id, SendDebitNote(debit_note.clone()))
         .await??;
 
+    let rejected_debit_note = FakePayment::fake_debit_note(
+        &agreement,
+        &activity_id,
+        BigDecimal::from_str("0.15")?,
+        None,
+    )?;
+    payment
+        .gsb_public_endpoint()
+        .send_as(
+            rejected_debit_note.issuer_id,
+            SendDebitNote(rejected_debit_note.clone()),
+        )
+        .await??;
+
     log::info!("Issuing invoice...");
     let invoice = FakePayment::fake_invoice(&agreement, BigDecimal::from_str("0.2")?)?;
     payment
@@ -148,6 +163,16 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
         .unwrap();
     requestor
         .simple_accept_debit_note(&debit_note, &allocation)
+        .await
+        .unwrap();
+
+    let rejection = Rejection {
+        rejection_reason: RejectionReason::IncorrectAmount,
+        total_amount_accepted: BigDecimal::from_str("0.1")?,
+        message: Some("unexpected usage".to_owned()),
+    };
+    requestor
+        .reject_debit_note(&rejected_debit_note.debit_note_id, &rejection)
         .await
         .unwrap();
 
@@ -195,6 +220,12 @@ async fn test_payment_sync(ctx: &mut DroppableTestContext) -> anyhow::Result<()>
             sync.debit_note_accepts[0].acceptance.total_amount_accepted,
             debit_note.total_amount_due
         );
+        assert_eq!(sync.debit_note_rejects.len(), 1);
+        assert_eq!(
+            sync.debit_note_rejects[0].debit_note_id,
+            rejected_debit_note.debit_note_id
+        );
+        assert_eq!(sync.debit_note_rejects[0].rejection, rejection);
         break;
     }
 
