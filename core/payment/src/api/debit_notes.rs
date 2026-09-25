@@ -414,6 +414,20 @@ async fn accept_debit_note(
         }
         Err(e) => return response::server_error(&e),
     };
+
+    // See the equivalent check in `api/invoices.rs`: accepting with an allocation on a
+    // different platform than the agreement's strands the obligation permanently, as
+    // the activity's scheduled amount advances while no expenditure on the batch's
+    // platform can cover it.
+    if allocation.payment_platform != debit_note.payment_platform {
+        let msg = format!(
+            "Allocation {} is on payment platform {}, but debit note {} is on {}",
+            allocation_id, allocation.payment_platform, debit_note_id, debit_note.payment_platform
+        );
+        log::warn!("{}", msg);
+        return response::bad_request(&msg);
+    }
+
     if amount_to_pay > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
