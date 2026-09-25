@@ -31,6 +31,8 @@ use crate::utils::response;
 const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
+const DEPOSIT_ALLOCATION_INCREASE_ERROR: &str =
+    "Cannot increase a deposit-backed allocation; create a new allocation with a new deposit";
 
 mod api_error;
 mod platform_triple;
@@ -328,6 +330,14 @@ fn amend_allocation_fields(
     let total_amount = update
         .total_amount
         .unwrap_or_else(|| old_allocation.total_amount.clone());
+
+    // A deposit is validated against the full allocation amount only when the allocation
+    // is created. Keep an accepted deposit-backed reservation from increasing; additional
+    // capacity requires a new allocation backed by a new deposit.
+    if old_allocation.deposit.is_some() && total_amount > old_allocation.total_amount {
+        return Err(DEPOSIT_ALLOCATION_INCREASE_ERROR);
+    }
+
     let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
 
     if remaining_amount < 0 {
@@ -694,6 +704,82 @@ async fn get_pay_allocation_orders(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ya_client_model::payment::allocation::Deposit;
+
+    fn allocation(total: i64, spent: i64, with_deposit: bool) -> Allocation {
+        let now = Utc::now();
+        Allocation {
+            allocation_id: "allocation-1".to_string(),
+            address: "0xbabe000000000000000000000000000000000000".to_string(),
+            payment_platform: "erc20-holesky-tglm".to_string(),
+            total_amount: BigDecimal::from(total),
+            spent_amount: BigDecimal::from(spent),
+            remaining_amount: BigDecimal::from(total - spent),
+            timestamp: now,
+            timeout: Some(now + chrono::Duration::hours(1)),
+            deposit: with_deposit.then(|| Deposit {
+                id: "0x1".to_string(),
+                contract: "0xc0ffee0000000000000000000000000000000000".to_string(),
+                validate: None,
+            }),
+            created_ts: now,
+            updated_ts: now,
+            make_deposit: false,
+            extend_timeout: None,
+        }
+    }
+
+    fn amount_update(total: i64) -> AllocationUpdate {
+        AllocationUpdate {
+            total_amount: Some(BigDecimal::from(total)),
+            timeout: None,
+            deposit: None,
+        }
+    }
+
+    #[test]
+    fn deposit_backed_allocation_cannot_be_increased() {
+        let result = amend_allocation_fields(allocation(100, 25, true), amount_update(101));
+
+        assert_eq!(result.unwrap_err(), DEPOSIT_ALLOCATION_INCREASE_ERROR);
+    }
+
+    #[test]
+    fn deposit_backed_allocation_can_be_decreased() {
+        let amended = amend_allocation_fields(allocation(100, 25, true), amount_update(80))
+            .expect("decreasing a deposit-backed allocation should be allowed");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(80));
+        assert_eq!(amended.remaining_amount, BigDecimal::from(55));
+        assert!(amended.deposit.is_some());
+    }
+
+    #[test]
+    fn deposit_backed_allocation_can_update_timeout() {
+        let old_allocation = allocation(100, 25, true);
+        let timeout = Utc::now() + chrono::Duration::hours(2);
+        let update = AllocationUpdate {
+            total_amount: None,
+            timeout: Some(timeout),
+            deposit: None,
+        };
+
+        let amended = amend_allocation_fields(old_allocation, update)
+            .expect("updating a deposit-backed allocation timeout should be allowed");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(100));
+        assert_eq!(amended.timeout, Some(timeout));
+    }
+
+    #[test]
+    fn wallet_backed_allocation_can_still_be_increased() {
+        let amended = amend_allocation_fields(allocation(100, 25, false), amount_update(150))
+            .expect("wallet-backed allocation increases should remain supported");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(150));
+        assert_eq!(amended.remaining_amount, BigDecimal::from(125));
+        assert!(amended.deposit.is_none());
+    }
 
     #[test]
     fn numeric_allocation_amount_keeps_decimal_precision() {
