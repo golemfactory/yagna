@@ -346,50 +346,63 @@ async fn accept_debit_note(
         Err(e) => return response::server_error(&e),
     };
     //check if invoice exists and accepted for this activity
-    match db
+    // Every invoice for the agreement has to be considered, not just one: an agreement
+    // can carry several, so an older pending invoice must not mask a later one that
+    // should stop this debit note from being accepted.
+    let invoices = match db
         .as_dao::<InvoiceDao>()
-        .get_by_agreement(activity.agreement_id.clone(), node_id)
+        .get_statuses_by_agreement(activity.agreement_id.clone(), node_id)
         .await
     {
-        Ok(Some(invoice)) => match invoice.status {
-            DocumentStatus::Issued => {
-                log::error!(
-                    "Wrong status [{}] for invoice [{}] for Activity [{}] and agreement [{}]",
-                    invoice.status,
-                    invoice.invoice_id,
-                    activity_id,
-                    activity.agreement_id
-                );
-                return response::server_error(&"Wrong status for invoice");
-            }
-            DocumentStatus::Received => {
-                log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
-                        debit_note_id,
-                        invoice.invoice_id,
-                        activity_id,
-                        activity.agreement_id
-                    );
-            }
-            DocumentStatus::Accepted
-            | DocumentStatus::Rejected
-            | DocumentStatus::Failed
-            | DocumentStatus::Settled
-            | DocumentStatus::Cancelled => {
-                log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
-                        debit_note_id,
-                        invoice.invoice_id,
-                        invoice.status,
-                        activity_id,
-                        activity.agreement_id
-                    );
-                return response::ok(Null);
-            }
-        },
-        Ok(None) => {
-            //no problem, ignore
-        }
+        Ok(invoices) => invoices,
         Err(e) => return response::server_error(&e),
     };
+
+    if let Some((invoice_id, status)) = invoices.iter().find(|(_, status)| {
+        matches!(
+            status,
+            DocumentStatus::Accepted
+                | DocumentStatus::Rejected
+                | DocumentStatus::Failed
+                | DocumentStatus::Settled
+                | DocumentStatus::Cancelled
+        )
+    }) {
+        log::info!("Received debit note [{}] for already existing invoice [{}] with status {} for Activity [{}] and agreement [{}]",
+                debit_note_id,
+                invoice_id,
+                status,
+                activity_id,
+                activity.agreement_id
+            );
+        return response::ok(Null);
+    }
+
+    if let Some((invoice_id, status)) = invoices
+        .iter()
+        .find(|(_, status)| matches!(status, DocumentStatus::Issued))
+    {
+        log::error!(
+            "Wrong status [{}] for invoice [{}] for Activity [{}] and agreement [{}]",
+            status,
+            invoice_id,
+            activity_id,
+            activity.agreement_id
+        );
+        return response::server_error(&"Wrong status for invoice");
+    }
+
+    for (invoice_id, _) in invoices
+        .iter()
+        .filter(|(_, status)| matches!(status, DocumentStatus::Received))
+    {
+        log::warn!("Received debit note [{}] for freshly received invoice [{}] for Activity [{}] and agreement [{}]",
+                debit_note_id,
+                invoice_id,
+                activity_id,
+                activity.agreement_id
+            );
+    }
     let amount_to_pay = &debit_note.total_amount_due - &activity.total_amount_accepted.0;
 
     log::trace!(

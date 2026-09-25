@@ -10,7 +10,7 @@ use diesel::{
     BoolExpressionMethods, ExpressionMethods, JoinOnDsl, OptionalExtension, QueryDsl, RunQueryDsl,
 };
 use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use ya_client_model::payment::{DocumentStatus, Invoice, InvoiceEventType, NewInvoice, Rejection};
 use ya_client_model::NodeId;
 use ya_core_model::payment::local::StatValue;
@@ -198,8 +198,13 @@ impl InvoiceDao<'_> {
     }
 
     /*
-     * Get invoice by agreement id
-     * Only one invoice per agreement is allowed (it is enforced by the unique constraint on pay_invoice_x_activity)
+     * Get one invoice by agreement id, if any exists
+     *
+     * Note that nothing constrains an agreement to a single invoice: the primary key of
+     * pay_invoice_x_activity is (owner_id, invoice_id, activity_id), so two invoices may
+     * cover the same activity, and an invoice with no activity ids writes no rows there
+     * at all. Which row this returns is therefore arbitrary. Callers deciding whether an
+     * agreement has already been invoiced must use `get_statuses_by_agreement` instead.
      */
     pub async fn get_by_agreement(
         &self,
@@ -224,6 +229,35 @@ impl InvoiceDao<'_> {
                 None => Ok(None),
             }
         })
+        .await
+    }
+
+    /// Returns the id and status of every invoice for the agreement.
+    ///
+    /// Unlike `get_by_agreement` this does not hide additional invoices behind an
+    /// arbitrarily chosen row, so a guard cannot be fooled by an older pending invoice
+    /// masking a later one.
+    pub async fn get_statuses_by_agreement(
+        &self,
+        agreement_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Vec<(String, DocumentStatus)>> {
+        readonly_transaction(
+            self.pool,
+            "invoice_dao_get_statuses_by_agreement",
+            move |conn| {
+                let invoices: Vec<(String, String)> = dsl::pay_invoice
+                    .filter(dsl::agreement_id.eq(&agreement_id))
+                    .filter(dsl::owner_id.eq(owner_id))
+                    .select((dsl::id, dsl::status))
+                    .load(conn)?;
+
+                invoices
+                    .into_iter()
+                    .map(|(id, status)| Ok((id, status.try_into()?)))
+                    .collect()
+            },
+        )
         .await
     }
 
