@@ -294,6 +294,13 @@ pub mod processor {
             )))
         }
 
+        pub fn activity_platform(activity: &Activity, platform: &str) -> Result<(), Self> {
+            Err(Self::Validation(format!(
+                "Invalid payment platform for activity {}: {} != {}",
+                activity.id, activity.payment_platform, platform
+            )))
+        }
+
         pub fn activity_zero_amount(activity_id: &str) -> Result<(), Self> {
             Err(Self::Validation(format!(
                 "Activity with 0 amount: {}",

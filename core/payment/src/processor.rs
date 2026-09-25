@@ -1181,6 +1181,12 @@ impl PaymentProcessor {
                     Some(activity) if &activity.payer_addr != payer_addr => {
                         return VerifyPaymentError::activity_payer(&activity, payer_addr);
                     }
+                    Some(activity) if activity.payment_platform != payment.payment_platform => {
+                        return VerifyPaymentError::activity_platform(
+                            &activity,
+                            &payment.payment_platform,
+                        );
+                    }
                     _ => (),
                 }
             }
