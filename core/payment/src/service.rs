@@ -920,6 +920,56 @@ mod public {
         }
 
         let node_id = *agreement.requestor_id();
+
+        // The agreement id is taken from the message, so verify that the activity really
+        // belongs to it, as `send_invoice` does. Without this an issuer can bill an
+        // activity under a different agreement of theirs: `pay_activity` is created below
+        // first-writer-wins, so the wrong binding sticks and the same work can be charged
+        // again later through a legitimate invoice on the real agreement.
+        //
+        // Debit notes arrive continuously, so prefer the binding already stored locally
+        // and only ask the activity service when there is none. Because the local row is
+        // written first-writer-wins, it is the binding that will actually be billed
+        // against; the service is authoritative exactly when no row exists yet, which is
+        // also the only point at which a wrong binding could be established.
+        let known_agreement_id = db
+            .as_dao::<ActivityDao>()
+            .get_agreement_id(activity_id.clone(), node_id)
+            .await
+            .map_err(|e| SendError::ServiceError(e.to_string()))?;
+
+        match known_agreement_id {
+            Some(id) => {
+                if id != agreement_id {
+                    return Err(SendError::BadRequest(format!(
+                        "Activity {} belongs to agreement {} not {}",
+                        activity_id, id, agreement_id
+                    )));
+                }
+            }
+            None => match provider::get_agreement_id(
+                activity_id.clone(),
+                ya_client_model::market::Role::Requestor,
+            )
+            .await
+            {
+                Ok(Some(id)) if id != agreement_id => {
+                    return Err(SendError::BadRequest(format!(
+                        "Activity {} belongs to agreement {} not {}",
+                        activity_id, id, agreement_id
+                    )));
+                }
+                Ok(None) => {
+                    return Err(SendError::BadRequest(format!(
+                        "Activity not found: {}",
+                        activity_id
+                    )));
+                }
+                Err(e) => return Err(SendError::ServiceError(e.to_string())),
+                _ => (),
+            },
+        }
+
         match async move {
             db.as_dao::<AgreementDao>()
                 .create_if_not_exists(agreement, node_id, Role::Requestor)

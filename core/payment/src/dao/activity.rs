@@ -193,6 +193,26 @@ impl ActivityDao<'_> {
         .await
     }
 
+    /// Returns the agreement this activity is already bound to locally, if it is known.
+    ///
+    /// Deliberately reads a single column and does not join, so callers on hot paths can
+    /// check a binding without the cost of loading the whole activity.
+    pub async fn get_agreement_id(
+        &self,
+        activity_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<String>> {
+        readonly_transaction(self.pool, "activity_dao_get_agreement_id", move |conn| {
+            let agreement_id = dsl::pay_activity
+                .find((&activity_id, &owner_id))
+                .select(dsl::agreement_id)
+                .first(conn)
+                .optional()?;
+            Ok(agreement_id)
+        })
+        .await
+    }
+
     pub async fn list(
         &self,
         role: Option<Role>,
