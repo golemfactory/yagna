@@ -23,17 +23,18 @@ jobs:
       # finds branches with names matching the release branch convention (e.g. release/v0.7) and returns one with highest version
       - name: Get latest stable branch
         id: latest-stable
-        # second sed expression removes leading whitespaces and '*' characters (git uses it to indicate the current branch)
         run: |
-          branch=$(git branch -a | sed -e 's:remotes/origin/::' -e 's:^[ \t*]*::' | grep -E '^release\/v[0-9]+(\.[0-9]+)+$' | sort -Vr | head -1)
+          branch=$(git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin/release/ | awk '/^release\/v[0-9]+(\.[0-9]+)+$/' | sort -Vr | sed -n '1p')
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
-      # prepares JSON object representing strategy matrix which contains two 'branch' variants: master and latest stable
+      # Always test main; include the latest stable branch only when one exists.
       - name: Get matrix JSON
         id: get-matrix
-        run: >-
-          echo 'matrix={"include":[{"branch":"master"},{"branch":"${{ steps.latest-stable.outputs.branch }}"}]}'
-          >> "$GITHUB_OUTPUT"
+        env:
+          STABLE_BRANCH: ${{ steps.latest-stable.outputs.branch }}
+        run: |
+          matrix=$(jq -cn --arg stable "$STABLE_BRANCH" '{include: ([{branch: "main"}] + (if $stable == "" then [] else [{branch: $stable}] end))}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   integration-test:
     needs: prepare-matrix

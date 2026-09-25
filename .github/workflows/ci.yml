@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - main
       - deposits
       - release/*
       - '**/all-tests'
       - '**/integration-tests'
   pull_request:
     branches:
-      - master
+      - main
       - deposits
       - release/*
     types: [opened, synchronize, reopened, labeled]
