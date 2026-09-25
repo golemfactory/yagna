@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 pub use ya_agreement_utils::{OfferDefinition, ProposalView};
 
@@ -65,9 +64,14 @@ pub trait NegotiatorComponent {
     }
 }
 
+/// Components are consulted in the order they were added: `negotiate_step`
+/// short-circuits on the first `Reject`, so the order decides which component
+/// speaks for the Provider (e.g. `RejectOnShutdown` is added first, so a
+/// shutting-down Provider answers with a final "shutting down" rejection
+/// instead of whatever another component would say).
 #[derive(Default)]
 pub struct NegotiatorsPack {
-    components: HashMap<String, Box<dyn NegotiatorComponent>>,
+    components: Vec<(String, Box<dyn NegotiatorComponent>)>,
 }
 
 impl NegotiatorsPack {
@@ -76,7 +80,7 @@ impl NegotiatorsPack {
         name: &str,
         component: Box<dyn NegotiatorComponent>,
     ) -> NegotiatorsPack {
-        self.components.insert(name.to_string(), component);
+        self.components.push((name.to_string(), component));
         self
     }
 }
@@ -166,5 +170,58 @@ impl NegotiatorComponent for NegotiatorsPack {
                 .ok();
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use serde_json::json;
+    use ya_agreement_utils::agreement::expand;
+    use ya_agreement_utils::OfferTemplate;
+    use ya_client_model::market::proposal::State;
+
+    struct Rejecting(&'static str);
+
+    impl NegotiatorComponent for Rejecting {
+        fn negotiate_step(
+            &mut self,
+            _demand: &ProposalView,
+            _offer: ProposalView,
+        ) -> anyhow::Result<NegotiationResult> {
+            Ok(NegotiationResult::Reject {
+                message: self.0.to_string(),
+                is_final: true,
+            })
+        }
+    }
+
+    fn proposal() -> ProposalView {
+        ProposalView {
+            content: OfferTemplate {
+                properties: expand(json!({})),
+                constraints: "()".to_string(),
+            },
+            id: "proposalId".to_string(),
+            issuer: Default::default(),
+            state: State::Initial,
+            timestamp: Utc::now(),
+        }
+    }
+
+    /// `negotiate_step` short-circuits on the first `Reject`, so the first
+    /// added component must be the first one consulted - insertion order,
+    /// not map order.
+    #[test]
+    fn components_are_consulted_in_insertion_order() {
+        let mut pack = NegotiatorsPack::default()
+            .add_component("first", Box::new(Rejecting("first")))
+            .add_component("second", Box::new(Rejecting("second")));
+
+        match pack.negotiate_step(&proposal(), proposal()).unwrap() {
+            NegotiationResult::Reject { message, .. } => assert_eq!(message, "first"),
+            other => panic!("expected Reject, got {:?}", other),
+        }
     }
 }
