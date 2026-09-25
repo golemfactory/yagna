@@ -489,6 +489,22 @@ async fn accept_invoice(
         }
         Err(e) => return response::server_error(&e),
     };
+
+    // The invoice's platform comes from the agreement; the allocation's is chosen by
+    // the caller. Accepting across a mismatch strands the obligation permanently:
+    // batch resolution advances the agreement's scheduled amount for the invoice, but
+    // looks for covering expenditures only among allocations on the batch's own
+    // platform, and the scheduled amount is never decreased. Reject before any state
+    // is written.
+    if allocation.payment_platform != invoice.payment_platform {
+        let msg = format!(
+            "Allocation {} is on payment platform {}, but invoice {} is on {}",
+            allocation_id, allocation.payment_platform, invoice_id, invoice.payment_platform
+        );
+        log::warn!("{}", msg);
+        return response::bad_request(&msg);
+    }
+
     if amount_to_pay > allocation.remaining_amount {
         let msg = format!(
             "Not enough funds. Allocated: {} Needed: {}",
