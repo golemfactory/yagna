@@ -15,8 +15,6 @@ on:
         description: 'Prefix of the tag'
         required: true
         default: 'pre-rel-v'
-  schedule:
-    - cron: '23 23 * * *'
 
 permissions:
   packages: write
