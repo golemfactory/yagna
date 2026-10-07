@@ -449,9 +449,11 @@ async fn amend_allocation(
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
         Ok(false) => {
+            // The allocation was released while we were validating the amend against the
+            // payment driver.
             return api_error::server_error(
                 &allocation_update,
-                &"Allocation not present despite preconditions being already ensured",
+                &"Allocation was released while the amend was being validated",
             );
         }
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
