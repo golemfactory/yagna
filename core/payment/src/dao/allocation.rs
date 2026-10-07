@@ -172,7 +172,7 @@ impl AllocationDao<'_> {
             };
 
             let avail_amount = allocation.total_amount.clone() - &current.spent_amount.0;
-            if avail_amount < BigDecimal::from(0) {
+            if avail_amount < 0 {
                 return Err(DbError::Query(format!(
                     "Amended allocation total {} is smaller than the already spent amount {}",
                     allocation.total_amount, current.spent_amount.0
