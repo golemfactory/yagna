@@ -1,5 +1,5 @@
 use crate::error::{DbError, DbResult};
-use crate::models::allocation::{AllocationExpenditureObj, ReadObj, WriteObj};
+use crate::models::allocation::{AllocationExpenditureObj, AmendObj, ReadObj, WriteObj};
 use crate::schema::pay_allocation::dsl;
 use crate::schema::pay_allocation_expenditure::dsl as dsld;
 use bigdecimal::BigDecimal;
@@ -143,13 +143,48 @@ impl AllocationDao<'_> {
         .await
     }
 
+    /// Applies an amend to an existing allocation.
+    ///
+    /// The caller reads the allocation, validates the change against the payment driver
+    /// over GSB, and only then calls this. A spend can commit during that round trip, so
+    /// `allocation.spent_amount` is stale by the time we get here and must not be written
+    /// back — doing so would revert the spend while its `pay_allocation_expenditure` row
+    /// survives, letting the same funds be committed twice.
+    ///
+    /// Instead we re-read `spent_amount` inside this transaction and derive `avail_amount`
+    /// from the amended total and that fresh value, so a concurrent spend is preserved
+    /// rather than rolled back. The `spent_amount` filter on the update is belt-and-braces
+    /// on top of that: it pins the update to the row we just read, so if the storage engine
+    /// ever let a write slip between the read and the update the result is a no-op rather
+    /// than a lost spend.
+    ///
+    /// Returns `false` if the allocation is gone or released.
     pub async fn replace(&self, allocation: Allocation, owner_id: NodeId) -> DbResult<bool> {
         do_with_transaction(self.pool, "allocation_dao_replace", move |conn| {
+            let current: Option<ReadObj> = dsl::pay_allocation
+                .find((owner_id, allocation.allocation_id.clone()))
+                .filter(dsl::released.eq(false))
+                .first(conn)
+                .optional()?;
+            let current = match current {
+                Some(current) => current,
+                None => return Ok(false),
+            };
+
+            let avail_amount = allocation.total_amount.clone() - &current.spent_amount.0;
+            if avail_amount < 0 {
+                return Err(DbError::Query(format!(
+                    "Amended allocation total {} is smaller than the already spent amount {}",
+                    allocation.total_amount, current.spent_amount.0
+                )));
+            }
+
             let count = diesel::update(dsl::pay_allocation)
-                .filter(dsl::id.eq(allocation.allocation_id.clone()))
+                .filter(dsl::id.eq(&allocation.allocation_id))
                 .filter(dsl::owner_id.eq(&owner_id))
                 .filter(dsl::released.eq(false))
-                .set(WriteObj::from_allocation(allocation, owner_id))
+                .filter(dsl::spent_amount.eq(&current.spent_amount))
+                .set(AmendObj::new(&allocation, avail_amount.into()))
                 .execute(conn)?;
 
             Ok(count == 1)
@@ -423,4 +458,199 @@ pub enum AllocationReleaseStatus {
         deposit: Option<Deposit>,
         platform: String,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::migrations;
+    use chrono::{Duration, Utc};
+    use std::str::FromStr;
+    use uuid::Uuid;
+    use ya_client_model::payment::NewAllocation;
+    use ya_persistence::executor::DbExecutor;
+
+    fn owner() -> NodeId {
+        NodeId::from_str("0xbabe000000000000000000000000000000000000").unwrap()
+    }
+
+    const AGREEMENT_ID: &str = "agreement-1";
+
+    /// Creates an allocation plus the agreement its expenditures reference.
+    async fn seed(db: &DbExecutor, total: u32) -> String {
+        db.with_transaction("seed_agreement", move |conn| {
+            let now = Utc::now().naive_utc();
+            diesel::insert_into(crate::schema::pay_agreement::dsl::pay_agreement)
+                .values((
+                    crate::schema::pay_agreement::dsl::id.eq(AGREEMENT_ID),
+                    crate::schema::pay_agreement::dsl::owner_id.eq(owner()),
+                    crate::schema::pay_agreement::dsl::role.eq("R"),
+                    crate::schema::pay_agreement::dsl::peer_id.eq(owner()),
+                    crate::schema::pay_agreement::dsl::payee_addr.eq(owner().to_string()),
+                    crate::schema::pay_agreement::dsl::payer_addr.eq(owner().to_string()),
+                    crate::schema::pay_agreement::dsl::payment_platform.eq("erc20-holesky-tglm"),
+                    crate::schema::pay_agreement::dsl::total_amount_due.eq("0"),
+                    crate::schema::pay_agreement::dsl::total_amount_accepted.eq("0"),
+                    crate::schema::pay_agreement::dsl::total_amount_scheduled.eq("0"),
+                    crate::schema::pay_agreement::dsl::total_amount_paid.eq("0"),
+                    crate::schema::pay_agreement::dsl::created_ts.eq(now),
+                    crate::schema::pay_agreement::dsl::updated_ts.eq(now),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(())
+        })
+        .await
+        .unwrap();
+
+        let dao: AllocationDao = db.as_dao();
+        dao.create(
+            NewAllocation {
+                address: None,
+                payment_platform: None,
+                total_amount: BigDecimal::from(total),
+                timeout: Some(Utc::now() + Duration::hours(1)),
+                make_deposit: false,
+                deposit: None,
+                extend_timeout: None,
+            },
+            owner(),
+            "erc20-holesky-tglm".to_string(),
+            owner().to_string(),
+        )
+        .await
+        .unwrap()
+    }
+
+    async fn balances(db: &DbExecutor, allocation_id: &str) -> (BigDecimal, BigDecimal) {
+        let dao: AllocationDao = db.as_dao();
+        match dao.get(allocation_id.to_string(), owner()).await.unwrap() {
+            AllocationStatus::Active(a) => (a.remaining_amount, a.spent_amount),
+            _ => panic!("allocation not active"),
+        }
+    }
+
+    /// A spend that commits between the amend's read and its write must survive.
+    ///
+    /// The amend handler reads the allocation, validates the change against the payment
+    /// driver over GSB, then writes back. Writing the pre-round-trip snapshot would
+    /// revert the spend while its `pay_allocation_expenditure` row survives, letting the
+    /// same funds be committed twice.
+    #[actix_rt::test]
+    async fn amend_does_not_revert_a_concurrent_spend() {
+        let db = DbExecutor::in_memory(&format!("amend-race-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        let allocation_id = seed(&db, 100).await;
+        let dao: AllocationDao = db.as_dao();
+
+        // The handler's read, before the GSB round trip.
+        let stale = match dao.get(allocation_id.clone(), owner()).await.unwrap() {
+            AllocationStatus::Active(a) => a,
+            _ => panic!("allocation not active"),
+        };
+        assert_eq!(stale.spent_amount, BigDecimal::from(0));
+
+        // A debit note lands while the driver is being consulted.
+        dao.spend_from_allocation_transaction(SpendFromAllocationArgs {
+            owner_id: owner(),
+            allocation_id: allocation_id.clone(),
+            agreement_id: AGREEMENT_ID.to_string(),
+            activity_id: None,
+            amount: BigDecimal::from(30),
+        })
+        .await
+        .unwrap();
+
+        // The amend now writes back, carrying the stale `spent_amount = 0`. The timeout
+        // change must land, but the balance columns must reflect the spend, not the
+        // snapshot.
+        let amended = Allocation {
+            timeout: Some(Utc::now() + Duration::hours(2)),
+            ..stale
+        };
+        assert!(dao.replace(amended, owner()).await.unwrap());
+
+        let (avail, spent) = balances(&db, &allocation_id).await;
+        assert_eq!(spent, BigDecimal::from(30), "spend was reverted");
+        assert_eq!(
+            avail,
+            BigDecimal::from(70),
+            "avail was restored to the total"
+        );
+    }
+
+    /// The ordinary path: no concurrent spend, so the amend applies and `avail_amount`
+    /// is derived from the current `spent_amount` rather than reset to the total.
+    #[actix_rt::test]
+    async fn amend_applies_and_preserves_prior_spend() {
+        let db = DbExecutor::in_memory(&format!("amend-ok-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        let allocation_id = seed(&db, 100).await;
+        let dao: AllocationDao = db.as_dao();
+
+        dao.spend_from_allocation_transaction(SpendFromAllocationArgs {
+            owner_id: owner(),
+            allocation_id: allocation_id.clone(),
+            agreement_id: AGREEMENT_ID.to_string(),
+            activity_id: None,
+            amount: BigDecimal::from(30),
+        })
+        .await
+        .unwrap();
+
+        let current = match dao.get(allocation_id.clone(), owner()).await.unwrap() {
+            AllocationStatus::Active(a) => a,
+            _ => panic!("allocation not active"),
+        };
+
+        // Raise the total to 150; nothing else races us.
+        let amended = Allocation {
+            total_amount: BigDecimal::from(150),
+            timeout: Some(Utc::now() + Duration::hours(2)),
+            ..current
+        };
+        assert!(dao.replace(amended, owner()).await.unwrap());
+
+        let (avail, spent) = balances(&db, &allocation_id).await;
+        assert_eq!(spent, BigDecimal::from(30), "spend must be untouched");
+        assert_eq!(avail, BigDecimal::from(120), "avail must be total - spent");
+    }
+
+    /// Shrinking the total below what has already been spent must be rejected, using the
+    /// spend visible inside the transaction rather than the caller's snapshot.
+    #[actix_rt::test]
+    async fn amend_below_spent_amount_is_rejected() {
+        let db = DbExecutor::in_memory(&format!("amend-shrink-{}", Uuid::new_v4())).unwrap();
+        db.apply_migration(migrations::MIGRATIONS).unwrap();
+
+        let allocation_id = seed(&db, 100).await;
+        let dao: AllocationDao = db.as_dao();
+
+        let stale = match dao.get(allocation_id.clone(), owner()).await.unwrap() {
+            AllocationStatus::Active(a) => a,
+            _ => panic!("allocation not active"),
+        };
+
+        dao.spend_from_allocation_transaction(SpendFromAllocationArgs {
+            owner_id: owner(),
+            allocation_id: allocation_id.clone(),
+            agreement_id: AGREEMENT_ID.to_string(),
+            activity_id: None,
+            amount: BigDecimal::from(60),
+        })
+        .await
+        .unwrap();
+
+        // Passed validation against the stale `spent_amount = 0`, but 50 < 60 spent.
+        let amended = Allocation {
+            total_amount: BigDecimal::from(50),
+            ..stale
+        };
+        assert!(dao.replace(amended, owner()).await.is_err());
+
+        let (avail, spent) = balances(&db, &allocation_id).await;
+        assert_eq!(spent, BigDecimal::from(60));
+        assert_eq!(avail, BigDecimal::from(40));
+    }
 }

@@ -161,7 +161,8 @@ pub fn try_from_validation(
         ValidateAllocationResult::DepositReused { allocation_id } => {
             let detail = format!(
                 "Submitted deposit already has a corresponding allocation {allocation_id}. \
-                        Consider amending the allocation if the deposit has been extended"
+                        Amend that allocation to update its timeout or validation settings. \
+                        Use a new deposit and allocation for additional capacity"
             );
 
             extensions.insert(
