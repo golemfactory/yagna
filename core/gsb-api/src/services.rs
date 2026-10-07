@@ -9,6 +9,7 @@ use std::{
     result::Result::{Err, Ok},
 };
 use thiserror::Error;
+use ya_client_model::NodeId;
 
 lazy_static! {
     pub(crate) static ref SERVICES: Addr<Services> = Services::default().start();
@@ -20,19 +21,20 @@ pub(crate) struct Services {
 }
 
 struct RegisteredService {
-    owner: String,
+    // App-keys for the same node share ownership, independently of their names.
+    owner: NodeId,
     service: Addr<Service>,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct Caller {
-    pub subject: String,
+    pub node_id: NodeId,
     pub admin: bool,
 }
 
 impl Caller {
     fn can_access(&self, service: &RegisteredService) -> bool {
-        self.admin || self.subject == service.owner
+        self.admin || self.node_id == service.owner
     }
 }
 
@@ -55,7 +57,7 @@ pub(crate) enum BindError {
 pub(crate) struct Bind {
     pub components: Vec<String>,
     pub addr_prefix: String,
-    pub owner: String,
+    pub owner: NodeId,
 }
 
 impl Handler<Bind> for Services {
@@ -68,7 +70,7 @@ impl Handler<Bind> for Services {
             ));
         }
         let addr = msg.addr_prefix.clone();
-        let owner = msg.owner.clone();
+        let owner = msg.owner;
         if self.services.contains_key(&addr) {
             return Err(BindError::DuplicatedService(addr));
         }
@@ -156,7 +158,7 @@ impl Handler<Unbind> for Services {
             log::debug!(
                 "Unbinding service: {} (caller: {})",
                 msg.addr,
-                msg.caller.subject
+                msg.caller.node_id
             );
             let error = CloseReason {
                 code: ws::CloseCode::Normal,
@@ -224,9 +226,13 @@ mod tests {
         }
     }
 
-    fn caller(subject: &str, admin: bool) -> Caller {
+    fn node_id(value: u8) -> NodeId {
+        format!("0x{value:040x}").parse().unwrap()
+    }
+
+    fn caller(value: u8, admin: bool) -> Caller {
         Caller {
-            subject: subject.to_string(),
+            node_id: node_id(value),
             admin,
         }
     }
@@ -240,7 +246,7 @@ mod tests {
             .send(Bind {
                 components: vec!["Call".to_string()],
                 addr_prefix: addr.clone(),
-                owner: "alice".to_string(),
+                owner: node_id(1),
             })
             .await
             .unwrap()
@@ -249,7 +255,7 @@ mod tests {
         let find_error = services
             .send(Find {
                 addr: addr.clone(),
-                caller: caller("bob", false),
+                caller: caller(2, false),
             })
             .await
             .unwrap()
@@ -259,7 +265,7 @@ mod tests {
         let unbind_error = services
             .send(Unbind {
                 addr: addr.clone(),
-                caller: caller("bob", false),
+                caller: caller(2, false),
             })
             .await
             .unwrap()
@@ -269,7 +275,7 @@ mod tests {
         services
             .send(Find {
                 addr: addr.clone(),
-                caller: caller("alice", false),
+                caller: caller(1, false),
             })
             .await
             .unwrap()
@@ -278,7 +284,7 @@ mod tests {
         services
             .send(Unbind {
                 addr,
-                caller: caller("alice", false),
+                caller: caller(1, false),
             })
             .await
             .unwrap()
@@ -294,7 +300,7 @@ mod tests {
             .send(Bind {
                 components: vec!["Call".to_string()],
                 addr_prefix: addr.clone(),
-                owner: "alice".to_string(),
+                owner: node_id(1),
             })
             .await
             .unwrap()
@@ -303,7 +309,7 @@ mod tests {
         services
             .send(Find {
                 addr: addr.clone(),
-                caller: caller("administrator", true),
+                caller: caller(3, true),
             })
             .await
             .unwrap()
@@ -312,7 +318,7 @@ mod tests {
         services
             .send(Unbind {
                 addr,
-                caller: caller("administrator", true),
+                caller: caller(3, true),
             })
             .await
             .unwrap()
@@ -330,7 +336,7 @@ mod tests {
             .send(Bind {
                 components: vec!["Call".to_string()],
                 addr_prefix: addr.clone(),
-                owner: "alice".to_string(),
+                owner: node_id(1),
             })
             .await
             .unwrap()
