@@ -995,102 +995,6 @@ mod public {
         }
     }
 
-    #[cfg(test)]
-    mod security_tests {
-        use super::*;
-        use crate::test_support as fixture;
-        use std::sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        };
-        use ya_core_model::activity;
-
-        #[actix_rt::test]
-        async fn debit_note_binding_is_checked_before_any_payment_rows_are_written() {
-            let _guard = crate::test_support::BUS_LOCK.lock().await;
-            // A stored binding is authoritative; otherwise query the activity service.
-            for scenario in [
-                "stored-match",
-                "stored-mismatch",
-                "service-match",
-                "service-mismatch",
-                "unknown",
-                "service-error",
-            ] {
-                let db = fixture::database();
-                let agreement = fixture::agreement();
-                let stored = scenario.starts_with("stored-");
-                let accepted = scenario.ends_with("-match");
-                if stored {
-                    let mut binding = agreement.clone();
-                    if !accepted {
-                        binding.agreement_id = "other-agreement".into();
-                    }
-                    fixture::seed_activity(&db, &binding, Role::Requestor).await;
-                }
-                crate::utils::fake_get_agreement(agreement.agreement_id.clone(), agreement.clone());
-                let calls = Arc::new(AtomicUsize::new(0));
-                let observed = calls.clone();
-                let actual_id = agreement.agreement_id.clone();
-                ya_service_bus::typed::bind(
-                    activity::local::BUS_ID,
-                    move |msg: activity::local::GetAgreementId| {
-                        let calls = observed.clone();
-                        let actual_id = actual_id.clone();
-                        async move {
-                            calls.fetch_add(1, Ordering::SeqCst);
-                            assert_eq!(msg.activity_id, fixture::ACTIVITY);
-                            match scenario {
-                                "service-match" => Ok(actual_id),
-                                "service-mismatch" => Ok("other-agreement".into()),
-                                "unknown" => Err(activity::RpcMessageError::NotFound(
-                                    "unknown activity".into(),
-                                )),
-                                _ => Err(activity::RpcMessageError::Service(
-                                    "activity service unavailable".into(),
-                                )),
-                            }
-                        }
-                    },
-                );
-                let note = fixture::debit_note(&agreement);
-                let result = send_debit_note(
-                    db.clone(),
-                    fixture::provider().to_string(),
-                    SendDebitNote(note.clone()),
-                )
-                .await;
-                match scenario {
-                    "stored-match" | "service-match" => {
-                        result.unwrap();
-                    }
-                    "service-error" => assert!(matches!(result, Err(SendError::ServiceError(_)))),
-                    _ => assert!(matches!(result, Err(SendError::BadRequest(_)))),
-                }
-                assert_eq!(calls.load(Ordering::SeqCst), usize::from(!stored));
-                let received = db
-                    .as_dao::<DebitNoteDao>()
-                    .get(note.debit_note_id, Some(fixture::requestor()))
-                    .await
-                    .unwrap();
-                assert_eq!(received.is_some(), accepted, "{scenario}");
-                let binding = db
-                    .as_dao::<ActivityDao>()
-                    .get_agreement_id(fixture::ACTIVITY.into(), fixture::requestor())
-                    .await
-                    .unwrap();
-                let expected = if scenario == "stored-mismatch" {
-                    Some("other-agreement".into())
-                } else if accepted {
-                    Some(agreement.agreement_id)
-                } else {
-                    None
-                };
-                assert_eq!(binding, expected, "{scenario}");
-            }
-        }
-    }
-
     async fn accept_debit_note(
         db: DbExecutor,
         sender_id: String,
@@ -1620,6 +1524,101 @@ mod public {
             Ok(Ack {})
         } else {
             Err(errors)
+        }
+    }
+    #[cfg(test)]
+    mod security_tests {
+        use super::*;
+        use crate::test_support as fixture;
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        use ya_core_model::activity;
+
+        #[actix_rt::test]
+        async fn debit_note_binding_is_checked_before_any_payment_rows_are_written() {
+            let _guard = crate::test_support::BUS_LOCK.lock().await;
+            // A stored binding is authoritative; otherwise query the activity service.
+            for scenario in [
+                "stored-match",
+                "stored-mismatch",
+                "service-match",
+                "service-mismatch",
+                "unknown",
+                "service-error",
+            ] {
+                let db = fixture::database();
+                let agreement = fixture::agreement();
+                let stored = scenario.starts_with("stored-");
+                let accepted = scenario.ends_with("-match");
+                if stored {
+                    let mut binding = agreement.clone();
+                    if !accepted {
+                        binding.agreement_id = "other-agreement".into();
+                    }
+                    fixture::seed_activity(&db, &binding, Role::Requestor).await;
+                }
+                crate::utils::fake_get_agreement(agreement.agreement_id.clone(), agreement.clone());
+                let calls = Arc::new(AtomicUsize::new(0));
+                let observed = calls.clone();
+                let actual_id = agreement.agreement_id.clone();
+                ya_service_bus::typed::bind(
+                    activity::local::BUS_ID,
+                    move |msg: activity::local::GetAgreementId| {
+                        let calls = observed.clone();
+                        let actual_id = actual_id.clone();
+                        async move {
+                            calls.fetch_add(1, Ordering::SeqCst);
+                            assert_eq!(msg.activity_id, fixture::ACTIVITY);
+                            match scenario {
+                                "service-match" => Ok(actual_id),
+                                "service-mismatch" => Ok("other-agreement".into()),
+                                "unknown" => Err(activity::RpcMessageError::NotFound(
+                                    "unknown activity".into(),
+                                )),
+                                _ => Err(activity::RpcMessageError::Service(
+                                    "activity service unavailable".into(),
+                                )),
+                            }
+                        }
+                    },
+                );
+                let note = fixture::debit_note(&agreement);
+                let result = send_debit_note(
+                    db.clone(),
+                    fixture::provider().to_string(),
+                    SendDebitNote(note.clone()),
+                )
+                .await;
+                match scenario {
+                    "stored-match" | "service-match" => {
+                        result.unwrap();
+                    }
+                    "service-error" => assert!(matches!(result, Err(SendError::ServiceError(_)))),
+                    _ => assert!(matches!(result, Err(SendError::BadRequest(_)))),
+                }
+                assert_eq!(calls.load(Ordering::SeqCst), usize::from(!stored));
+                let received = db
+                    .as_dao::<DebitNoteDao>()
+                    .get(note.debit_note_id, Some(fixture::requestor()))
+                    .await
+                    .unwrap();
+                assert_eq!(received.is_some(), accepted, "{scenario}");
+                let binding = db
+                    .as_dao::<ActivityDao>()
+                    .get_agreement_id(fixture::ACTIVITY.into(), fixture::requestor())
+                    .await
+                    .unwrap();
+                let expected = if scenario == "stored-mismatch" {
+                    Some("other-agreement".into())
+                } else if accepted {
+                    Some(agreement.agreement_id)
+                } else {
+                    None
+                };
+                assert_eq!(binding, expected, "{scenario}");
+            }
         }
     }
 }

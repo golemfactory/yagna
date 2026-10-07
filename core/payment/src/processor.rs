@@ -68,123 +68,6 @@ fn driver_endpoint(driver: &str) -> Endpoint {
     bus::service(driver_bus_id(driver))
 }
 
-#[cfg(test)]
-mod security_tests {
-    use super::*;
-    use crate::{dao::DebitNoteDao, error::DbError, test_support::*};
-    use diesel::{QueryDsl, RunQueryDsl};
-    use ya_client_model::payment::{DocumentStatus, NewDebitNote};
-
-    #[actix_rt::test]
-    async fn activity_payment_requires_the_agreed_platform_before_settlement() {
-        let _guard = BUS_LOCK.lock().await;
-        let driver_name = "platform-regression-test";
-        bus::bind(
-            &driver_bus_id(driver_name),
-            |_: driver::VerifySignature| async { Ok(true) },
-        );
-        bus::bind(
-            &driver_bus_id(driver_name),
-            |_: driver::VerifyPayment| async {
-                Ok(PaymentDetails {
-                    recipient: provider().to_string(),
-                    sender: requestor().to_string(),
-                    amount: 10.into(),
-                    date: Some(Utc::now()),
-                })
-            },
-        );
-        for (platform, accepted) in [(OTHER_PLATFORM, false), (PLATFORM, true)] {
-            let db = database();
-            let agreement = agreement();
-            seed_activity(&db, &agreement, Role::Provider).await;
-            let note_id = db
-                .as_dao::<DebitNoteDao>()
-                .create_new(
-                    NewDebitNote {
-                        activity_id: ACTIVITY.into(),
-                        total_amount_due: 10.into(),
-                        usage_counter_vector: None,
-                        payment_due_date: None,
-                    },
-                    provider(),
-                )
-                .await
-                .unwrap();
-            let processor =
-                PaymentProcessor::new(db.clone(), AllocationReleaseTasks::new_for_mocks_only());
-            processor.registry.write().await.platforms.insert(
-                platform.into(),
-                HashMap::from([(driver_name.into(), false)]),
-            );
-            let result = processor
-                .verify_payment(
-                    Payment {
-                        payment_id: uuid::Uuid::new_v4().to_string(),
-                        payer_id: requestor(),
-                        payee_id: provider(),
-                        payer_addr: requestor().to_string(),
-                        payee_addr: provider().to_string(),
-                        payment_platform: platform.into(),
-                        amount: 10.into(),
-                        timestamp: Utc::now(),
-                        agreement_payments: vec![],
-                        activity_payments: vec![ActivityPayment {
-                            activity_id: ACTIVITY.into(),
-                            amount: 10.into(),
-                            allocation_id: None,
-                        }],
-                        details: base64::encode("test-confirmation"),
-                    },
-                    vec![],
-                    None,
-                )
-                .await;
-            if accepted {
-                result.unwrap();
-            } else {
-                assert!(result.unwrap_err().to_string().contains("platform"));
-            }
-            let activity = db
-                .as_dao::<ActivityDao>()
-                .get(ACTIVITY.into(), provider())
-                .await
-                .unwrap()
-                .unwrap();
-            assert_eq!(
-                activity.total_amount_paid.0,
-                BigDecimal::from(if accepted { 10 } else { 0 })
-            );
-            let note = db
-                .as_dao::<DebitNoteDao>()
-                .get(note_id, Some(provider()))
-                .await
-                .unwrap()
-                .unwrap();
-            assert_eq!(
-                note.status,
-                if accepted {
-                    DocumentStatus::Settled
-                } else {
-                    DocumentStatus::Issued
-                }
-            );
-            let count = db
-                .with_transaction("count_payments", |conn| {
-                    Ok::<_, DbError>(
-                        crate::schema::pay_payment::table
-                            .count()
-                            .get_result::<i64>(conn)?,
-                    )
-                })
-                .await
-                .unwrap();
-            assert_eq!(count, i64::from(accepted));
-        }
-        bus::unbind(&driver_bus_id(driver_name)).await.unwrap();
-    }
-}
-
 #[derive(Clone, Debug)]
 struct AccountDetails {
     pub driver: String,
@@ -1568,5 +1451,122 @@ fn shut_down_driver(
             Ok(Ok(_)) => log::info!("Driver '{}' shut down successfully.", driver),
             err => log::error!("Error shutting down driver '{}': {:?}", driver, err),
         }
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use crate::{dao::DebitNoteDao, error::DbError, test_support::*};
+    use diesel::{QueryDsl, RunQueryDsl};
+    use ya_client_model::payment::{DocumentStatus, NewDebitNote};
+
+    #[actix_rt::test]
+    async fn activity_payment_requires_the_agreed_platform_before_settlement() {
+        let _guard = BUS_LOCK.lock().await;
+        let driver_name = "platform-regression-test";
+        bus::bind(
+            &driver_bus_id(driver_name),
+            |_: driver::VerifySignature| async { Ok(true) },
+        );
+        bus::bind(
+            &driver_bus_id(driver_name),
+            |_: driver::VerifyPayment| async {
+                Ok(PaymentDetails {
+                    recipient: provider().to_string(),
+                    sender: requestor().to_string(),
+                    amount: 10.into(),
+                    date: Some(Utc::now()),
+                })
+            },
+        );
+        for (platform, accepted) in [(OTHER_PLATFORM, false), (PLATFORM, true)] {
+            let db = database();
+            let agreement = agreement();
+            seed_activity(&db, &agreement, Role::Provider).await;
+            let note_id = db
+                .as_dao::<DebitNoteDao>()
+                .create_new(
+                    NewDebitNote {
+                        activity_id: ACTIVITY.into(),
+                        total_amount_due: 10.into(),
+                        usage_counter_vector: None,
+                        payment_due_date: None,
+                    },
+                    provider(),
+                )
+                .await
+                .unwrap();
+            let processor =
+                PaymentProcessor::new(db.clone(), AllocationReleaseTasks::new_for_mocks_only());
+            processor.registry.write().await.platforms.insert(
+                platform.into(),
+                HashMap::from([(driver_name.into(), false)]),
+            );
+            let result = processor
+                .verify_payment(
+                    Payment {
+                        payment_id: uuid::Uuid::new_v4().to_string(),
+                        payer_id: requestor(),
+                        payee_id: provider(),
+                        payer_addr: requestor().to_string(),
+                        payee_addr: provider().to_string(),
+                        payment_platform: platform.into(),
+                        amount: 10.into(),
+                        timestamp: Utc::now(),
+                        agreement_payments: vec![],
+                        activity_payments: vec![ActivityPayment {
+                            activity_id: ACTIVITY.into(),
+                            amount: 10.into(),
+                            allocation_id: None,
+                        }],
+                        details: base64::encode("test-confirmation"),
+                    },
+                    vec![],
+                    None,
+                )
+                .await;
+            if accepted {
+                result.unwrap();
+            } else {
+                assert!(result.unwrap_err().to_string().contains("platform"));
+            }
+            let activity = db
+                .as_dao::<ActivityDao>()
+                .get(ACTIVITY.into(), provider())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                activity.total_amount_paid.0,
+                BigDecimal::from(if accepted { 10 } else { 0 })
+            );
+            let note = db
+                .as_dao::<DebitNoteDao>()
+                .get(note_id, Some(provider()))
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                note.status,
+                if accepted {
+                    DocumentStatus::Settled
+                } else {
+                    DocumentStatus::Issued
+                }
+            );
+            let count = db
+                .with_transaction("count_payments", |conn| {
+                    Ok::<_, DbError>(
+                        crate::schema::pay_payment::table
+                            .count()
+                            .get_result::<i64>(conn)?,
+                    )
+                })
+                .await
+                .unwrap();
+            assert_eq!(count, i64::from(accepted));
+        }
+        bus::unbind(&driver_bus_id(driver_name)).await.unwrap();
     }
 }
