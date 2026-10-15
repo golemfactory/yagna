@@ -103,13 +103,11 @@ where
         let cache = self.cache.clone();
         let service = self.service.clone();
 
-        let allowed_uris = ["/metrics-api", "/version/get", "/dashboard"];
-
-        for uri in allowed_uris {
-            if req.uri().to_string().starts_with(uri) {
-                log::debug!("skipping authorization for uri={}", req.uri());
-                return Box::pin(service.borrow_mut().call(req));
-            }
+        // Check both the raw path and the percent-decoded path the router
+        // matches against, so encoded dot segments cannot slip through.
+        if is_public_path(req.path()) && is_public_path(req.match_info().as_str()) {
+            log::debug!("skipping authorization for path={}", req.path());
+            return Box::pin(service.borrow_mut().call(req));
         }
 
         Box::pin(async move {
@@ -137,6 +135,26 @@ where
             }
         })
     }
+}
+
+const PUBLIC_PATH_PREFIXES: [&str; 3] = ["/metrics-api", "/version/get", "/dashboard"];
+
+/// Returns true when `path` is one of the public prefixes or lies below one
+/// of them on a segment boundary. Paths containing `.` or `..` segments are
+/// never public: actix does not normalize them, so they must not be allowed
+/// to skip authorization.
+fn is_public_path(path: &str) -> bool {
+    if path
+        .split('/')
+        .any(|segment| segment == "." || segment == "..")
+    {
+        return false;
+    }
+
+    PUBLIC_PATH_PREFIXES.iter().any(|prefix| {
+        path.strip_prefix(prefix)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
 }
 
 fn principal_allowed_from_peer(principal: &Identity, peer_addr: Option<SocketAddr>) -> bool {
@@ -210,5 +228,101 @@ mod tests {
             Some("192.0.2.1:1234".parse().unwrap())
         ));
         assert!(principal_allowed_from_peer(&manager(), None));
+    }
+
+    #[test]
+    fn public_paths_match_only_on_segment_boundary() {
+        for path in [
+            "/dashboard",
+            "/dashboard/",
+            "/dashboard/index.html",
+            "/dashboard/assets/app.js",
+            "/metrics-api/v1/expose",
+            "/metrics-api/v1/filtered/sum",
+            "/version/get",
+        ] {
+            assert!(is_public_path(path), "{path} should be public");
+        }
+
+        for path in [
+            "/dashboardX",
+            "/dashboardX/index.html",
+            "/dashboard-api/v1/x",
+            "/version/getfoo",
+            "/version/get.json",
+            "/version",
+            "/metrics-apiZ",
+            "/metrics-apiZ/v1/expose",
+            "/payment-api/v1/dashboard",
+            "/dashboard/../payment-api/v1/allocations",
+            "/dashboard/./x",
+            "/metrics-api/..",
+            "dashboard",
+            "",
+        ] {
+            assert!(!is_public_path(path), "{path} should not be public");
+        }
+    }
+
+    mod middleware {
+        use super::*;
+        use actix_web::http::StatusCode;
+        use actix_web::{test, web, App, HttpResponse};
+
+        async fn ok() -> HttpResponse {
+            HttpResponse::Ok().finish()
+        }
+
+        async fn status(uri: &str) -> StatusCode {
+            let cache = AppKeyCache::from_appkeys(vec![], None).unwrap();
+            let app = test::init_service(
+                App::new()
+                    .wrap(Auth::new(cache))
+                    .route("/dashboard", web::get().to(ok))
+                    .route("/dashboard/{_:.*}", web::get().to(ok))
+                    .route("/dashboardX/{_:.*}", web::get().to(ok))
+                    .service(web::scope("metrics-api/v1").route("/expose", web::get().to(ok)))
+                    .service(
+                        web::scope("/version")
+                            .route("/get", web::get().to(ok))
+                            .route("/getfoo", web::get().to(ok)),
+                    )
+                    .service(web::scope("/payment-api/v1").route("/{_:.*}", web::get().to(ok))),
+            )
+            .await;
+            let req = test::TestRequest::get().uri(uri).to_request();
+            match test::try_call_service(&app, req).await {
+                Ok(resp) => resp.status(),
+                Err(error) => error.as_response_error().status_code(),
+            }
+        }
+
+        #[actix_rt::test]
+        async fn public_routes_skip_authorization() {
+            for uri in [
+                "/dashboard",
+                "/dashboard/",
+                "/dashboard/index.html",
+                "/metrics-api/v1/expose",
+                "/version/get",
+                "/version/get?x=1",
+            ] {
+                assert_eq!(status(uri).await, StatusCode::OK, "{uri}");
+            }
+        }
+
+        #[actix_rt::test]
+        async fn look_alike_and_traversal_paths_require_authorization() {
+            for uri in [
+                "/dashboardX/index.html",
+                "/version/getfoo",
+                "/payment-api/v1/allocations?x=/dashboard",
+                "/dashboard/../payment-api/v1/allocations",
+                "/dashboard/%2e%2e/payment-api/v1/allocations",
+                "/dashboard/%2E%2E/payment-api/v1/allocations",
+            ] {
+                assert_eq!(status(uri).await, StatusCode::UNAUTHORIZED, "{uri}");
+            }
+        }
     }
 }
