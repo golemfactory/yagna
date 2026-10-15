@@ -55,7 +55,7 @@ async fn test_gsb_get_agreement() {
         .await
         .unwrap();
 
-    let agreement = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+    let agreement = bus::service(network.market_gsb_prefixes(REQ_NAME).1)
         .send(market::GetAgreement {
             agreement_id: agreement_id.into_client(),
             role: Role::Requestor,
@@ -67,6 +67,15 @@ async fn test_gsb_get_agreement() {
     assert_eq!(agreement.demand.requestor_id, req_id.identity);
     assert_eq!(agreement.offer.provider_id, prov_id.identity);
     assert_eq!(agreement.app_session_id, sess_id);
+
+    // GetAgreement must not be exposed on the public prefix.
+    let result = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+        .send(market::GetAgreement {
+            agreement_id: agreement_id.into_client(),
+            role: Role::Requestor,
+        })
+        .await;
+    assert!(result.is_err());
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
@@ -103,7 +112,7 @@ async fn test_gsb_list_agreements() {
         .await
         .unwrap();
 
-    let agreements = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+    let agreements = bus::service(network.market_gsb_prefixes(REQ_NAME).1)
         .send(market::ListAgreements::default())
         .await
         .unwrap()
@@ -112,6 +121,12 @@ async fn test_gsb_list_agreements() {
     assert_eq!(agreements.len(), 1);
     assert_eq!(agreements[0].id, agreement_id.into_client());
     assert_eq!(agreements[0].role, Role::Requestor);
+
+    // ListAgreements must not be exposed on the public prefix.
+    let result = bus::service(network.market_gsb_prefixes(REQ_NAME).0)
+        .send(market::ListAgreements::default())
+        .await;
+    assert!(result.is_err());
 }
 
 #[cfg_attr(not(feature = "test-suite"), ignore)]
