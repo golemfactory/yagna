@@ -183,9 +183,14 @@ impl PaymentDao<'_> {
             .await
     }
 
-    pub async fn mark_sent(&self, payment_id: String) -> DbResult<()> {
+    pub async fn mark_sent(
+        &self,
+        payment_id: String,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_mark_sent", move |conn| {
-            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+            diesel::update(dsl::pay_payment.find((payment_id, owner_id, peer_id)))
                 .filter(dsl::role.eq(Role::Requestor))
                 .set(dsl::send_payment.eq(false))
                 .execute(conn)?;
@@ -197,11 +202,13 @@ impl PaymentDao<'_> {
     pub async fn add_signature(
         &self,
         payment_id: String,
+        owner_id: NodeId,
+        peer_id: NodeId,
         signature: Vec<u8>,
         signed_bytes: Vec<u8>,
     ) -> DbResult<()> {
         do_with_transaction(self.pool, "payment_dao_update", move |conn| {
-            diesel::update(dsl::pay_payment.filter(dsl::id.eq(payment_id)))
+            diesel::update(dsl::pay_payment.find((payment_id, owner_id, peer_id)))
                 .filter(dsl::role.eq(Role::Requestor))
                 .set((
                     dsl::signature.eq(signature),
@@ -218,18 +225,41 @@ impl PaymentDao<'_> {
         payment_id: String,
         owner_id: NodeId,
     ) -> DbResult<Option<Signed<Payment>>> {
+        self.get_by_peer(payment_id, owner_id, None).await
+    }
+
+    /// Select the recipient's payment when several peers share a driver payment ID.
+    pub async fn get_for_peer(
+        &self,
+        payment_id: String,
+        owner_id: NodeId,
+        peer_id: NodeId,
+    ) -> DbResult<Option<Signed<Payment>>> {
+        self.get_by_peer(payment_id, owner_id, Some(peer_id)).await
+    }
+
+    async fn get_by_peer(
+        &self,
+        payment_id: String,
+        owner_id: NodeId,
+        peer_id: Option<NodeId>,
+    ) -> DbResult<Option<Signed<Payment>>> {
         readonly_transaction(self.pool, "payment_dao_get", move |conn| {
-            let payment: Option<ReadObj> = dsl::pay_payment
+            let mut query = dsl::pay_payment
                 .filter(dsl::id.eq(&payment_id))
                 .filter(dsl::owner_id.eq(&owner_id))
-                .first(conn)
-                .optional()?;
+                .into_boxed();
+            if let Some(peer_id) = peer_id {
+                query = query.filter(dsl::peer_id.eq(peer_id));
+            }
+            let payment: Option<ReadObj> = query.first(conn).optional()?;
 
             match payment {
                 Some(payment) => {
                     let document_payments = document_pay_dsl::pay_payment_document
                         .filter(document_pay_dsl::payment_id.eq(&payment_id))
                         .filter(document_pay_dsl::owner_id.eq(&owner_id))
+                        .filter(document_pay_dsl::peer_id.eq(&payment.peer_id))
                         .load(conn)?;
                     Ok(Some(payment.into_signed_api_model(document_payments)))
                 }
@@ -256,6 +286,7 @@ impl PaymentDao<'_> {
                 let document_payments = document_pay_dsl::pay_payment_document
                     .filter(document_pay_dsl::payment_id.eq(&payment.id))
                     .filter(document_pay_dsl::owner_id.eq(&payment.owner_id))
+                    .filter(document_pay_dsl::peer_id.eq(&payment.peer_id))
                     .load(conn)?;
 
                 result.push(payment.into_api_model(document_payments))
@@ -300,7 +331,8 @@ impl PaymentDao<'_> {
                     .inner_join(
                         dsl::pay_payment.on(document_pay_dsl::owner_id
                             .eq(dsl::owner_id)
-                            .and(document_pay_dsl::payment_id.eq(dsl::id))),
+                            .and(document_pay_dsl::payment_id.eq(dsl::id))
+                            .and(document_pay_dsl::peer_id.eq(dsl::peer_id))),
                     )
                     .inner_join(
                         agreement_dsl::pay_agreement.on(document_pay_dsl::owner_id
@@ -355,6 +387,7 @@ impl PaymentDao<'_> {
                 let document_payments = document_pay_dsl::pay_payment_document
                     .filter(document_pay_dsl::payment_id.eq(&payment.id))
                     .filter(document_pay_dsl::owner_id.eq(&payment.owner_id))
+                    .filter(document_pay_dsl::peer_id.eq(&payment.peer_id))
                     .load(conn)?;
 
                 payments.push(payment.into_api_model(document_payments))
@@ -375,9 +408,13 @@ fn join_document_payments(
         document_payments
             .into_iter()
             .fold(HashMap::new(), |mut map, document_payment| {
-                map.entry(document_payment.payment_id.clone())
-                    .or_insert_with(Vec::new)
-                    .push(document_payment);
+                map.entry((
+                    document_payment.payment_id.clone(),
+                    document_payment.owner_id,
+                    document_payment.peer_id,
+                ))
+                .or_insert_with(Vec::new)
+                .push(document_payment);
                 map
             });
 
@@ -385,7 +422,7 @@ fn join_document_payments(
         .into_iter()
         .map(|payment| {
             let document_payments = document_payments_map
-                .remove(&payment.id)
+                .remove(&(payment.id.clone(), payment.owner_id, payment.peer_id))
                 .unwrap_or_default();
             payment.into_signed_api_model(document_payments)
         })

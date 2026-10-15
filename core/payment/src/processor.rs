@@ -962,11 +962,12 @@ impl PaymentProcessor {
 
                 log::trace!("Get signed payment for peer: {}", value.payee_id);
                 let signed_payment = payment_dao
-                    .get(payment_id.clone(), payer_id)
+                    .get_for_peer(payment_id.clone(), payer_id, value.payee_id)
                     .await?
                     .ok_or_else(|| {
                         NotifyPaymentError::Critical(format!(
-                            "Cannot find payment object payment id: {payment_id} payer id: {payer_id}"
+                            "Cannot find payment object payment id: {payment_id} payer id: {payer_id} payee id: {}",
+                            value.payee_id
                         ))
                     })?;
                 payloads.push(signed_payment.payload);
@@ -1021,13 +1022,17 @@ impl PaymentProcessor {
                     payment_dao
                         .add_signature(
                             payment.payment_id.clone(),
+                            payer_id,
+                            payment.payee_id,
                             msg_with_bytes.signature.clone(),
                             msg_with_bytes.signed_bytes.clone(),
                         )
                         .await?;
 
                     if mark_sent {
-                        payment_dao.mark_sent(payment.payment_id.clone()).await?;
+                        payment_dao
+                            .mark_sent(payment.payment_id.clone(), payer_id, payment.payee_id)
+                            .await?;
                     } else {
                         sync_dao.upsert(payment.payee_id).await?;
                         SYNC_NOTIFS_NOTIFY.notify_one();
