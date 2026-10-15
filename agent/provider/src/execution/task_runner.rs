@@ -152,6 +152,9 @@ pub struct TaskRunner {
     /// Spawned tasks.
     tasks: Vec<Task>,
     active_agreements: HashMap<String, AgreementView>,
+    /// Activities destroyed before their task was created (activity_id -> agreement_id).
+    /// Entries are consumed by CreateActivity or dropped when the Agreement is closed.
+    destroyed_before_start: HashMap<String, String>,
 
     /// External actors can listen on these signals.
     pub activity_created: SignalSlot<CreateActivity>,
@@ -207,6 +210,7 @@ impl TaskRunner {
             registry,
             tasks: vec![],
             active_agreements: HashMap::new(),
+            destroyed_before_start: HashMap::new(),
             activity_created: SignalSlot::<CreateActivity>::default(),
             activity_destroyed: SignalSlot::<ActivityDestroyed>::default(),
             config: Arc::new(config),
@@ -286,6 +290,40 @@ impl TaskRunner {
                 "Activity [{}] is already running. Ignoring duplicate CreateActivity event.",
                 msg.activity_id
             );
+            return Ok(());
+        }
+
+        if self
+            .destroyed_before_start
+            .remove(&msg.activity_id)
+            .is_some()
+        {
+            log::info!(
+                "Activity [{}] was destroyed before it started. Not spawning ExeUnit.",
+                msg.activity_id
+            );
+
+            // No ExeUnit will set Terminated state or exit, so we must do both
+            // ourselves. Signal is sent after the state is set, like for exited ExeUnit.
+            let api = self.api.clone();
+            let state_retry_interval = self.config.exeunit_state_retry_interval;
+            let activity_destroyed = self.activity_destroyed.clone();
+
+            tokio::task::spawn_local(async move {
+                set_activity_terminated(
+                    api,
+                    &msg.activity_id,
+                    "destroyed",
+                    "Activity destroyed before ExeUnit was started",
+                    state_retry_interval,
+                )
+                .await;
+
+                let _ = activity_destroyed.send_signal(ActivityDestroyed {
+                    agreement_id: msg.agreement_id,
+                    activity_id: msg.activity_id,
+                });
+            });
             return Ok(());
         }
 
@@ -795,6 +833,17 @@ impl Handler<DestroyActivity> for TaskRunner {
         let task_position = match self.tasks.iter().position(|task| {
             task.agreement_id == msg.agreement_id && task.activity_id == msg.activity_id
         }) {
+            // CreateActivity reaches us only after a roundtrip through TaskManager,
+            // so DestroyActivity can overtake it. Remember it, so the task won't start.
+            None if self.active_agreements.contains_key(&msg.agreement_id) => {
+                log::info!(
+                    "Activity [{}] not started yet. It will be destroyed on creation.",
+                    msg.activity_id
+                );
+                self.destroyed_before_start
+                    .insert(msg.activity_id, msg.agreement_id);
+                return ActorResponse::reply(Ok(()));
+            }
             None => {
                 return ActorResponse::reply(Err(anyhow!(
                     "Can't destroy not existing activity [{}]",
@@ -835,6 +884,8 @@ impl Handler<AgreementClosed> for TaskRunner {
         let activities = self.list_activities(&agreement_id);
 
         self.active_agreements.remove(&agreement_id);
+        self.destroyed_before_start
+            .retain(|_, agreement| agreement != &agreement_id);
 
         if self.config.auto_cleanup_agreement {
             let workdir = self.agreement_dir(&agreement_id);
@@ -948,5 +999,153 @@ impl StateMonitor {
 
     fn sleep(&self) -> impl Future<Output = ()> {
         tokio::time::sleep(self.interval)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::channel::mpsc;
+    use futures::StreamExt;
+    use std::convert::TryFrom;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use ya_agreement_utils::agreement::expand;
+    use ya_client::web::WebClient;
+
+    /// Activity API stub answering every request with empty 200 and
+    /// reporting received request lines.
+    fn activity_api_stub() -> (ActivityProviderApi, std::sync::mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    loop {
+                        let mut request_line = String::new();
+                        if reader.read_line(&mut request_line).unwrap_or(0) == 0 {
+                            return;
+                        }
+                        let mut content_length = 0;
+                        loop {
+                            let mut line = String::new();
+                            reader.read_line(&mut line).unwrap();
+                            match line.trim_end().split_once(':') {
+                                None => break,
+                                Some((name, value)) => {
+                                    if name.eq_ignore_ascii_case("content-length") {
+                                        content_length = value.trim().parse().unwrap();
+                                    }
+                                }
+                            }
+                        }
+                        let mut body = vec![0; content_length];
+                        reader.read_exact(&mut body).unwrap();
+
+                        let _ = tx.send(request_line.trim_end().to_string());
+                        stream
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                            .unwrap();
+                    }
+                });
+            }
+        });
+
+        let api = WebClient::builder()
+            .build()
+            .interface_at(url::Url::parse(&url).unwrap())
+            .unwrap();
+        (api, rx)
+    }
+
+    struct DestroyedListener(mpsc::UnboundedSender<ActivityDestroyed>);
+
+    impl Actor for DestroyedListener {
+        type Context = Context<Self>;
+    }
+
+    impl Handler<ActivityDestroyed> for DestroyedListener {
+        type Result = Result<()>;
+
+        fn handle(&mut self, msg: ActivityDestroyed, _: &mut Context<Self>) -> Self::Result {
+            self.0.unbounded_send(msg)?;
+            Ok(())
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_destroy_activity_before_create() {
+        let (api, requests) = activity_api_stub();
+        let data_dir = tempfile::tempdir().unwrap();
+        let config = TaskRunnerConfig {
+            process_termination_timeout: Duration::from_secs(1),
+            exeunit_state_retry_interval: Duration::from_millis(100),
+            auto_cleanup_activity: false,
+            auto_cleanup_agreement: false,
+            session_id: "test".to_string(),
+        };
+
+        // Registry is empty, so any attempt to spawn ExeUnit would fail.
+        let mut runner =
+            TaskRunner::new(api, config, ExeUnitsRegistry::default(), data_dir.path()).unwrap();
+        let agreement = AgreementView::try_from(expand(serde_json::json!({
+            "agreementId": "agreement-1",
+            "demand.properties": {},
+            "offer.properties": {},
+        })))
+        .unwrap();
+        runner
+            .active_agreements
+            .insert(agreement.id.clone(), agreement);
+
+        let (tx, mut destroyed) = mpsc::unbounded();
+        runner
+            .activity_destroyed
+            .subscribe(DestroyedListener(tx).start().recipient());
+        let runner = runner.start();
+
+        // Destroy for activity of unknown agreement is still rejected.
+        runner
+            .send(DestroyActivity {
+                activity_id: "activity-0".to_string(),
+                agreement_id: "unknown-agreement".to_string(),
+            })
+            .await
+            .unwrap()
+            .unwrap_err();
+
+        // DestroyActivity overtakes CreateActivity.
+        runner
+            .send(DestroyActivity {
+                activity_id: "activity-1".to_string(),
+                agreement_id: "agreement-1".to_string(),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        runner
+            .send(CreateActivity {
+                activity_id: "activity-1".to_string(),
+                agreement_id: "agreement-1".to_string(),
+                requestor_pub_key: None,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
+        let msg = tokio::time::timeout(Duration::from_secs(5), destroyed.next())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(msg.activity_id, "activity-1");
+        assert_eq!(msg.agreement_id, "agreement-1");
+        assert_eq!(
+            requests.recv_timeout(Duration::from_secs(1)).unwrap(),
+            "PUT /activity/activity-1/state HTTP/1.1"
+        );
     }
 }
