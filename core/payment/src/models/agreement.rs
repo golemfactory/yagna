@@ -2,7 +2,7 @@ use crate::schema::pay_agreement;
 use chrono::{NaiveDateTime, Timelike, Utc};
 use serde::Serialize;
 use serde_json::Value;
-use ya_agreement_utils::agreement::{expand, TypedPointer};
+use ya_agreement_utils::agreement::{try_expand, TypedPointer};
 use ya_client_model::market::Agreement;
 use ya_client_model::NodeId;
 use ya_persistence::types::{BigDecimalField, Role};
@@ -37,8 +37,10 @@ impl WriteObj {
             Role::Requestor => (requestor_id, provider_id),
         };
 
-        let demand_properties = expand(agreement.demand.properties);
-        let offer_properties = expand(agreement.offer.properties);
+        let demand_properties = try_expand(agreement.demand.properties)
+            .map_err(|e| format!("Invalid demand properties: {e}"))?;
+        let offer_properties = try_expand(agreement.offer.properties)
+            .map_err(|e| format!("Invalid offer properties: {e}"))?;
 
         let payment_platform = demand_properties
             .pointer("/golem/com/payment/chosen-platform")

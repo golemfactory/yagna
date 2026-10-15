@@ -127,7 +127,7 @@ impl TryFrom<&Agreement> for AgreementView {
     type Error = Error;
 
     fn try_from(agreement: &Agreement) -> Result<Self, Self::Error> {
-        Self::try_from(expand(serde_json::to_value(agreement)?))
+        Self::try_from(try_expand(serde_json::to_value(agreement)?)?)
     }
 }
 
@@ -221,18 +221,78 @@ pub fn try_from_path(path: &PathBuf) -> Result<Value, Error> {
 }
 
 pub fn try_from_json<S: AsRef<str>>(contents: S) -> Result<Value, Error> {
-    Ok(expand(
-        serde_json::from_str::<Value>(contents.as_ref()).map_err(Error::from)?,
-    ))
+    try_expand(serde_json::from_str::<Value>(contents.as_ref()).map_err(Error::from)?)
 }
 
 pub fn try_from_yaml<S: AsRef<str>>(contents: S) -> Result<Value, Error> {
-    Ok(expand(
-        serde_yaml::from_str::<Value>(contents.as_ref()).map_err(Error::from)?,
-    ))
+    try_expand(serde_yaml::from_str::<Value>(contents.as_ref()).map_err(Error::from)?)
 }
 
+/// Maximum nesting depth of a value produced by [`try_expand`].
+///
+/// Every dot-separated segment of a property key adds one nesting level after
+/// expansion, as does every nested object or array. Real properties are at most
+/// 6-7 levels deep (e.g. `golem.com.payment.platform.<platform>.address`), plus
+/// a few levels of envelope (e.g. `demand.properties`) when a whole Agreement or
+/// Proposal is expanded. The limit leaves a wide margin above that, while keeping
+/// recursive processing of expanded values (expansion, merging, serialization and
+/// drop) far from overflowing the stack on malicious input.
+pub const MAX_EXPAND_DEPTH: usize = 64;
+
+/// Expands flat dotted property keys into nested objects.
+///
+/// Returns an error if the expanded value would be nested deeper than
+/// [`MAX_EXPAND_DEPTH`]. Use this function for any value coming from
+/// an untrusted source.
+pub fn try_expand(value: Value) -> Result<Value, Error> {
+    check_expand_depth(&value, 0)?;
+    Ok(expand_unchecked(value))
+}
+
+/// Expands flat dotted property keys into nested objects.
+///
+/// If the expanded value would be nested deeper than [`MAX_EXPAND_DEPTH`],
+/// the value is returned unchanged. Prefer [`try_expand`], which reports this
+/// case as an error.
 pub fn expand(value: Value) -> Value {
+    match check_expand_depth(&value, 0) {
+        Ok(()) => expand_unchecked(value),
+        Err(_) => value,
+    }
+}
+
+/// Recursion is bounded by `MAX_EXPAND_DEPTH`, since `depth` grows on every call.
+fn check_expand_depth(value: &Value, depth: usize) -> Result<(), Error> {
+    let too_deep = || {
+        Error::InvalidValue(format!(
+            "Property nesting depth exceeds the limit of {MAX_EXPAND_DEPTH}"
+        ))
+    };
+    match value {
+        Value::Object(m) => {
+            for (k, v) in m {
+                let depth = depth + k.matches('.').count() + 1;
+                if depth > MAX_EXPAND_DEPTH {
+                    return Err(too_deep());
+                }
+                check_expand_depth(v, depth)?;
+            }
+        }
+        Value::Array(array) => {
+            let depth = depth + 1;
+            if depth > MAX_EXPAND_DEPTH {
+                return Err(too_deep());
+            }
+            for v in array {
+                check_expand_depth(v, depth)?;
+            }
+        }
+        _ => (),
+    }
+    Ok(())
+}
+
+fn expand_unchecked(value: Value) -> Value {
     match value {
         Value::Object(m) => {
             let mut new_map = Map::new();
@@ -241,7 +301,7 @@ pub fn expand(value: Value) -> Value {
                 let mut parts: Vec<&str> = k.split('.').collect();
 
                 let ki = parts.remove(0).to_string();
-                let vi = expand_obj(parts, expand(v));
+                let vi = expand_obj(parts, expand_unchecked(v));
 
                 if let Some(ve) = new_map.get_mut(&ki) {
                     merge_obj(ve, vi);
@@ -252,7 +312,7 @@ pub fn expand(value: Value) -> Value {
 
             Value::Object(new_map)
         }
-        Value::Array(array) => Value::Array(array.into_iter().map(expand).collect()),
+        Value::Array(array) => Value::Array(array.into_iter().map(expand_unchecked).collect()),
         value => value,
     }
 }
@@ -529,6 +589,65 @@ constraints: |
 
         merge_obj(&mut f, s);
         assert_eq!(f, e);
+    }
+
+    fn dotted_key(segments: usize) -> String {
+        vec!["a"; segments].join(".")
+    }
+
+    #[test]
+    fn expand_rejects_too_deep_key() {
+        let key = dotted_key(100_000);
+        let value = serde_json::json!({ "golem": { key.clone(): 1 } });
+
+        assert!(matches!(
+            try_expand(value.clone()),
+            Err(Error::InvalidValue(_))
+        ));
+        // Infallible variant leaves the value as it is.
+        assert_eq!(expand(value.clone()), value);
+
+        let contents = serde_json::to_string(&value).unwrap();
+        assert!(try_from_json(contents).is_err());
+
+        let proposal = |key: &str| {
+            serde_json::json!({
+                "properties": { key: 1 },
+                "constraints": "()",
+                "proposalId": "id",
+                "issuerId": "0x0000000000000000000000000000000000000000",
+                "state": "Initial",
+                "timestamp": "2020-01-01T00:00:00Z",
+            })
+        };
+        assert!(ProposalView::try_from(proposal("golem.inf.mem.gib")).is_ok());
+        assert!(ProposalView::try_from(proposal(&key)).is_err());
+    }
+
+    #[test]
+    fn expand_depth_limit_boundary() {
+        let at_limit = serde_json::json!({ dotted_key(MAX_EXPAND_DEPTH): 1 });
+        assert!(try_expand(at_limit).is_ok());
+
+        let over_limit = serde_json::json!({ dotted_key(MAX_EXPAND_DEPTH + 1): 1 });
+        assert!(try_expand(over_limit).is_err());
+
+        // Depth accumulates across nested objects and arrays.
+        let nested = serde_json::json!({
+            dotted_key(MAX_EXPAND_DEPTH / 2): [{ dotted_key(MAX_EXPAND_DEPTH / 2): 1 }]
+        });
+        assert!(try_expand(nested).is_err());
+    }
+
+    #[test]
+    fn try_expand_matches_expand() {
+        for value in [
+            serde_json::from_str::<Value>(r#"{ "a": { "b.c": 1, "d": [{ "e.f": 2 }] } }"#).unwrap(),
+            serde_yaml::from_str::<Value>(YAML).unwrap(),
+        ] {
+            assert_eq!(try_expand(value.clone()).unwrap(), expand(value));
+        }
+        check_values(&try_expand(serde_yaml::from_str::<Value>(YAML).unwrap()).unwrap());
     }
 
     #[test]

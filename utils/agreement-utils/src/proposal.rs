@@ -2,7 +2,7 @@ use ya_client_model::market::proposal::State;
 use ya_client_model::market::{NewProposal, Proposal};
 use ya_client_model::NodeId;
 
-use crate::agreement::{expand, flatten, try_from_path, TypedPointer};
+use crate::agreement::{flatten, try_expand, try_from_path, TypedPointer};
 use crate::template::property_to_pointer_paths;
 use crate::{Error, OfferTemplate};
 
@@ -112,12 +112,12 @@ impl TryFrom<Value> for ProposalView {
 
     fn try_from(mut value: Value) -> Result<Self, Self::Error> {
         let offer = OfferTemplate {
-            properties: expand(
+            properties: try_expand(
                 value
                     .pointer_mut("/properties")
                     .map(Value::take)
                     .unwrap_or(Value::Null),
-            ),
+            )?,
             constraints: value
                 .pointer("/constraints")
                 .as_typed(Value::as_str)?
@@ -171,6 +171,6 @@ impl TryFrom<&Proposal> for ProposalView {
     type Error = Error;
 
     fn try_from(proposal: &Proposal) -> Result<Self, Self::Error> {
-        Self::try_from(expand(serde_json::to_value(proposal)?))
+        Self::try_from(try_expand(serde_json::to_value(proposal)?)?)
     }
 }
