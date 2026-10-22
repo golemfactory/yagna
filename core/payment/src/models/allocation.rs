@@ -6,7 +6,10 @@ use ya_client_model::payment::{Allocation, NewAllocation};
 use ya_client_model::NodeId;
 use ya_persistence::types::BigDecimalField;
 
-#[derive(Queryable, Debug, Identifiable, Insertable, AsChangeset)]
+// Deliberately not `AsChangeset`: as a full-row changeset this would overwrite
+// `spent_amount`/`avail_amount` from whatever snapshot the caller happens to hold. Use
+// `AmendObj` for updates.
+#[derive(Queryable, Debug, Identifiable, Insertable)]
 #[diesel(table_name = pay_allocation)]
 pub struct WriteObj {
     pub id: String,
@@ -71,18 +74,32 @@ impl WriteObj {
             released: false,
         }
     }
+}
 
-    pub fn from_allocation(allocation: Allocation, owner_id: NodeId) -> Self {
+/// Changeset for amending an existing allocation.
+///
+/// Deliberately narrow: it carries only the columns the amend endpoint owns. In
+/// particular `spent_amount` is never written, because the amend handler makes a GSB
+/// round trip to the payment driver between reading the allocation and writing it back,
+/// and a spend committed in that window must not be rolled back. `avail_amount` is
+/// recomputed by the DAO from the *current* `spent_amount`, read inside the same
+/// transaction as the update.
+///
+/// `deposit` is `None` when the allocation has no deposit; diesel's default
+/// `AsChangeset` behaviour skips `None` columns, which is what we want here — amend can
+/// never add or remove a deposit, only update the `validate` flag of an existing one.
+#[derive(AsChangeset)]
+#[diesel(table_name = pay_allocation)]
+pub struct AmendObj {
+    pub avail_amount: BigDecimalField,
+    pub timeout: NaiveDateTime,
+    pub deposit: Option<String>,
+}
+
+impl AmendObj {
+    pub fn new(allocation: &Allocation, avail_amount: BigDecimalField) -> Self {
         Self {
-            id: allocation.allocation_id,
-            owner_id,
-            payment_platform: allocation.payment_platform,
-            address: allocation.address,
-            avail_amount: (allocation.total_amount.clone() - allocation.spent_amount.clone())
-                .into(),
-            spent_amount: allocation.spent_amount.into(),
-            created_ts: allocation.timestamp.naive_utc(),
-            updated_ts: allocation.timestamp.naive_utc(),
+            avail_amount,
             timeout: allocation.timeout.map(|v| v.naive_utc()).unwrap_or(
                 Utc::now()
                     .checked_add_days(Days::new(365 * 10))
@@ -93,8 +110,6 @@ impl WriteObj {
                 .deposit
                 .as_ref()
                 .map(|deposit| serde_json::to_string(&deposit).unwrap()),
-            deposit_status: allocation.deposit.map(|_| "open".to_string()),
-            released: false,
         }
     }
 }

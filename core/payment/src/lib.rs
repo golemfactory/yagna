@@ -34,6 +34,9 @@ pub mod timeout_lock;
 pub mod utils;
 mod wallet;
 
+#[cfg(test)]
+mod test_support;
+
 pub use batch::send_batch_payments;
 
 pub mod migrations {
