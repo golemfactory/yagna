@@ -1385,7 +1385,6 @@ impl PaymentProcessor {
                             schedule_release_allocation(
                                 db.clone(),
                                 allocation.allocation_id.clone(),
-                                allocation.timeout,
                                 NodeId::from_str(&allocation.address.clone())
                                     .map_err(|e| {
                                         GenericError::new(format!(

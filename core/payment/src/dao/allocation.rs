@@ -372,6 +372,45 @@ impl AllocationDao<'_> {
         .await
     }
 
+    /// Returns the current deadline if still active, or `None` once inactive.
+    /// The deadline check and release share a transaction with respect to amendments.
+    pub(crate) async fn release_if_expired(
+        &self,
+        allocation_id: String,
+        owner_id: NodeId,
+    ) -> DbResult<Option<NaiveDateTime>> {
+        do_with_transaction(
+            self.pool,
+            "allocation_dao_release_if_expired",
+            move |conn| {
+                let timeout: Option<NaiveDateTime> = dsl::pay_allocation
+                    .find((owner_id, &allocation_id))
+                    .filter(dsl::released.eq(false))
+                    .select(dsl::timeout)
+                    .first(conn)
+                    .optional()?;
+                let timeout = match timeout {
+                    Some(timeout) => timeout,
+                    None => return Ok(None),
+                };
+                if timeout > chrono::Utc::now().naive_utc() {
+                    return Ok(Some(timeout));
+                }
+
+                diesel::update(dsl::pay_allocation.find((owner_id, &allocation_id)))
+                    .set(dsl::released.eq(true))
+                    .execute(conn)?;
+                log::info!(
+                    "Allocation {} for node {} expired and was released",
+                    allocation_id,
+                    owner_id
+                );
+                Ok(None)
+            },
+        )
+        .await
+    }
+
     pub async fn release(
         &self,
         allocation_id: String,

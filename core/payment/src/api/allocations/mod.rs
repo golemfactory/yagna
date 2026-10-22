@@ -38,6 +38,9 @@ mod api_error;
 mod platform_triple;
 mod token_name;
 
+#[cfg(test)]
+mod timer_tests;
+
 use crate::alloc_release_task::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
 
@@ -253,7 +256,6 @@ async fn create_allocation(
                 schedule_release_allocation(
                     db.clone(),
                     allocation_id,
-                    allocation.timeout,
                     node_id,
                     (*allocation_release_tasks.into_inner()).clone(),
                 );
@@ -447,15 +449,6 @@ async fn amend_allocation(
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
-    // Ensure that the allocation is not released before we update it. Additionally, it will set up new allocation auto release task
-    schedule_release_allocation(
-        db.clone(),
-        amended_allocation.allocation_id.clone(),
-        amended_allocation.timeout,
-        node_id,
-        (*allocation_release_tasks.into_inner()).clone(),
-    );
-
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
         Ok(false) => {
@@ -468,6 +461,13 @@ async fn amend_allocation(
         }
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
+
+    schedule_release_allocation(
+        db.clone(),
+        allocation_id,
+        node_id,
+        (*allocation_release_tasks.into_inner()).clone(),
+    );
 
     get_allocation(db, path, id).await
 }
@@ -563,7 +563,6 @@ async fn get_demand_decorations(
 pub fn schedule_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
-    allocation_timeout: Option<DateTime<Utc>>,
     node_id: NodeId,
     allocation_release_tasks: AllocationReleaseTasks,
 ) {
@@ -579,48 +578,43 @@ pub fn schedule_release_allocation(
             allocation_id
         );
     }
-    if let Some(timeout) = allocation_timeout {
-        log::info!(
-            "Scheduling release of allocation {} for node {} at {}",
-            allocation_id,
-            node_id,
-            allocation_timeout
-                .map(|t| t.to_rfc3339())
-                .unwrap_or_else(|| "no timeout set".to_string())
-        );
-
-        task_map.insert(
-            allocation_id.clone(),
-            tokio::task::spawn(async move {
-                //do not sleep to long, it allows to accommodate clock drift
-                let max_sleep_time = chrono::Duration::seconds(60);
-
+    task_map.insert(
+        allocation_id.clone(),
+        tokio::task::spawn(async move {
+            loop {
+                // Read the committed deadline even if concurrent amendments scheduled
+                // their timers in a different order. Expiry is checked in the same
+                // transaction as release, so an already-running old timer is safe too.
+                let timeout = match db
+                    .as_dao::<AllocationDao>()
+                    .release_if_expired(allocation_id.clone(), node_id)
+                    .await
+                {
+                    Ok(Some(timeout)) => timeout,
+                    Ok(None) => break,
+                    Err(e) => {
+                        log::warn!("Releasing allocation {} failed: {}", allocation_id, e);
+                        break;
+                    }
+                };
+                log::info!(
+                    "Scheduling release of allocation {} for node {} at {}",
+                    allocation_id,
+                    node_id,
+                    timeout
+                );
+                // Limit individual sleeps to accommodate clock drift.
                 loop {
-                    let time_diff = timeout - Utc::now();
-
+                    let time_diff = timeout - Utc::now().naive_utc();
                     if time_diff <= chrono::Duration::zero() {
                         break;
                     }
-
-                    let timeout = time_diff.min(max_sleep_time);
+                    let timeout = time_diff.min(chrono::Duration::seconds(60));
                     tokio::time::sleep(timeout.to_std().expect("Value has to be ok")).await;
                 }
-
-                log::info!(
-                    "Allocation {} for node {} expired and it's being released",
-                    allocation_id,
-                    node_id
-                );
-
-                release_allocation_internal(db, allocation_id, node_id).await;
-            }),
-        );
-    } else {
-        log::warn!(
-            "No timeout set for allocation {}, skipping scheduling release.",
-            allocation_id
-        );
-    }
+            }
+        }),
+    );
 }
 
 pub fn cancel_release_allocation_task(
