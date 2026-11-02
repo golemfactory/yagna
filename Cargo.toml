@@ -7,10 +7,10 @@ license = "GPL-3.0"
 name = "yagna"
 readme = "README.md"
 repository = "https://github.com/golemfactory/yagna"
-version = "0.18.1"
+version = "0.18.2"
 
 [features]
-default = ['erc20-driver', 'gftp/bin', 'encryption']
+default = ['erc20-driver', 'gftp/bin', 'encryption-strict']
 dashboard = ['rust-embed', 'mime_guess']
 dummy-driver = ['ya-dummy-driver']
 erc20-driver = ['ya-erc20-driver']
