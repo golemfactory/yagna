@@ -8957,17 +8957,26 @@ dependencies = [
 [[package]]
 name = "webpki-roots"
 version = "0.22.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6c71e40d7d2c34a5106301fb632274ca37242cd0c9d3e64dbece371a40a2d87"
 dependencies = [
  "webpki",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
 name = "webpki-roots"
 version = "0.25.4"
+dependencies = [
+ "webpki-roots 1.0.11",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
+dependencies = [
+ "rustls-pki-types",
+]
 
 [[package]]
 name = "which"
@@ -10975,9 +10984,13 @@ dependencies = [
  "lazy_static",
  "log",
  "regex",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "trust-dns-resolver 0.22.0",
  "url",
+ "webpki-roots 0.22.6",
+ "webpki-roots 0.25.4",
+ "webpki-roots 1.0.11",
  "ya-relay-stack 0.5.0",
 ]
 

@@ -217,6 +217,10 @@ mismatched_lifetime_syntaxes = "allow"
 
 [workspace]
 resolver = "1"
+exclude = [
+  "patches/webpki-roots/v022",
+  "patches/webpki-roots/v025",
+]
 members = [
   "agent/provider",
   "core/activity",
@@ -349,6 +353,10 @@ ya-framework-basic.path = "test-utils/test-framework/framework-basic"
 ya-framework-mocks.path = "test-utils/test-framework/framework-mocks"
 
 [patch.crates-io]
+# Preserve the legacy root-store APIs while using the maintained CA bundle.
+# See patches/webpki-roots/README.md for provenance and audit limitations.
+webpki-roots-022 = { package = "webpki-roots", path = "patches/webpki-roots/v022" }
+webpki-roots-025 = { package = "webpki-roots", path = "patches/webpki-roots/v025" }
 ya-service-bus = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
 ya-sb-router = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
 ya-sb-proto = { git = "https://github.com/golemfactory/ya-service-bus.git", rev = "31a965ffdb69aa5e9e93a260b92fcee9ea4e3276" }
