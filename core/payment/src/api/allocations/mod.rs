@@ -31,10 +31,15 @@ use crate::utils::response;
 const DEFAULT_TESTNET_NETWORK: NetworkName = NetworkName::Holesky;
 const DEFAULT_MAINNET_NETWORK: NetworkName = NetworkName::Polygon;
 const DEFAULT_PAYMENT_DRIVER: DriverName = DriverName::Erc20;
+const DEPOSIT_ALLOCATION_INCREASE_ERROR: &str =
+    "Cannot increase a deposit-backed allocation; create a new allocation with a new deposit";
 
 mod api_error;
 mod platform_triple;
 mod token_name;
+
+#[cfg(test)]
+mod timer_tests;
 
 use crate::alloc_release_task::AllocationReleaseTasks;
 use platform_triple::PaymentPlatformTriple;
@@ -251,7 +256,6 @@ async fn create_allocation(
                 schedule_release_allocation(
                     db.clone(),
                     allocation_id,
-                    allocation.timeout,
                     node_id,
                     (*allocation_release_tasks.into_inner()).clone(),
                 );
@@ -328,6 +332,14 @@ fn amend_allocation_fields(
     let total_amount = update
         .total_amount
         .unwrap_or_else(|| old_allocation.total_amount.clone());
+
+    // A deposit is validated against the full allocation amount only when the allocation
+    // is created. Keep an accepted deposit-backed reservation from increasing; additional
+    // capacity requires a new allocation backed by a new deposit.
+    if old_allocation.deposit.is_some() && total_amount > old_allocation.total_amount {
+        return Err(DEPOSIT_ALLOCATION_INCREASE_ERROR);
+    }
+
     let remaining_amount = total_amount.clone() - &old_allocation.spent_amount;
 
     if remaining_amount < 0 {
@@ -437,25 +449,25 @@ async fn amend_allocation(
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
 
-    // Ensure that the allocation is not released before we update it. Additionally, it will set up new allocation auto release task
-    schedule_release_allocation(
-        db.clone(),
-        amended_allocation.allocation_id.clone(),
-        amended_allocation.timeout,
-        node_id,
-        (*allocation_release_tasks.into_inner()).clone(),
-    );
-
     match dao.replace(amended_allocation, node_id).await {
         Ok(true) => {}
         Ok(false) => {
+            // The allocation was released while we were validating the amend against the
+            // payment driver.
             return api_error::server_error(
                 &allocation_update,
-                &"Allocation not present despite preconditions being already ensured",
+                &"Allocation was released while the amend was being validated",
             );
         }
         Err(e) => return api_error::server_error(&allocation_update, &e.to_string()),
     }
+
+    schedule_release_allocation(
+        db.clone(),
+        allocation_id,
+        node_id,
+        (*allocation_release_tasks.into_inner()).clone(),
+    );
 
     get_allocation(db, path, id).await
 }
@@ -551,7 +563,6 @@ async fn get_demand_decorations(
 pub fn schedule_release_allocation(
     db: Data<DbExecutor>,
     allocation_id: String,
-    allocation_timeout: Option<DateTime<Utc>>,
     node_id: NodeId,
     allocation_release_tasks: AllocationReleaseTasks,
 ) {
@@ -567,48 +578,43 @@ pub fn schedule_release_allocation(
             allocation_id
         );
     }
-    if let Some(timeout) = allocation_timeout {
-        log::info!(
-            "Scheduling release of allocation {} for node {} at {}",
-            allocation_id,
-            node_id,
-            allocation_timeout
-                .map(|t| t.to_rfc3339())
-                .unwrap_or_else(|| "no timeout set".to_string())
-        );
-
-        task_map.insert(
-            allocation_id.clone(),
-            tokio::task::spawn(async move {
-                //do not sleep to long, it allows to accommodate clock drift
-                let max_sleep_time = chrono::Duration::seconds(60);
-
+    task_map.insert(
+        allocation_id.clone(),
+        tokio::task::spawn(async move {
+            loop {
+                // Read the committed deadline even if concurrent amendments scheduled
+                // their timers in a different order. Expiry is checked in the same
+                // transaction as release, so an already-running old timer is safe too.
+                let timeout = match db
+                    .as_dao::<AllocationDao>()
+                    .release_if_expired(allocation_id.clone(), node_id)
+                    .await
+                {
+                    Ok(Some(timeout)) => timeout,
+                    Ok(None) => break,
+                    Err(e) => {
+                        log::warn!("Releasing allocation {} failed: {}", allocation_id, e);
+                        break;
+                    }
+                };
+                log::info!(
+                    "Scheduling release of allocation {} for node {} at {}",
+                    allocation_id,
+                    node_id,
+                    timeout
+                );
+                // Limit individual sleeps to accommodate clock drift.
                 loop {
-                    let time_diff = timeout - Utc::now();
-
+                    let time_diff = timeout - Utc::now().naive_utc();
                     if time_diff <= chrono::Duration::zero() {
                         break;
                     }
-
-                    let timeout = time_diff.min(max_sleep_time);
+                    let timeout = time_diff.min(chrono::Duration::seconds(60));
                     tokio::time::sleep(timeout.to_std().expect("Value has to be ok")).await;
                 }
-
-                log::info!(
-                    "Allocation {} for node {} expired and it's being released",
-                    allocation_id,
-                    node_id
-                );
-
-                release_allocation_internal(db, allocation_id, node_id).await;
-            }),
-        );
-    } else {
-        log::warn!(
-            "No timeout set for allocation {}, skipping scheduling release.",
-            allocation_id
-        );
-    }
+            }
+        }),
+    );
 }
 
 pub fn cancel_release_allocation_task(
@@ -694,6 +700,82 @@ async fn get_pay_allocation_orders(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ya_client_model::payment::allocation::Deposit;
+
+    fn allocation(total: i64, spent: i64, with_deposit: bool) -> Allocation {
+        let now = Utc::now();
+        Allocation {
+            allocation_id: "allocation-1".to_string(),
+            address: "0xbabe000000000000000000000000000000000000".to_string(),
+            payment_platform: "erc20-holesky-tglm".to_string(),
+            total_amount: BigDecimal::from(total),
+            spent_amount: BigDecimal::from(spent),
+            remaining_amount: BigDecimal::from(total - spent),
+            timestamp: now,
+            timeout: Some(now + chrono::Duration::hours(1)),
+            deposit: with_deposit.then(|| Deposit {
+                id: "0x1".to_string(),
+                contract: "0xc0ffee0000000000000000000000000000000000".to_string(),
+                validate: None,
+            }),
+            created_ts: now,
+            updated_ts: now,
+            make_deposit: false,
+            extend_timeout: None,
+        }
+    }
+
+    fn amount_update(total: i64) -> AllocationUpdate {
+        AllocationUpdate {
+            total_amount: Some(BigDecimal::from(total)),
+            timeout: None,
+            deposit: None,
+        }
+    }
+
+    #[test]
+    fn deposit_backed_allocation_cannot_be_increased() {
+        let result = amend_allocation_fields(allocation(100, 25, true), amount_update(101));
+
+        assert_eq!(result.unwrap_err(), DEPOSIT_ALLOCATION_INCREASE_ERROR);
+    }
+
+    #[test]
+    fn deposit_backed_allocation_can_be_decreased() {
+        let amended = amend_allocation_fields(allocation(100, 25, true), amount_update(80))
+            .expect("decreasing a deposit-backed allocation should be allowed");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(80));
+        assert_eq!(amended.remaining_amount, BigDecimal::from(55));
+        assert!(amended.deposit.is_some());
+    }
+
+    #[test]
+    fn deposit_backed_allocation_can_update_timeout() {
+        let old_allocation = allocation(100, 25, true);
+        let timeout = Utc::now() + chrono::Duration::hours(2);
+        let update = AllocationUpdate {
+            total_amount: None,
+            timeout: Some(timeout),
+            deposit: None,
+        };
+
+        let amended = amend_allocation_fields(old_allocation, update)
+            .expect("updating a deposit-backed allocation timeout should be allowed");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(100));
+        assert_eq!(amended.timeout, Some(timeout));
+    }
+
+    #[test]
+    fn wallet_backed_allocation_can_still_be_increased() {
+        let amended = amend_allocation_fields(allocation(100, 25, false), amount_update(150))
+            .expect("wallet-backed allocation increases should remain supported");
+
+        assert_eq!(amended.total_amount, BigDecimal::from(150));
+        assert_eq!(amended.remaining_amount, BigDecimal::from(125));
+        assert!(amended.deposit.is_none());
+    }
 
     #[test]
     fn numeric_allocation_amount_keeps_decimal_precision() {
