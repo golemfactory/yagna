@@ -46,7 +46,7 @@ impl FakeMarket {
 
         let self_ = self.clone();
         bus::bind_with_caller(
-            market::BUS_ID,
+            market::local::BUS_ID,
             move |sender: String, msg: market::GetAgreement| {
                 let self_ = self_.clone();
                 async move { self_.get_agreement_handler(sender, msg).await }
@@ -54,7 +54,7 @@ impl FakeMarket {
         );
         let self_ = self.clone();
         bus::bind_with_caller(
-            market::BUS_ID,
+            market::local::BUS_ID,
             move |sender: String, msg: market::ListAgreements| {
                 let self_ = self_.clone();
                 async move { self_.list_agreements_handler(sender, msg).await }

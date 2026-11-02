@@ -55,7 +55,7 @@ impl AgreementsCommand {
                     app_session_id,
                 };
 
-                let agreements = bus::service(ya_core_model::market::BUS_ID)
+                let agreements = bus::service(ya_core_model::market::local::BUS_ID)
                     .send(request)
                     .await??;
 
@@ -89,7 +89,7 @@ impl AgreementsCommand {
                     role,
                 };
 
-                let agreement = bus::service(ya_core_model::market::BUS_ID)
+                let agreement = bus::service(ya_core_model::market::local::BUS_ID)
                     .send(request)
                     .await??;
 
