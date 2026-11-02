@@ -82,7 +82,7 @@ impl AppKeyCache {
         Ok(appkey_cache)
     }
 
-    fn from_appkeys(
+    pub(super) fn from_appkeys(
         appkeys: Vec<AppKey>,
         admin: Option<AdminCredential>,
     ) -> anyhow::Result<AppKeyCache> {
