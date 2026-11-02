@@ -3,7 +3,7 @@ use anyhow::anyhow;
 use serde_json::Value;
 use std::convert::TryFrom;
 
-use ya_agreement_utils::agreement::{expand, flatten_value};
+use ya_agreement_utils::agreement::{flatten_value, try_expand};
 use ya_agreement_utils::{AgreementView, OfferTemplate};
 use ya_client::model::market::NewOffer;
 use ya_client_model::market::proposal::State;
@@ -101,7 +101,7 @@ impl Handler<ReactToProposal> for CompositeNegotiator {
         let their = ProposalView::try_from(&msg.demand)?;
         let template = ProposalView {
             content: OfferTemplate {
-                properties: expand(msg.prev_proposal.properties),
+                properties: try_expand(msg.prev_proposal.properties)?,
                 constraints: constraints.clone(),
             },
             id: msg.prev_proposal.proposal_id,
