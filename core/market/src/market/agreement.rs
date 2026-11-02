@@ -7,12 +7,14 @@ use crate::db::dao::AgreementDao;
 use crate::db::model::{AgreementId, Owner};
 use crate::db::DbMixedExecutor;
 
-pub async fn bind_gsb(db: DbMixedExecutor, public_prefix: &str, _local_prefix: &str) {
-    log::trace!("Binding market agreement public service to service bus");
-    ServiceBinder::new(public_prefix, &db, ())
+pub async fn bind_gsb(db: DbMixedExecutor, _public_prefix: &str, local_prefix: &str) {
+    // These handlers don't check `sender_id`, so they must not be reachable
+    // from remote nodes. Bind them on the local prefix only.
+    log::trace!("Binding market agreement local service to service bus");
+    ServiceBinder::new(local_prefix, &db, ())
         .bind(list_agreements)
         .bind(get_agreement);
-    log::debug!("Successfully bound market agreement public service to service bus");
+    log::debug!("Successfully bound market agreement local service to service bus");
 }
 
 async fn list_agreements(
@@ -66,8 +68,6 @@ async fn get_agreement(
     let agreement_id = AgreementId::from_client(&msg.agreement_id, owner)
         .map_err(|e| RpcMessageError::Market(e.to_string()))?;
 
-    // TODO: We should check Agreement owner, like in REST get_agreement implementation, but
-    //  I'm not sure we can trust `sender_id` value from gsb now.
     let dao = db.as_dao::<AgreementDao>();
     let now = chrono::Utc::now().naive_utc();
     dao.select(&agreement_id, None, now)

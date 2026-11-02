@@ -37,7 +37,7 @@ async fn post_services(
     let bind = Bind {
         components: components.clone(),
         addr_prefix: on.clone(),
-        owner: id.subject.clone(),
+        owner: id.identity,
     };
     let response = services.send(bind).await;
     log::debug!("Service bind result: {:?}", response);
@@ -106,7 +106,7 @@ async fn get_service_messages(
 
 fn caller(id: &Identity) -> Caller {
     Caller {
-        subject: id.subject.clone(),
+        node_id: id.identity,
         admin: id.role == Role::Admin,
     }
 }
@@ -247,6 +247,80 @@ mod tests {
     fn admin_can_bind_global_service_address() {
         let admin = principal("administrator", Role::Admin);
         assert!(authorize_bind(&admin, "/public/gftp/service").is_ok());
+    }
+
+    #[actix_web::test]
+    async fn service_ownership_follows_node_id_instead_of_appkey_name() {
+        use actix_web::{test, HttpMessage};
+
+        let app =
+            test::init_service(App::new().service(web_scope(Services::default().start()))).await;
+        let owner_node: NodeId = "0x1000000000000000000000000000000000000001"
+            .parse()
+            .unwrap();
+        let other_node: NodeId = "0x2000000000000000000000000000000000000002"
+            .parse()
+            .unwrap();
+
+        for role in [Role::Manager, Role::Admin] {
+            let mut owner = Identity::admin(owner_node);
+            owner.role = role;
+            let address = format!(
+                "{}/{}",
+                crate::manager_service_namespace(&owner.subject),
+                uuid::Uuid::new_v4()
+            );
+            let request = test::TestRequest::post()
+                .uri("/gsb-api/v1/services")
+                .set_json(ServiceRequest {
+                    listen: ServiceListenRequest {
+                        on: address.clone(),
+                        components: vec!["Call".to_string()],
+                    },
+                })
+                .to_request();
+            request.extensions_mut().insert(owner.clone());
+            let response = test::call_service(&app, request).await;
+            assert_eq!(response.status(), StatusCode::CREATED);
+
+            let path = format!("/gsb-api/v1/services/{}", BASE64.encode(&address));
+            let mut foreign = owner.clone();
+            foreign.identity = other_node;
+            foreign.role = Role::Manager;
+
+            // Even the administrator's reserved name must not grant another node access.
+            for method in [
+                actix_web::http::Method::GET,
+                actix_web::http::Method::DELETE,
+            ] {
+                let request = test::TestRequest::default()
+                    .method(method)
+                    .uri(&path)
+                    .to_request();
+                request.extensions_mut().insert(foreign.clone());
+                let response = test::call_service(&app, request).await;
+                assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            }
+
+            // A differently named manager key for the owning node can attach and delete.
+            let mut same_node = principal("another-app-key", Role::Manager);
+            same_node.identity = owner_node;
+            let request = test::TestRequest::get()
+                .uri(&path)
+                .insert_header(("connection", "upgrade"))
+                .insert_header(("upgrade", "websocket"))
+                .insert_header(("sec-websocket-version", "13"))
+                .insert_header(("sec-websocket-key", "dGhlIHNhbXBsZSBub25jZQ=="))
+                .to_request();
+            request.extensions_mut().insert(same_node.clone());
+            let response = test::call_service(&app, request).await;
+            assert_eq!(response.status(), StatusCode::SWITCHING_PROTOCOLS);
+
+            let request = test::TestRequest::delete().uri(&path).to_request();
+            request.extensions_mut().insert(same_node);
+            let response = test::call_service(&app, request).await;
+            assert_eq!(response.status(), StatusCode::OK);
+        }
     }
 
     /// Returns POST service request and service address.

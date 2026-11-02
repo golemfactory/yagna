@@ -682,3 +682,80 @@ async fn reject_invoice(
     );
     result
 }
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use crate::test_support as fixture;
+    use actix_web::http::StatusCode;
+
+    #[actix_rt::test]
+    async fn acceptance_rejects_platform_mismatch_without_writing_state() {
+        let _guard = crate::test_support::BUS_LOCK.lock().await;
+        let _net = fixture::bind_acceptance_receiver();
+        for (platform, accepted) in [(fixture::OTHER_PLATFORM, false), (fixture::PLATFORM, true)] {
+            let db = fixture::database();
+            let agreement = fixture::agreement();
+            fixture::seed_activity(&db, &agreement, Role::Requestor).await;
+            let document = fixture::invoice(&agreement);
+            db.as_dao::<InvoiceDao>()
+                .insert_received(document.clone())
+                .await
+                .unwrap();
+            let allocation_id = fixture::allocation(&db, platform).await;
+            let response = accept_invoice(
+                Data::new(db.clone()),
+                Data::new(PaymentApiState::default()),
+                Path::from(params::InvoiceId {
+                    invoice_id: document.invoice_id.clone(),
+                }),
+                Query(params::Timeout { timeout: Some(1.0) }),
+                Json(Acceptance {
+                    total_amount_accepted: 10.into(),
+                    allocation_id: allocation_id.clone(),
+                }),
+                Identity::admin(fixture::requestor()),
+            )
+            .await;
+            assert_eq!(
+                response.status(),
+                if accepted {
+                    StatusCode::OK
+                } else {
+                    StatusCode::BAD_REQUEST
+                }
+            );
+            fixture::assert_acceptance_state(
+                &db,
+                &agreement.agreement_id,
+                &allocation_id,
+                accepted,
+            )
+            .await;
+            let stored = db
+                .as_dao::<InvoiceDao>()
+                .get(document.invoice_id, fixture::requestor())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                stored.status,
+                if accepted {
+                    DocumentStatus::Accepted
+                } else {
+                    DocumentStatus::Received
+                }
+            );
+            let activity = db
+                .as_dao::<ActivityDao>()
+                .get(fixture::ACTIVITY.into(), fixture::requestor())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(
+                activity.total_amount_scheduled.0,
+                bigdecimal::BigDecimal::from(0)
+            );
+        }
+    }
+}
