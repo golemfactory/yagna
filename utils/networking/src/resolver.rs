@@ -4,8 +4,8 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter::FromIterator;
 use std::net::IpAddr;
 
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::TokioAsyncResolver;
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
 use url::Url;
 
 const DEFAULT_LOOKUP_DOMAIN: &str = "dev.golem.network";
@@ -23,17 +23,29 @@ pub async fn resolve_yagna_srv_record(prefix: &str) -> std::io::Result<String> {
 /// Performs lookup of the Service Record (SRV) in the Domain Name System
 /// If successful responds in the format of `hostname:port`
 pub async fn resolve_srv_record(record: &str) -> std::io::Result<String> {
-    let resolver: TokioAsyncResolver =
-        TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
-    let lookup = resolver.srv_lookup(record).await?;
+    let resolver: TokioResolver = TokioResolver::builder_with_config(
+        ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE),
+        TokioRuntimeProvider::default(),
+    )
+    .with_options(ResolverOpts::default())
+    .build()
+    .map_err(std::io::Error::other)?;
+    let lookup = resolver
+        .srv_lookup(record)
+        .await
+        .map_err(std::io::Error::other)?;
     let srv = lookup
+        .answers()
         .iter()
-        .next()
+        .find_map(|record| match &record.data {
+            hickory_resolver::proto::rr::RData::SRV(value) => Some(value),
+            _ => None,
+        })
         .ok_or_else(|| IoError::from(IoErrorKind::NotFound))?;
     let addr = format!(
         "{}:{}",
-        srv.target().to_string().trim_end_matches('.'),
-        srv.port()
+        srv.target.to_string().trim_end_matches('.'),
+        srv.port
     );
 
     log::debug!("Resolved address: {}", addr);
@@ -44,10 +56,25 @@ pub async fn resolve_href_record(record: &str) -> std::io::Result<Vec<String>> {
     eprintln!("record={record}");
     let opts = ResolverOpts::default();
 
-    let resolver: TokioAsyncResolver =
-        TokioAsyncResolver::tokio(ResolverConfig::cloudflare(), opts)?;
-    let txt = resolver.txt_lookup(record).await?;
-    Ok(txt.iter().map(|r| r.to_string()).collect())
+    let resolver: TokioResolver = TokioResolver::builder_with_config(
+        ResolverConfig::udp_and_tcp(&hickory_resolver::config::CLOUDFLARE),
+        TokioRuntimeProvider::default(),
+    )
+    .with_options(opts)
+    .build()
+    .map_err(std::io::Error::other)?;
+    let txt = resolver
+        .txt_lookup(record)
+        .await
+        .map_err(std::io::Error::other)?;
+    Ok(txt
+        .answers()
+        .iter()
+        .filter_map(|record| match &record.data {
+            hickory_resolver::proto::rr::RData::TXT(value) => Some(value.to_string()),
+            _ => None,
+        })
+        .collect())
 }
 
 /// Replace domain name in URL with resolved IP address
@@ -64,7 +91,12 @@ pub async fn resolve_dns_record(request_url: &str) -> anyhow::Result<String> {
 }
 
 pub async fn resolve_dns_record_host(host: &str) -> anyhow::Result<String> {
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE),
+        TokioRuntimeProvider::default(),
+    )
+    .with_options(ResolverOpts::default())
+    .build()?;
 
     let response = resolver.lookup_ip(host).await?;
     let address = response
@@ -101,7 +133,12 @@ pub async fn try_resolve_dns_record(request_url_or_host: &str) -> String {
 
 /// Resolve all known IP addresses of a given domain
 pub async fn resolve_domain_name<T: FromIterator<IpAddr>>(domain: &str) -> anyhow::Result<T> {
-    let resolver = TokioAsyncResolver::tokio(ResolverConfig::google(), ResolverOpts::default())?;
+    let resolver = TokioResolver::builder_with_config(
+        ResolverConfig::udp_and_tcp(&hickory_resolver::config::GOOGLE),
+        TokioRuntimeProvider::default(),
+    )
+    .with_options(ResolverOpts::default())
+    .build()?;
     let response = resolver.lookup_ip(domain).await?;
     Ok(T::from_iter(response.iter()))
 }

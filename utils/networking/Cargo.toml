@@ -6,7 +6,7 @@ edition = "2024"
 
 [features]
 default = ["dns"]
-dns = ["anyhow", "url", "trust-dns-resolver/tokio-openssl"]
+dns = ["anyhow", "url", "dep:hickory-resolver"]
 vpn = ["ya-relay-stack", "ipnet", "thiserror"]
 
 [dependencies]
@@ -18,14 +18,8 @@ regex = "1"
 ya-relay-stack = { workspace = true, optional = true }
 
 anyhow = { version = "1.0", optional = true }
-trust-dns-resolver = { workspace = true, optional = true, features = ["system-config", "tokio-runtime"] }
+hickory-resolver = { workspace = true, optional = true, features = ["system-config", "tokio"] }
 url = { workspace = true, optional = true }
 
 ipnet = { version = "2.3", optional = true }
 thiserror = { version = "1.0", optional = true }
-
-[dev-dependencies]
-sha2 = "0.10"
-webpki-roots-022 = { package = "webpki-roots", version = "0.22.6" }
-webpki-roots-025 = { package = "webpki-roots", version = "0.25.4" }
-webpki-roots-current = { package = "webpki-roots", version = "1.0.10" }

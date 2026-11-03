@@ -10,11 +10,11 @@ use std::collections::HashMap;
 
 use ya_counters::Counter;
 
-use actix_http::Method;
 use async_stream::stream;
 use futures::{StreamExt, TryFutureExt};
 use futures_core::stream::Stream;
 use http::StatusCode;
+use reqwest::Method;
 use reqwest::{RequestBuilder, Response};
 use std::fmt::{Display, Formatter};
 use std::pin::Pin;
