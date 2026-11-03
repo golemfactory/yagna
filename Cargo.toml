@@ -278,8 +278,8 @@ actix = { version = "0.13", default-features = false }
 derive_more = "0.99.11"
 diesel = { version = "2.3", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "2.3"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "c55f6b5c27429ab0ce097d2fadfc06d90e1b1405" }
-erc20_processor = { package = "erc20-processor", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "c55f6b5c27429ab0ce097d2fadfc06d90e1b1405" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "adc9846d88e417525b0e5a68991d219f13e93544" }
+erc20_processor = { package = "erc20-processor", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "adc9846d88e417525b0e5a68991d219f13e93544" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "0.5.1" }
