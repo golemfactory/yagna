@@ -5,13 +5,13 @@ use std::str::FromStr;
 #[cfg(test)]
 use std::time::Duration;
 
-use trust_dns_resolver::config;
-use trust_dns_resolver::TokioAsyncResolver;
+use hickory_resolver::config;
+use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
 
 #[derive(Clone)]
 pub struct StableResolver {
     stable_dns: IpAddr,
-    resolver: TokioAsyncResolver,
+    resolver: TokioResolver,
 }
 
 impl StableResolver {
@@ -39,11 +39,13 @@ impl StableResolver {
 #[cfg(test)]
 async fn google_resolver() -> anyhow::Result<StableResolver> {
     let mut options: config::ResolverOpts = Default::default();
-    options.use_hosts_file = false;
+    options.use_hosts_file = hickory_resolver::config::ResolveHosts::Never;
     options.cache_size = 0;
-    let config = config::ResolverConfig::default();
-    let resolver = TokioAsyncResolver::tokio(config, options)?;
-    let stable_dns = config::GOOGLE_IPS[0];
+    let config = config::ResolverConfig::udp_and_tcp(&config::GOOGLE);
+    let resolver = TokioResolver::builder_with_config(config, TokioRuntimeProvider::default())
+        .with_options(options)
+        .build()?;
+    let stable_dns = config::GOOGLE.ips[0];
 
     Ok(StableResolver {
         stable_dns,
@@ -52,17 +54,21 @@ async fn google_resolver() -> anyhow::Result<StableResolver> {
 }
 
 pub async fn resolver() -> anyhow::Result<StableResolver> {
-    let default_resolver = TokioAsyncResolver::tokio(Default::default(), Default::default())?;
+    let default_resolver = TokioResolver::builder_with_config(
+        config::ResolverConfig::udp_and_tcp(&config::GOOGLE),
+        TokioRuntimeProvider::default(),
+    )
+    .with_options(Default::default())
+    .build()?;
     let response = default_resolver
         .lookup_ip("stable-dns.dev.golem.network")
         .await?;
-    let stable_dns = response.into_iter().next().unwrap_or(config::GOOGLE_IPS[0]);
-    let mut config = config::ResolverConfig::new();
-    config.add_name_server(config::NameServerConfig::new(
-        (stable_dns, 53).into(),
-        trust_dns_resolver::config::Protocol::Udp,
-    ));
-    let resolver = TokioAsyncResolver::tokio(config, Default::default())?;
+    let stable_dns = response.into_iter().next().unwrap_or(config::GOOGLE.ips[0]);
+    let config =
+        config::ResolverConfig::from_name_servers(vec![config::NameServerConfig::udp(stable_dns)]);
+    let resolver = TokioResolver::builder_with_config(config, TokioRuntimeProvider::default())
+        .with_options(Default::default())
+        .build()?;
     Ok(StableResolver {
         stable_dns,
         resolver,
@@ -72,13 +78,14 @@ pub async fn resolver() -> anyhow::Result<StableResolver> {
 pub const DNS_PORT: u16 = 53;
 
 pub fn dns_servers() -> impl Iterator<Item = IpAddr> {
-    use trust_dns_resolver::config::*;
+    use hickory_resolver::config::*;
 
-    GOOGLE_IPS
+    GOOGLE
+        .ips
         .iter()
         .cloned()
-        .chain(CLOUDFLARE_IPS.iter().cloned())
-        .chain(QUAD9_IPS.iter().cloned())
+        .chain(CLOUDFLARE.ips.iter().cloned())
+        .chain(QUAD9.ips.iter().cloned())
 }
 
 // Do not use it in CI

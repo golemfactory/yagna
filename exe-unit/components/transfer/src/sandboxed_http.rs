@@ -4,13 +4,13 @@ use actix_http::{Method, Payload, StatusCode};
 use awc::ClientResponse;
 use bytes::Bytes;
 use futures::Stream;
+use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::{net::runtime::TokioRuntimeProvider, TokioResolver};
 use ipnet::IpNet;
 use std::cell::OnceCell;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::rc::Rc;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::TokioAsyncResolver;
 use url::Url;
 
 use crate::error::{Error, HttpError};
@@ -28,7 +28,7 @@ pub type SandboxedHttpResponse = ClientResponse<Decoder<Payload>>;
 #[derive(Clone)]
 pub struct SandboxedHttpClient {
     inner: awc::Client,
-    resolver: Rc<OnceCell<Result<TokioAsyncResolver, String>>>,
+    resolver: Rc<OnceCell<Result<TokioResolver, String>>>,
     allowed_networks: Rc<[IpNet]>,
     max_redirects: usize,
 }
@@ -146,12 +146,17 @@ impl SandboxedHttpClient {
         self.request(Method::GET, url).send().await
     }
 
-    fn resolver(&self) -> Result<&TokioAsyncResolver, Error> {
+    fn resolver(&self) -> Result<&TokioResolver, Error> {
         match self.resolver.get_or_init(|| {
             let mut options = ResolverOpts::default();
-            options.use_hosts_file = false;
-            TokioAsyncResolver::tokio(ResolverConfig::cloudflare_https(), options)
-                .map_err(|error| error.to_string())
+            options.use_hosts_file = hickory_resolver::config::ResolveHosts::Never;
+            TokioResolver::builder_with_config(
+                ResolverConfig::https(&hickory_resolver::config::CLOUDFLARE),
+                TokioRuntimeProvider::default(),
+            )
+            .with_options(options)
+            .build()
+            .map_err(|error| error.to_string())
         }) {
             Ok(resolver) => Ok(resolver),
             Err(error) => Err(HttpError::Dns(error.clone()).into()),
@@ -408,6 +413,16 @@ mod tests {
     use actix_web::{web, App, HttpResponse, HttpServer};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+
+    #[actix_rt::test]
+    async fn resolver_initializes_tls_without_hosts_file() {
+        let client = SandboxedHttpClient::new();
+        let resolver = client.resolver().unwrap();
+        assert_eq!(
+            resolver.options().use_hosts_file,
+            hickory_resolver::config::ResolveHosts::Never
+        );
+    }
 
     #[test]
     fn accepts_public_unicast_addresses() {
