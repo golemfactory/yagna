@@ -511,8 +511,10 @@ mod tests {
         description: Some("Failed to read response. Err: Missing root map. Err: Empty map".to_string()) })); 
         "Close when empty"
     )]
-    //TODO Why None here
-    #[test_case(r#"{ "not_id": "nope" }"#, Frame::Close(None);
+    // The reason is truncated to fit a WebSocket control frame.
+    #[test_case(r#"{ "not_id": "nope" }"#, Frame::Close(Some(CloseReason {
+        code: CloseCode::Policy,
+        description: Some("Failed to read response. Err: Missing response id. Err: Failed to read field: id. Err: Error reading flexbuffer: KeyNotFoun".to_string()) }));
         "Close when no id")]
     #[test_case(r#"{ "id": "some", "not_payload": { "some": "value" } }"#, Frame::Close(Some(CloseReason { 
         code: CloseCode::Policy,
@@ -540,7 +542,7 @@ mod tests {
             .send(ws::Message::Binary(Bytes::from(ws_res)))
             .await;
         assert!(ws_res.is_ok());
-        assert!(matches!(ws_frames.next().await, Some(Ok(frame)) if frame.eq(&expected_frame)));
+        assert_eq!(ws_frames.next().await.unwrap().unwrap(), expected_frame);
     }
 
     #[actix_web::test]
@@ -747,9 +749,11 @@ mod tests {
         verify_delete_service(&mut api, &service_addr).await;
     }
 
+    #[test_case(CloseCode::Normal; "normal close")]
+    #[test_case(CloseCode::Abnormal; "invalid wire close code")]
     #[actix_web::test]
     #[serial]
-    async fn buffering_gsb_msgs_after_ws_close_msg_and_reconnect_test() {
+    async fn buffering_gsb_msgs_after_ws_close_msg_and_reconnect_test(close_code: CloseCode) {
         let mut api = dummy_api();
 
         let (bind_req, service_addr) = bind_get_chunk_service_req(&mut api);
@@ -763,57 +767,61 @@ mod tests {
         println!("WS closing MSG");
         ws_frames
             .send(ws::Message::Close(Some(CloseReason {
-                code: CloseCode::Abnormal,
+                code: close_code,
                 description: Some("Test close reason".to_string()),
             })))
             .await
             .unwrap();
 
-        let (gsb_res, ws_res) = tokio::join!(
-            async {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                println!("GSB req");
-                let gsb_resp = gsb_endpoint
-                    .call(GetChunk {
-                        offset: u64::MIN,
-                        size: PAYLOAD_LEN as u64,
-                    })
-                    .await;
-                println!("GSB res");
-                gsb_resp
-            },
-            async {
-                tokio::time::sleep(Duration::from_millis(200)).await;
-                println!("WS reconnect");
-                let mut ws_frames = api.ws_at(&services_path).await.unwrap();
-                println!("WS next");
-                let ws_req = ws_frames.next().await;
+        let (gsb_res, ws_res) = tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::join!(
+                async {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    println!("GSB req");
+                    let gsb_resp = gsb_endpoint
+                        .call(GetChunk {
+                            offset: u64::MIN,
+                            size: PAYLOAD_LEN as u64,
+                        })
+                        .await;
+                    println!("GSB res");
+                    gsb_resp
+                },
+                async {
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    println!("WS reconnect");
+                    let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+                    println!("WS next");
+                    let ws_req = ws_frames.next().await;
 
-                let ws_req = match ws_req {
-                    Some(Ok(Frame::Binary(ws_req))) => {
-                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
-                    }
-                    msg => panic!("Not expected msg: {:?}", msg),
-                };
-                let len = ws_req.payload.size as usize;
-                let ws_res = TestWsResponse {
-                    id: ws_req.id,
-                    payload: GftpChunk {
-                        content: vec![7; len],
-                        offset: 0,
-                    },
-                };
-                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+                    let ws_req = match ws_req {
+                        Some(Ok(Frame::Binary(ws_req))) => {
+                            flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                        }
+                        msg => panic!("Not expected msg: {:?}", msg),
+                    };
+                    let len = ws_req.payload.size as usize;
+                    let ws_res = TestWsResponse {
+                        id: ws_req.id,
+                        payload: GftpChunk {
+                            content: vec![7; len],
+                            offset: 0,
+                        },
+                    };
+                    let ws_res = flexbuffers::to_vec(ws_res).unwrap();
 
-                println!("WS send");
-                let ws_res = ws_frames
-                    .send(ws::Message::Binary(Bytes::from(ws_res)))
-                    .await;
+                    println!("WS send");
+                    let ws_res = ws_frames
+                        .send(ws::Message::Binary(Bytes::from(ws_res)))
+                        .await;
 
-                println!("WS sent");
-                ws_res
-            }
-        );
+                    println!("WS sent");
+                    ws_res
+                }
+            )
+        })
+        .await
+        .expect("WebSocket reconnect must resume buffered GSB requests");
 
         ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();
@@ -840,50 +848,54 @@ mod tests {
         println!("GSB Waiting for disconnect");
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let (gsb_res, ws_res) = tokio::join!(
-            async {
-                println!("GSB req");
-                let gsb_resp = gsb_endpoint
-                    .call(GetChunk {
-                        offset: u64::MIN,
-                        size: PAYLOAD_LEN as u64,
-                    })
-                    .await;
-                println!("GSB res");
-                gsb_resp
-            },
-            async {
-                println!("Waiting for disconnect and GSB");
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                println!("WS connect");
-                let mut ws_frames = api.ws_at(&services_path).await.unwrap();
-                println!("WS next");
-                let ws_req = ws_frames.next().await;
-                let ws_req = match ws_req {
-                    Some(Ok(Frame::Binary(ws_req))) => {
-                        flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
-                    }
-                    msg => panic!("Not expected msg: {:?}", msg),
-                };
-                let len = ws_req.payload.size as usize;
-                let ws_res = TestWsResponse {
-                    id: ws_req.id,
-                    payload: GftpChunk {
-                        content: vec![7; len],
-                        offset: 0,
-                    },
-                };
-                let ws_res = flexbuffers::to_vec(ws_res).unwrap();
+        let (gsb_res, ws_res) = tokio::time::timeout(Duration::from_secs(10), async {
+            tokio::join!(
+                async {
+                    println!("GSB req");
+                    let gsb_resp = gsb_endpoint
+                        .call(GetChunk {
+                            offset: u64::MIN,
+                            size: PAYLOAD_LEN as u64,
+                        })
+                        .await;
+                    println!("GSB res");
+                    gsb_resp
+                },
+                async {
+                    println!("Waiting for disconnect and GSB");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    println!("WS connect");
+                    let mut ws_frames = api.ws_at(&services_path).await.unwrap();
+                    println!("WS next");
+                    let ws_req = ws_frames.next().await;
+                    let ws_req = match ws_req {
+                        Some(Ok(Frame::Binary(ws_req))) => {
+                            flexbuffers::from_slice::<TestWsRequest<GetChunk>>(&ws_req).unwrap()
+                        }
+                        msg => panic!("Not expected msg: {:?}", msg),
+                    };
+                    let len = ws_req.payload.size as usize;
+                    let ws_res = TestWsResponse {
+                        id: ws_req.id,
+                        payload: GftpChunk {
+                            content: vec![7; len],
+                            offset: 0,
+                        },
+                    };
+                    let ws_res = flexbuffers::to_vec(ws_res).unwrap();
 
-                println!("WS send");
-                let ws_res = ws_frames
-                    .send(ws::Message::Binary(Bytes::from(ws_res)))
-                    .await;
+                    println!("WS send");
+                    let ws_res = ws_frames
+                        .send(ws::Message::Binary(Bytes::from(ws_res)))
+                        .await;
 
-                println!("WS sent");
-                ws_res
-            }
-        );
+                    println!("WS sent");
+                    ws_res
+                }
+            )
+        })
+        .await
+        .expect("WebSocket reconnect must resume buffered GSB requests");
 
         ws_res.unwrap();
         let gsb_res = gsb_res.unwrap().unwrap();

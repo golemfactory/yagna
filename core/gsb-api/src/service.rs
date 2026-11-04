@@ -83,21 +83,16 @@ pub(crate) struct DropMessages {
 }
 
 impl Handler<DropMessages> for Service {
-    type Result = ResponseFuture<<DropMessages as Message>::Result>;
+    type Result = ();
 
     fn handle(&mut self, msg: DropMessages, _: &mut Self::Context) -> Self::Result {
         let reason = msg.reason.clone();
         self.msg_handler.drop_messages(msg);
         if let Some(ws_handler) = self.msg_handler.ws_handler() {
             log::debug!("Disconnecting from WS. Reason: {reason:?}");
-            let disconnect_fut = ws_handler.send(WsDisconnect(reason));
-            Box::pin(async move {
-                if let Err(err) = disconnect_fut.await {
-                    log::warn!("Failed to disconnect from WS. Err: {}.", err);
-                };
-            })
-        } else {
-            Box::pin(future::ready(()))
+            // The WebSocket actor can be waiting for this handler before it
+            // resumes its mailbox. Waiting for its reply would deadlock both.
+            ws_handler.do_send(WsDisconnect(reason));
         }
     }
 }
