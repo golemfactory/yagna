@@ -278,15 +278,15 @@ actix = { version = "0.13", default-features = false }
 derive_more = "0.99.11"
 diesel = { version = "2.3", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "2.3"
-erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "adc9846d88e417525b0e5a68991d219f13e93544" }
-erc20_processor = { package = "erc20-processor", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "adc9846d88e417525b0e5a68991d219f13e93544" }
+erc20_payment_lib = { git = "https://github.com/golemfactory/erc20_payment_lib", rev = "6cc32cfe11ea87554b8a7a83ba9bb33ffb554734" }
+erc20_processor = { package = "erc20-processor", git = "https://github.com/golemfactory/erc20_payment_lib", rev = "6cc32cfe11ea87554b8a7a83ba9bb33ffb554734" }
 #erc20_payment_lib = { path = "../../payments/erc20_payment_lib/crates/erc20_payment_lib" }
 #erc20_processor = { path = "../../payments/erc20_payment_lib" }
 #erc20_payment_lib = { version = "0.5.1" }
 #erc20_processor = { version = "0.5.1" }
 gftp = { version = "0.4.1", path = "core/gftp" }
 hex = "0.4.3"
-libsqlite3-sys = { version = "0.26.0", features = ["bundled"] }
+libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 openssl = "0.10"
 promptly = "0.3.0"
 rand = "0.8.5"
