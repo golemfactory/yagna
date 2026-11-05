@@ -68,17 +68,17 @@ def prepare():
     global yagna
     global processor
     yagna = shutil.which("yagna")
-    processor = shutil.which("erc20_processor")
+    processor = shutil.which("erc20-processor")
 
     if yagna is None or processor is None:
-        subprocess.run(["cargo", "build", "-p", "erc20_processor", "-p", "yagna"])
+        subprocess.run(["cargo", "build", "-p", "erc20-processor", "-p", "yagna"])
 
         if os.name == "nt":
             yagna = "..\\..\\..\\target\\debug\\yagna.exe"
-            processor = "..\\..\\..\\target\\debug\\erc20_processor.exe"
+            processor = "..\\..\\..\\target\\debug\\erc20-processor.exe"
         else:
             yagna = "../../../target/debug/yagna"
-            processor = "../../../../target/debug/erc20_processor"
+            processor = "../../../../target/debug/erc20-processor"
 
 
 def create_keys():
