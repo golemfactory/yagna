@@ -70,7 +70,7 @@ log = "0.4"
 openssl = {workspace = true, optional = true}
 rand = "0.8.5"
 regex = "1.5"
-reqwest = {version = "0.12.28", optional = false, features = ["stream"]}
+reqwest = {workspace = true, features = ["stream"]}
 secp256k1 = {version = "0.27.0", optional = true}
 serde = {version = "^1.0", features = ["derive"]}
 serde_json = "1.0"

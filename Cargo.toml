@@ -290,6 +290,7 @@ libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 openssl = "0.10"
 promptly = "0.3.0"
 rand = "0.8.5"
+reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls-webpki-roots", "charset", "http2", "system-proxy"] }
 regex = "1.10.4"
 strum = { version = "0.24", features = ["derive"] }
 hickory-resolver = "0.26.3"
