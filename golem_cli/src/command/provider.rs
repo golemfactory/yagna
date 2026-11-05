@@ -183,10 +183,19 @@ impl YaProviderCommand {
 
     pub async fn update_classic_presets(
         mut self,
+        runtimes: &[RuntimeInfo],
         starting_fee: Option<BigDecimal>,
         env_per_sec: Option<BigDecimal>,
         cpu_per_sec: Option<BigDecimal>,
     ) -> anyhow::Result<()> {
+        let preset_names: Vec<_> = CLASSIC_RUNTIMES
+            .iter()
+            .filter(|name| runtimes.iter().any(|runtime| runtime.name == **name))
+            .collect();
+        if preset_names.is_empty() {
+            anyhow::bail!("No installed runtime supports these price settings (wasmtime, vm)");
+        }
+
         let cmd = &mut self.cmd;
         cmd.args(["preset", "update", "--no-interactive"]);
         cmd.arg("--pricing").arg("linear");
@@ -199,7 +208,7 @@ impl YaProviderCommand {
         if let Some(initial) = starting_fee {
             cmd.arg("--price").arg(format!("Init price={}", initial));
         }
-        for runtime_name in CLASSIC_RUNTIMES {
+        for runtime_name in preset_names {
             cmd.arg("--name").arg(runtime_name);
         }
         self.exec_no_output().await
@@ -434,6 +443,70 @@ fn preset_command<'a, 'b>(
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    fn runtimes(names: &[&str]) -> Vec<RuntimeInfo> {
+        names
+            .iter()
+            .map(|name| RuntimeInfo {
+                name: (*name).into(),
+                description: None,
+            })
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn price_updates_target_only_installed_classic_runtimes() {
+        for (installed, expected_names) in [
+            (vec!["vm"], "--name vm"),
+            (vec!["wasmtime"], "--name wasmtime"),
+            (
+                vec!["vm", "custom", "wasmtime"],
+                "--name wasmtime --name vm",
+            ),
+            (vec!["custom", "vm"], "--name vm"),
+        ] {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", "test \"$*\" = \"$EXPECTED_ARGS\"", "ya-provider"]);
+            cmd.env(
+                "EXPECTED_ARGS",
+                format!(
+                    "preset update --no-interactive --pricing linear \
+                     --price CPU=0.125 --price Duration=0.25 --price Init price=0.5 {expected_names}"
+                ),
+            );
+
+            YaProviderCommand { cmd }
+                .update_classic_presets(
+                    &runtimes(&installed),
+                    Some(BigDecimal::from_str("0.5").unwrap()),
+                    Some(BigDecimal::from_str("0.25").unwrap()),
+                    Some(BigDecimal::from_str("0.125").unwrap()),
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn price_updates_without_classic_runtimes_do_not_execute_provider() {
+        for installed in [vec![], vec!["custom"]] {
+            let command = YaProviderCommand {
+                cmd: Command::new("this-provider-must-not-be-executed"),
+            };
+            let error = command
+                .update_classic_presets(
+                    &runtimes(&installed),
+                    None,
+                    None,
+                    Some(BigDecimal::from(1)),
+                )
+                .await
+                .unwrap_err();
+
+            assert!(error.to_string().contains("No installed runtime"));
+        }
+    }
 
     #[test]
     fn hourly_price_conversion_keeps_wei_precision() {
