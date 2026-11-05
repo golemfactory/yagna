@@ -49,7 +49,7 @@ jobs:
       - name: Build
         run: |
           cargo build
-          cargo build -p erc20_processor
+          cargo build -p erc20-processor
 
       - name: Run test
         run: |
