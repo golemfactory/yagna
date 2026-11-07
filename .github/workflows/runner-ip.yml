@@ -1,0 +1,22 @@
+name: Inspect custom builder IP
+
+on:
+  push:
+    branches: [codex/runner-ip]
+    paths: [.github/workflows/runner-ip.yml]
+
+permissions: {}
+
+jobs:
+  inspect:
+    runs-on: [yagna-builder]
+    timeout-minutes: 2
+    steps:
+      - name: Show runner addresses
+        shell: bash
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "Local addresses: $(hostname -I)"
+          printf 'Public IPv4: '
+          curl -4 --fail --silent --show-error --max-time 15 https://api.ipify.org
+          printf '\n'
