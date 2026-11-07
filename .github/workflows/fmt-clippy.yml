@@ -33,6 +33,9 @@ jobs:
       - name: Check lockfile
         run: mise run ci:lock
 
+      - name: Check production HTTP certificate roots
+        run: python3 .github/scripts/check_reqwest_tls.py
+
       - name: Validate workflows
         run: mise run ci:workflows
 

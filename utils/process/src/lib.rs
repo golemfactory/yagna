@@ -220,12 +220,15 @@ impl ProcessHandle {
 #[cfg(windows)]
 unsafe fn ctrl_break_process(process: Arc<SharedChild>) -> Result<()> {
     let process_pid = process.id();
-    let event_result = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, process_pid);
+    // SAFETY: Both arguments are scalar values; WinAPI reports invalid process
+    // groups through the return value.
+    let event_result = unsafe { GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, process_pid) };
 
     if event_result == 0 {
         return Err(anyhow!(
             "Unable to send CTRL-BREAK event to the process. Error code: {}",
-            errhandlingapi::GetLastError()
+            // SAFETY: Reading the calling thread's last-error code has no preconditions.
+            unsafe { errhandlingapi::GetLastError() }
         ));
     };
     Ok(())

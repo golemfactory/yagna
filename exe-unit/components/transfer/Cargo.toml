@@ -42,7 +42,7 @@ thiserror = "1.0.11"
 tokio = { version = "1", features = ["fs", "io-util"] }
 tokio-tar = { package = "astral-tokio-tar", version = "0.6.4" }
 tokio-util = { version = "0.7", features = ["io"] }
-trust-dns-resolver = { workspace = true, features = ["dns-over-https-rustls"] }
+hickory-resolver = { workspace = true, features = ["https-ring", "webpki-roots"] }
 url = "2.1.1"
 walkdir = "2.3.1"
 async-trait = "0.1.74"
@@ -55,7 +55,7 @@ awc = { version = "3", features = ["openssl"] }
 awc = { version = "3", features = ["openssl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-awc = { version = "3", features = ["rustls-0_21"] }
+awc = { version = "3", features = ["rustls-0_23-webpki-roots"] }
 
 [features]
 sgx = [

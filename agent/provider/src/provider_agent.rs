@@ -239,27 +239,20 @@ impl ProviderAgent {
             return Err(anyhow!("No Presets were selected. Can't create offers."));
         }
 
-        let preset_names = presets.iter().map(|p| &p.name).collect::<Vec<_>>();
+        let presets = Self::presets_with_available_exeunits(presets, &runner).await?;
+        let preset_names = presets.iter().map(|(p, _)| &p.name).collect::<Vec<_>>();
         log::debug!("Preset names: {:?}", preset_names);
-        let offer_templates = runner.send(GetOfferTemplates(presets.clone())).await??;
+        let offer_templates = runner
+            .send(GetOfferTemplates(
+                presets.iter().map(|(p, _)| p.clone()).collect(),
+            ))
+            .await??;
 
-        for preset in presets {
+        for (preset, exeunit_desc) in presets {
             let offer: OfferTemplate = offer_templates
                 .get(&preset.name)
                 .ok_or_else(|| anyhow!("Offer template not found for preset [{}]", preset.name))?
                 .clone();
-            let exeunit_name = preset.exeunit_name.clone();
-            let exeunit_desc = runner
-                .send(GetExeUnit { name: exeunit_name })
-                .await?
-                .map_err(|error| {
-                    anyhow!(
-                        "Failed to create offer for preset [{}]. Error: {}",
-                        preset.name,
-                        error
-                    )
-                })?;
-
             let offer = Self::build_offer(
                 node_info.clone(),
                 inf_node_info.clone(),
@@ -272,6 +265,29 @@ impl ProviderAgent {
             market.send(offer).await??;
         }
         Ok(())
+    }
+
+    async fn presets_with_available_exeunits(
+        presets: Vec<Preset>,
+        runner: &Addr<TaskRunner>,
+    ) -> anyhow::Result<Vec<(Preset, ExeUnitDesc)>> {
+        let mut available = Vec::with_capacity(presets.len());
+        for preset in presets {
+            if let Ok(desc) = runner
+                .send(GetExeUnit {
+                    name: preset.exeunit_name.clone(),
+                })
+                .await?
+            {
+                available.push((preset, desc));
+            }
+        }
+        if available.is_empty() {
+            return Err(anyhow!(
+                "No selected Presets have an available runtime. Can't create offers."
+            ));
+        }
+        Ok(available)
     }
 
     fn build_offer(
@@ -683,14 +699,74 @@ struct CreateOffers(pub OfferKind);
 /// Tests
 #[cfg(test)]
 mod tests {
+    use actix::Actor;
+    use structopt::StructOpt;
     use test_case::test_case;
     use ya_agreement_utils::{InfNodeInfo, NodeInfo, OfferTemplate};
+    use ya_client::activity::ActivityProviderApi;
+    use ya_client::web::{WebClient, WebInterface};
     use ya_manifest_utils::manifest;
 
     use crate::{
-        execution::ExeUnitDesc, market::Preset, payments::AccountView,
+        execution::{ExeUnitDesc, ExeUnitsRegistry, TaskRunner, TaskRunnerConfig},
+        market::Preset,
+        payments::AccountView,
         provider_agent::ProviderAgent,
     };
+
+    #[test_case(false; "without wasm")]
+    #[test_case(true; "with wasm")]
+    #[actix_rt::test]
+    async fn selects_presets_with_available_runtimes(wasm_available: bool) {
+        let data_dir = tempfile::tempdir().unwrap();
+        let mut vm_desc = fake_data().exeunit_desc;
+        vm_desc.name = "vm".into();
+        vm_desc.supervisor_path = std::env::current_exe().unwrap();
+        let mut descriptors = vec![vm_desc.clone()];
+        if wasm_available {
+            let mut wasm_desc = vm_desc;
+            wasm_desc.name = "wasmtime".into();
+            descriptors.push(wasm_desc);
+        }
+        let registry_file = data_dir.path().join("exeunits.json");
+        std::fs::write(&registry_file, serde_json::to_vec(&descriptors).unwrap()).unwrap();
+        let registry = ExeUnitsRegistry::from_file(&registry_file).unwrap();
+        let api = ActivityProviderApi::from_client(WebClient::builder().build());
+        let runner = TaskRunner::new(
+            api,
+            TaskRunnerConfig::from_iter(["ya-provider"]),
+            registry,
+            data_dir.path(),
+        )
+        .unwrap()
+        .start();
+        let vm_preset = Preset {
+            name: "vm".into(),
+            exeunit_name: "vm".into(),
+            ..Preset::default()
+        };
+        let selected = ProviderAgent::presets_with_available_exeunits(
+            vec![Preset::default(), vm_preset.clone()],
+            &runner,
+        )
+        .await
+        .unwrap();
+        assert_eq!(selected.len(), if wasm_available { 2 } else { 1 });
+        let (preset, desc) = selected.last().unwrap();
+        assert_eq!(preset, &vm_preset);
+        assert_eq!(desc.name, "vm");
+
+        let only_wasm =
+            ProviderAgent::presets_with_available_exeunits(vec![Preset::default()], &runner).await;
+        if wasm_available {
+            assert_eq!(only_wasm.unwrap()[0].1.name, "wasmtime");
+        } else {
+            assert!(only_wasm
+                .unwrap_err()
+                .to_string()
+                .contains("No selected Presets have an available runtime"));
+        }
+    }
 
     #[test_case(true,  r#"["inet", "vpn", "manifest-support"]"#  ; "Supported with 'inet', 'vpn', and 'manifest-support'")]
     #[test_case(true,  r#"["manifest-support"]"#  ; "Supported with 'manifest-support' only")]

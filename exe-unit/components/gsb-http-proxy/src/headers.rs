@@ -63,7 +63,7 @@ pub fn add(mut builder: RequestBuilder, headers: HashMap<String, Vec<String>>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use reqwest::header::{HeaderName, HeaderValue};
+    use actix_http::header::{HeaderName, HeaderValue};
     use std::str::FromStr;
 
     fn mock_headers() -> HeaderMap {

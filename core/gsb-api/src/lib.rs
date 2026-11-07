@@ -197,7 +197,12 @@ impl WsMessagesHandler {
     }
 
     fn close(&self, ctx: &mut WebsocketContext<WsMessagesHandler>, code: CloseCode, desc: &str) {
-        let description = Some(desc.to_string());
+        // A control frame has at most 125 bytes, including the two-byte close code.
+        let mut end = desc.len().min(123);
+        while !desc.is_char_boundary(end) {
+            end -= 1;
+        }
+        let description = Some(desc[..end].to_string());
         let reason = Some(CloseReason { code, description });
         self.start_buffering(reason.clone(), ctx);
         log::warn!("Closing WS handler: {}", desc);
@@ -314,10 +319,10 @@ impl StreamHandler<Result<actix_http::ws::Message, ProtocolError>> for WsMessage
                 ws::Message::Pong(_) => log::warn!("Pong handling is not implemented."),
                 ws::Message::Nop => log::warn!("Nop handling is not implemented."),
             },
-            Err(cause) => ctx.close(Some(CloseReason {
-                code: ws::CloseCode::Error,
-                description: Some(format!("ProtocolError: {cause}")),
-            })),
+            // Transport EOF is followed by `finished`, which restores buffering.
+            // Do not discard responses already queued by the closing connection.
+            Err(ProtocolError::Io(_)) => ctx.close(None),
+            Err(cause) => self.close(ctx, CloseCode::Error, &format!("ProtocolError: {cause}")),
         };
     }
 

@@ -88,8 +88,10 @@ pub async fn run(settings: Settings) -> Result</*exit code*/ i32> {
         || settings.env_per_hour.is_some()
         || settings.cpu_per_hour.is_some()
     {
+        let runtimes = cmd.ya_provider()?.list_runtimes().await?;
         cmd.ya_provider()?
             .update_classic_presets(
+                &runtimes,
                 settings.starting_fee,
                 settings.env_per_hour.map(price_per_hour_to_second),
                 settings.cpu_per_hour.map(price_per_hour_to_second),

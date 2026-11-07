@@ -68,6 +68,6 @@ awc = { version = "3", features = ["openssl"] }
 awc = { version = "3", features = ["openssl"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-awc = { version = "3", features = ["rustls-0_21"] }
+awc = { version = "3", features = ["rustls-0_23-webpki-roots"] }
 
 [dev-dependencies]
