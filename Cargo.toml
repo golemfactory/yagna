@@ -299,7 +299,7 @@ url = "2.3.1"
 
 ya-agreement-utils = { version = "0.6", path = "utils/agreement-utils" }
 ya-exe-unit.path = "./exe-unit"
-ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "7cbe72a74ad5e1b099829937c4faa5aa20fefd59" }
+ya-relay-client = { git = "https://github.com/golemfactory/ya-relay.git", rev = "3035e6e3b369082c6fe6df7bdd83874999d712dc" }
 ya-relay-stack = { git = "https://github.com/golemfactory/ya-relay.git", rev = "c92a75b0cf062fcc9dbb3ea2a034d913e5fad8e5" }
 ya-utils-futures = { path = "utils/futures" }
 ya-utils-networking = { path = "utils/networking", default-features = false }
