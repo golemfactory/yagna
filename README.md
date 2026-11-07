@@ -43,6 +43,9 @@ Builds applications to run for requestors on the network. Golem's potential goes
 ## Documentation
 For a more in-depth look at how Golem works, head over to our [documentation.](https://docs.golem.network/)
 
+When signing in with the CLI, GitHub occasionally asks to re-authorize the application; the
+step-by-step walkthrough is in the [Golem Cloud CLI login guide](https://blog.golem.network/cloud-cli/).
+
 ## Project Layout
 
 * [agent/provider](agent/provider) - provider agent implementation based on core services.
